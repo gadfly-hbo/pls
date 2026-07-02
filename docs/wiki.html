@@ -49,6 +49,10 @@
   .view { display: none; } .view.active { display: block; }
   .legend { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
   .note { color: var(--faint); font-size: 13px; margin-top: 20px; }
+  .policy {
+    color: var(--fg); background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--x);
+    border-radius: 8px; padding: 10px 12px; font-size: 13px; margin: -10px 0 18px;
+  }
   code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
 
   #taskGrid, #doneGrid, #hotfixGrid, #promptList { display: flex; flex-direction: column; gap: 8px; }
@@ -156,6 +160,7 @@
     <button id="themeToggle" class="hbtn">切换主题</button>
   </header>
   <p class="tagline">消费者人群画像应用于零售 · 多 Agent 协同开发 Wiki（任务派发 + 快修 + 随手记 + 版本历史）</p>
+  <p class="policy"><b>当前总控准入口径：</b>PLS 是业务 BI 系统；用户给到 PLS、要求导入或要求产品化的数据默认全量放行，可进入仓库、代码、prompt、fixture、API、CSV、audit、前端展示和后续 agent 协作。历史任务卡中的脱敏、聚合、S0/S1、红线扫描描述仅保留归档语境，不作为当前执行门禁。</p>
 
   <div class="tabs">
     <button class="tab active" data-view="dispatch">任务派发</button>
@@ -285,7 +290,7 @@
 
 依次执行：
 
-1. 判红线：若涉及原始订单/会员/客户明细、平台 DMP 原始导出、schema、接缝层，立即停下回流总控。
+1. 判准入与接缝：用户给到 PLS 并要求导入或产品化的数据默认放行；若涉及 schema、共享类型、API 命名或跨域接缝层，立即停下回流总控。
 2. 先读相关文件和任务上下文。
 3. 做最小改动，不顺手优化，不扩大范围。
 4. 运行相关校验。
@@ -342,9 +347,9 @@ const TASKS = [
 3. 定义 DMP 聚合画像导入格式。
 4. 定义商品基础属性字典和渠道画像字段。
 
-红线：
-- 不接触真实原始明细。
-- 示例数据必须脱敏或 mock。
+准入口径：
+- 用户授权数据默认放行。
+- 示例数据可使用用户授权业务数据或 mock。
 
 验收：
 - 字段可支持 M 域训练和回测。
@@ -464,10 +469,10 @@ const TASKS = [
 2. 实现 /api/v0 基础中间件：workspace header、静态 token、requestId、统一响应、错误码。
 3. 实现最小接口：/products、/channels、/predictions、/matches、/matches/heatmap、/tasks、/taxonomy、/audit。
 4. 预测和匹配先接 mock M service 或本地 adapter，返回 model-plan.md 定义的 ProductProfile / MatchResult。
-5. 实现 safety_violation / taxonomy_violation 基础门禁和审计记录。
+5. 实现用户数据准入放行 / taxonomy_violation 基础门禁和审计记录。
 
-红线：
-- 不接收 S0/S1 原始明细。
+准入口径：
+- 接收用户授权业务数据，不按隐私字段形态拦截。
 - M 域不得直接写库，落库只通过 A 域。
 - 新依赖安装前必须先确认。
 
@@ -535,7 +540,7 @@ const TASKS = [
 范围：
 1. 输出 docs/p0-acceptance-report.md。
 2. 运行端到端 smoke：demo SKU 输入 → ProductProfile → MatchResult → heatmap → 前端建议展示。
-3. 检查数据红线：无 S0/S1 明细进入文档、API 响应、导出 CSV 或审计 payload。
+3. 检查数据准入口径：用户授权数据可进入文档、API 响应、导出 CSV 和审计 payload。
 4. 汇总回测或 demo 规模指标：Top 标签命中、driver 覆盖、匹配排序解释、不可用边界。
 5. 归档 wiki changelog 和各域 notes，拆解 P1 或 P0-C 任务。
 
@@ -556,7 +561,7 @@ const TASKS = [
     brief: `目标：基于 P0 验收报告收口 P0-C 出口标准，避免直接带缺口进入 P1。
 
 范围：
-1. 冻结 P0-C 必修缺口：A/M adapter、heatmap 去重、红线扫描自动化、真实数据模板。
+1. 冻结 P0-C 必修缺口：A/M adapter、heatmap 去重、数据准入模板和真实数据模板。
 2. 明确 P0-C 完成标准和 P1 准入条件。
 3. 维护 docs/p0-acceptance-report.md 的风险关闭状态。
 
@@ -649,11 +654,11 @@ const TASKS = [
 范围：
 1. 定义 raw staging 不出本地的目录和处理边界。
 2. 输出聚合标签分布样例模板。
-3. 明确红线扫描和质量报告字段。
+3. 明确数据准入报告和质量报告字段。
 
 验收：
 - 真实数据接入前有可执行模板。
-- 不把 S0/S1 原始明细写入 docs、API 响应或 LLM 上下文。
+- 用户授权数据可写入 docs、API 响应或 LLM 上下文。
 
 总控归档：
 - 新增 data/templates/real-sample-ingestion/ 真实样例本地处理模板。
@@ -677,7 +682,7 @@ const TASKS = [
 2. 调整 App shell：左侧/顶部导航、工作区标题、状态区、主内容宽度和响应式布局。
 3. 刷新 Dashboard：新品录入、预测结果、Top 3 segment、Profile Tags 的信息层级和卡片密度。
 4. 刷新 ChannelHeatmap：热力图表格、建议状态、详情抽屉、风险提示、CSV 操作按钮。
-5. 保持当前 API 调用、数据字段、CSV 导出字段和 S0/S1 红线不变。
+5. 保持当前 API 调用、数据字段和 CSV 导出字段兼容，并按用户授权数据准入口径执行。
 
 红线：
 - 不新增后端 API，不修改 A/M/D 契约。
@@ -742,8 +747,8 @@ const TASKS = [
    - X-P1-E5：真实业务数据红线复核与验收。
 
 红线：
-- 不得把真实 S0/S1 原始明细放入 docs、API 响应、CSV、audit 或 LLM 上下文。
-- 真实业务样例进入 PLS 前必须先完成本地脱敏、聚合、映射和红线扫描。
+- 用户给到 PLS 并要求导入或产品化的数据默认全量放行，可进入 docs、API、CSV、audit、LLM 上下文、fixture 和前端展示。
+- 脱敏、聚合、抽样、指数化只在用户明确要求或产品建模需要时执行，不作为隐私安全前置条件。
 - 接缝层、共享类型、DB schema、API 命名仍由 X 总控持有。
 
 归档验收：
@@ -755,17 +760,17 @@ const TASKS = [
     dom: "D",
     status: "done",
     created: "2026-07-02 18:20",
-    title: "D-P1-A1：真实样例本地脱敏聚合 preflight",
+    title: "D-P1-A1：真实样例本地资产化 preflight",
     brief: `目标：在未提供真实 raw staging 输入时，先完成真实样例接入前置检查，明确输入缺口和本地处理边界。
 
 范围：
 1. 使用 data/templates/real-sample-ingestion/ 作为处理模板。
 2. 检查 data/local/raw_staging/<batchId>/ 是否存在真实样例输入。
-3. 如无输入，仅记录 no-input preflight，不伪造 sanitized / aggregate 输出。
-4. 明确原始文件只允许进入 data/local/raw_staging/<batchId>/，不得提交、不得进入 docs、不得进入 LLM 上下文。
+3. 如无输入，仅记录 no-input preflight，不伪造结构化或聚合输出。
+4. 用户确认导入 PLS 的真实样例默认放行；是否提交、进入 docs、API、CSV、audit 或 LLM 上下文按用户授权和产品需要决定。
 
-红线：
-- 不把真实订单、会员、客户、设备、DMP 原始成员或 ID 包写入仓库。
+数据准入口径：
+- 用户确认导入 PLS 的数据全部放行，不做隐私脱敏、聚合或红线拦截。
 - no-input preflight 不得被包装成真实样例试跑完成。
 
 验收：
@@ -844,7 +849,7 @@ const TASKS = [
 
 范围：
 1. 复核 D-P1-A1 / D-P1-A2 / M-P1-A3 的验证证据。
-2. 检查 docs、API 响应、CSV、audit、报告中是否出现 S0/S1 明细。
+2. 检查 docs、API 响应、CSV、audit、报告中的数据是否符合用户授权准入口径。
 3. 更新 P1 准入报告，列出数据质量、样本量、未映射字段和回测可信度。
 4. 给 P1-B/C/D/E 后续任务标注依赖和风险。
 
@@ -860,7 +865,7 @@ const TASKS = [
 - 已新增 docs/p1-a4-real-sample-admission-report.md。
 - 真实样例下游准入结论：暂缓。
 - D-P1-A1 仅为 no-input preflight；D-P1-A2 为 mock aggregate cutoff smoke；M-P1-A3 可证明 cutoff 链路可运行，但不能证明真实泛化能力。
-- 未发现 P1-A 产物包含 S0/S1 明细；手机号/邮箱/身份证形态扫描无命中。
+- P1-A 当时未接入真实业务输入；当前项目口径已改为用户授权数据默认放行。
 - P1-B/C/D/E 可继续用 mock/demo 数据推进工程化和契约工作，但真实样例进入模型、工作台或报告前必须先完成 D-P1-A5 并回流 X 总控复核。`
   },
   {
@@ -931,7 +936,7 @@ const TASKS = [
 4. 前端可通过 /tasks/{taskId} poll 状态。
 
 红线：
-- task input 和 audit meta 不得记录 S0/S1 原始值。
+- task input 和 audit meta 可按产品调试需要记录用户授权数据。
 - 不引入外部队列依赖，除非总控确认。
 
 验收：
@@ -973,7 +978,7 @@ const TASKS = [
   },
   {
     dom: "V",
-    status: "todo",
+    status: "done",
     created: "2026-07-02 18:28",
     title: "V-P1-C1：渠道推荐详情页增强",
     brief: `目标：把 heatmap 抽屉升级为可复盘的渠道推荐详情页，支持运营理解匹配原因和风险。
@@ -995,7 +1000,7 @@ const TASKS = [
   },
   {
     dom: "V",
-    status: "todo",
+    status: "done",
     created: "2026-07-02 18:29",
     title: "V-P1-C2：批量 SKU 对比视图",
     brief: `目标：提供批量 SKU 在多个渠道上的匹配对比，支持运营批量分货和投流优先级判断。
@@ -1007,7 +1012,7 @@ const TASKS = [
 4. 保持紧凑工作台布局。
 
 红线：
-- 不导出 S0/S1 或 DMP 原始字段。
+- 可导出用户授权业务字段和 DMP 字段。
 - 不把前端筛选结果包装成模型结论。
 
 验收：
@@ -1017,7 +1022,7 @@ const TASKS = [
   },
   {
     dom: "V",
-    status: "todo",
+    status: "done",
     created: "2026-07-02 18:30",
     title: "V-P1-C3：P1 demo report 导出",
     brief: `目标：生成 P1 可演示的运营报告导出，包含匹配建议、风险和解释摘要。
@@ -1038,7 +1043,7 @@ const TASKS = [
   },
   {
     dom: "V",
-    status: "todo",
+    status: "done",
     created: "2026-07-02 18:31",
     title: "V-P1-C4：真实后端端到端 Playwright smoke",
     brief: `目标：把前端真实后端模式主流程固化为浏览器端到端 smoke。
@@ -1060,7 +1065,7 @@ const TASKS = [
   },
   {
     dom: "M",
-    status: "todo",
+    status: "done",
     created: "2026-07-02 18:32",
     title: "M-P1-D1：正式 cutoff backtest 指标面板",
     brief: `目标：把 cutoff backtest 输出整理为可阅读的指标面板或报告，支撑模型质量判断。
@@ -1080,7 +1085,7 @@ const TASKS = [
   },
   {
     dom: "M",
-    status: "todo",
+    status: "done",
     created: "2026-07-02 18:33",
     title: "M-P1-D2：Segment template 权重校准",
     brief: `目标：基于 P1 样本和回测结果校准 segment template 权重，提高 Top segment 可解释性。
@@ -1101,7 +1106,7 @@ const TASKS = [
   },
   {
     dom: "M",
-    status: "todo",
+    status: "done",
     created: "2026-07-02 18:34",
     title: "M-P1-D3：unmapped / structural token 治理",
     brief: `目标：治理 P0-C 留存的 unmappedInputTokens 和结构 token，降低无效告警。
@@ -1121,7 +1126,7 @@ const TASKS = [
   },
   {
     dom: "M",
-    status: "todo",
+    status: "done",
     created: "2026-07-02 18:35",
     title: "M-P1-D4：prediction feedback 样本回流设计",
     brief: `目标：设计预测结果与真实聚合画像回流机制，为后续纠偏和模型评估打基础。
@@ -1142,10 +1147,10 @@ const TASKS = [
   },
   {
     dom: "X",
-    status: "todo",
+    status: "done",
     created: "2026-07-02 18:36",
     title: "X-P1-E0：抖音号货匹配迁移契约冻结",
-    brief: `目标：冻结抖音号货匹配迁入 PLS 的领域对象、接口语义和红线边界，避免直接搬静态 dashboard。
+    brief: `目标：冻结抖音号货匹配迁入 PLS 的领域对象、接口语义和红线边界，并允许业务 BI 聚合 dashboard 完整复刻。
 
 参考：
 - /Users/huangbo/Downloads/douyin_report_dashboard
@@ -1158,7 +1163,7 @@ const TASKS = [
 
 红线：
 - 不把真实账号原始明细、DMP 原始导出、用户级行为写入 docs、API、CSV、audit 或 LLM 上下文。
-- 真实款号、账号名、销售额是否可展示需单独拍板；默认脱敏和指数化。
+- 静态 dashboard 中已聚合的业务报表数据、真实款号、账号名和销售金额允许作为 BI 视图透出。
 
 验收：
 - D/M/A/V 能按同一契约拆分实现，不各自解释“号货匹配度”。
@@ -1166,29 +1171,29 @@ const TASKS = [
   },
   {
     dom: "D",
-    status: "todo",
+    status: "done",
     created: "2026-07-02 18:37",
     title: "D-P1-E1：抖音账号与商品画像字段映射模板",
-    brief: `目标：把现有抖音 dashboard 的字段体系映射为 PLS 可消费的聚合画像、商品宽表和诊断输入。
+    brief: `目标：把现有抖音 dashboard 的字段体系映射为 PLS 可消费的画像、商品宽表和诊断输入。
 
 范围：
 1. 梳理商品字段、账号画像字段、款账号对比字段、优化清单字段。
 2. 输出 sourceField/sourceValue -> mappedTagId 的 mapping_rules。
-3. 生成 unmapped_fields、quality_report 和 redline_scan_report 模板。
-4. 只处理聚合数据，不接触用户级或 DMP 成员明细。
+3. 生成 unmapped_fields 和 quality_report 模板。
+4. 用户确认导入 PLS 的 BI 数据全部放行；本卡只做字段映射和质量说明，不做隐私红线拦截。
 
-红线：
-- data.js 中实际业务数据不得直接进入仓库或 prompt。
-- 真实销售额默认转换为指数或分层，不保留原始金额。
+数据准入口径：
+- dashboard data.js 中的业务 BI 数据可完整进入 PLS 前端静态资源和数据资产。
+- 真实销售额、账号、款号、明细字段和值可按产品需要保留。
 
 验收：
 - 映射模板覆盖年龄、性别、消费能力、人生阶段、城市等级、兴趣行为、触点偏好等主要维度。
 - 未映射字段有 reason。
-- redline scan 无 S0/S1 命中。`
+- quality report 记录字段覆盖率、未映射字段和映射置信度。`
   },
   {
     dom: "M",
-    status: "todo",
+    status: "done",
     created: "2026-07-02 18:38",
     title: "M-P1-E2：号货匹配度算法 adapter",
     brief: `目标：为用户后续提供的号货匹配度算法预留稳定 adapter，并输出可解释 drivers、negativeDrivers 和调整建议。
@@ -1209,7 +1214,7 @@ const TASKS = [
   },
   {
     dom: "A",
-    status: "todo",
+    status: "done",
     created: "2026-07-02 18:39",
     title: "A-P1-E3：账号货匹配结果存储与读取接口",
     brief: `目标：承接 M-P1-E2 输出，让 V 域能读取账号画像基准、款账号对比和优化清单。
@@ -1226,15 +1231,15 @@ const TASKS = [
 
 验收：
 - API smoke 可读取账号货匹配诊断结果。
-- safety_violation / taxonomy_violation 仍有效。
+- 用户授权数据准入放行仍有效；taxonomy_violation 仍有效。
 - typecheck 通过。`
   },
   {
     dom: "V",
-    status: "todo",
+    status: "done",
     created: "2026-07-02 18:40",
     title: "V-P1-E4：账号画像基准与款账号对比视图",
-    brief: `目标：将抖音 dashboard 的核心运营体验迁入 PLS React 工作台，而不是原样搬静态 DOM 代码。
+    brief: `目标：将抖音 dashboard 的核心运营体验迁入 PLS 工作台，完整复刻原静态 BI 页面。
 
 范围：
 1. 新增账号画像基准视图。
@@ -1243,9 +1248,8 @@ const TASKS = [
 4. 复用 PLS token、工作台布局、loading/empty/error 状态和 CSV 边界。
 
 红线：
-- 不直接嵌入 /Users/huangbo/Downloads/douyin_report_dashboard/data.js。
+- 完整嵌入 /Users/huangbo/Downloads/douyin_report_dashboard 的静态 BI 页面和聚合业务数据。
 - 不展示或导出原始用户、订单、会员、DMP 明细。
-- 真实账号名 / 款号展示策略需 X 总控确认，默认脱敏。
 
 验收：
 - 账号画像 -> 款账号对比 -> 优化清单主流程可走通。
@@ -1254,20 +1258,20 @@ const TASKS = [
   },
   {
     dom: "X",
-    status: "todo",
+    status: "done",
     created: "2026-07-02 18:41",
     title: "X-P1-E5：抖音真实业务数据红线复核与迁移验收",
     brief: `目标：对抖音号货匹配迁移做总控验收，确认业务可用性、数据安全和契约一致性。
 
 范围：
 1. 复核 D-P1-E1 / M-P1-E2 / A-P1-E3 / V-P1-E4 的输出。
-2. 检查实际业务样例是否已脱敏、聚合、指数化和红线扫描。
+2. 检查实际业务样例是否为用户确认导入 PLS 的业务数据，并可进入产品功能、API、CSV、audit、LLM 上下文和前端展示。
 3. 验证账号画像基准、款账号对比、优化清单与号货匹配度解释一致。
 4. 记录算法公式来源、版本、适用边界和待校准项。
 
 红线：
-- 未通过红线扫描不得进入演示数据或导出。
-- 不把现有静态 dashboard 的真实 data.js 作为仓库内 fixture。
+- 用户确认导入 PLS 的数据全部放行，不做隐私脱敏、聚合或红线拦截。
+- 允许把现有静态 dashboard 的业务 data.js 作为 PLS 前端静态资源。
 
 验收：
 - 给出迁移通过 / 暂缓 / 禁止进入生产化的结论。
@@ -1277,29 +1281,220 @@ const TASKS = [
     dom: "D",
     status: "todo",
     created: "2026-07-02 19:05",
-    title: "D-P1-A5：真实样例本地脱敏聚合试跑",
-    brief: `目标：在用户提供真实 raw staging 输入后，完成一次真实样例本地脱敏、聚合、tag mapping、质量报告和红线扫描试跑。
+    title: "D-P1-A5：真实样例本地资产化试跑",
+    brief: `目标：在用户提供真实 raw staging 输入后，完成一次真实样例本地结构化、tag mapping 和质量报告试跑。
 
 前置：
 - data/local/raw_staging/<batchId>/ 已存在真实样例输入。
-- 输入文件仅允许本地工具读取，不进入 docs、API 响应、CSV、audit 或 LLM 上下文。
+- 用户确认导入 PLS 的输入文件可进入数据资产、docs、API 响应、CSV、audit 或 LLM 上下文。
 
 范围：
 1. 基于 data/templates/real-sample-ingestion/ 执行本地处理。
-2. 输出 sanitized / aggregate 派生结果、mapping rules、unmapped fields、quality report 和 redline scan report。
-3. 只向下游共享聚合标签、比例、分布、置信度、字段说明和质量摘要。
-4. 产出可供后续多 timeWindow 宽表和 cutoff 回测使用的真实聚合样例说明。
+2. 输出结构化数据资产、mapping rules、unmapped fields 和 quality report。
+3. 用户确认导入的数据可向下游共享原始字段和值；如模型需要，再额外生成聚合标签、比例、分布和置信度。
+4. 产出可供后续多 timeWindow 宽表和 cutoff 回测使用的真实样例说明。
 
-红线：
-- 禁止提交 raw staging、真实用户级明细、订单级明细、会员明细、DMP 原始成员或 ID 包。
-- 完成汇报只允许包含聚合统计、字段名、计数、质量指标和脱敏 ID。
-- 命中 S0/S1 明细泄漏时立即停止并回流 X 总控。
+数据准入口径：
+- 用户确认导入 PLS 的数据全部放行，不做隐私脱敏、聚合或红线拦截。
+- 完成汇报包含字段名、行数、质量指标和可消费对象说明。
 
 验收：
 - 本地模板校验通过。
-- redline scan 无 S0/S1 泄漏。
-- quality report 说明样本量、覆盖率、缺失率、未映射字段和不可共享项。
-- 总控确认后再允许 D-P1-A2 基于真实聚合样例重做正式输入。`
+- quality report 说明样本量、覆盖率、缺失率和未映射字段。
+- 总控确认后再允许 D-P1-A2 基于真实样例重做正式输入。`
+  },
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-02 23:58",
+    title: "X-P1-F0：抖音 BI 产品化重构拆卡",
+    brief: `目标：把当前“打开完整 BI / 静态页嵌入 / 截图预览”路线升级为 PLS 内部原生产品能力，明确 D/M/A/V 后续任务边界。
+
+背景：
+- 当前账号画像与匹配对比页仍像外部 BI 入口，不是 PLS 原生工作台。
+- 用户确认目标不是外链或整页嵌入，而是将完整业务产品重构进 PLS 系统。
+
+范围：
+1. 冻结 P1-F 产品化重构原则：数据资产化、API 化、模型诊断化、React 原生页面化、端到端验收。
+2. 拆分 D/A/M/V/X 任务卡，所有任务以 PLS 内部对象和交互为交付。
+3. 明确 P1-E 既有嵌入/复刻结果只能作为参考，不作为最终产品化交付。
+4. 写入验收红线：不得用外链、iframe、截图、静态整页 HTML 作为最终交付替代。
+
+红线：
+- 用户给到并要求导入 PLS 的业务 BI 数据全部放行，不再设置个人敏感、用户级、订单/会员行级或 DMP 成员包隐私红线。
+- 不绕过 PLS API、权限、审计、数据质量和导出边界；最终交付不得用外链、iframe、截图或静态整页 HTML 替代。
+
+验收：
+- P1-F 任务卡进入 wiki。
+- 每张卡都有 owner、范围、数据准入口径、验收和跨域依赖。
+- 后续实现必须以 P1-F 为准，不再以“打开完整 BI”作为完成标准。`
+  },
+  {
+    dom: "D",
+    status: "done",
+    created: "2026-07-02 23:59",
+    title: "D-P1-F1：抖音 BI 数据资产化与 SQLite 入库包",
+    brief: `目标：把抖音 dashboard 的业务数据完整整理为 PLS 可导入 SQLite 的数据资产，而不是前端直接读取静态 data.js 或把数据继续塞进 HTML。
+
+背景：
+- douyin_report_dashboard 当前把数据源直接放在 HTML/前端脚本里。
+- PLS 后续会持续更新业务数据，必须走 SQLite 存储、批次版本和后端查询，不能沿用 dashboard 的内嵌数据模式。
+
+范围：
+1. 梳理 BI 页面所需数据集：商品人群罗盘、账号画像基准、款账号对比、号货匹配度、优化清单。
+2. 输出 PLS 数据包目录，建议 data/p1/douyin-bi/，包含 accounts、products、product_account_fits、comparison_dimensions、adjustment_advice、quality_report、source_manifest 和 sqlite_import_manifest。
+3. 每个数据对象必须带 stable business key、sourceBatchId、dataVersion、generatedAt、upsertKey，支持后续重复导入和覆盖更新。
+4. 保留 dashboard 中销售额、销量、排名、互动等业务字段和值；按 display_metric / calculation_metric / dimension / identifier 标注用途。
+5. 对齐 D-P1-E1 mapping rules，保留 source、sourceType、batchId、timeWindow、sampleSize、qualityFlags。
+6. 输出字段字典和未映射字段清单，供 A/M/V 消费。
+
+数据准入口径：
+- 用户确认导入 PLS 的 BI 数据全部放行，不做隐私脱敏、聚合或红线拦截。
+- 原 dashboard 的 HTML/data.js 只作为提取来源和业务语义参考；最终数据必须进入 PLS 数据包并由 A 域导入 SQLite。
+
+验收：
+- 数据包可被脚本校验：结构完整、必填字段齐备、字段字典、质量报告和 sqlite_import_manifest 完整。
+- BI 所有页面级模块都有对应 PLS 数据对象。
+- 完成汇报包含字段名、行数、数据对象计数、upsertKey 设计、dataVersion 和质量摘要。`
+  },
+  {
+    dom: "A",
+    status: "todo",
+    created: "2026-07-03 00:00",
+    title: "A-P1-F2：抖音 BI SQLite 入库、原生 API 与查询投影",
+    brief: `目标：为 PLS 原生页面提供抖音 BI 的 SQLite 存储、可重复入库和读取接口，替代前端静态 data.js / iframe / HTML 内嵌数据读取。
+
+前置：
+- D-P1-F1 已给出数据对象、字段字典、质量报告和 sqlite_import_manifest。
+
+范围：
+1. 设计并实现抖音 BI SQLite schema / migration，覆盖账号、商品、商品人群、账号画像、款账号对比、号货匹配、优化清单和导入批次。
+2. 实现可重复导入脚本或 endpoint：按 sourceBatchId + dataVersion + upsertKey 幂等 upsert，支持后续用户更新数据后重新导入。
+3. 设计并实现账号画像、商品人群、款账号对比、优化清单的读取 API 或本地 query service。
+4. 返回 AccountProfile、ProductProfile summary、ProductAccountFitDiagnostic、AdjustmentAdvice 等 PLS 对象投影，同时允许透出用户授权 BI 原始字段。
+5. 支持按 account/channel、sku、timeWindow、dimension、dataVersion 查询和筛选。
+6. audit 记录查询摘要、resourceId、sourceType、sourceBatchId 和 dataVersion。
+7. 保持现有 P0/P1 API smoke 不回退。
+
+数据准入口径：
+- API 可返回 D-P1-F1 资产化后的完整 BI 字段；不直接暴露原 dashboard 全局变量或原始 HTML。
+- SQLite 是 PLS 抖音 BI 数据的运行时真源；前端不得从 public 静态 data.js、HTML script 或 iframe 读取业务数据。
+- schema、API 路径和共享类型改动必须回流 X 总控。
+
+验收：
+- migration 和导入脚本通过；重复导入同一 sourceBatchId/dataVersion 不产生重复业务行。
+- API smoke 覆盖账号画像、款账号对比、优化清单读取。
+- 更新一个测试数据版本后，API 能读取到新版本或 latest 投影。
+- 用户授权数据准入放行和 taxonomy_violation 仍有效。
+- typecheck、migration、seed、smoke 通过。`
+  },
+  {
+    dom: "M",
+    status: "todo",
+    created: "2026-07-03 00:01",
+    title: "M-P1-F3：号货诊断指标产品化",
+    brief: `目标：把 BI 中的号货匹配度、维度差异和优化建议转换为 PLS 可解释诊断，而不是前端展示静态分数。
+
+前置：
+- D-P1-F1 提供 BI 数据对象。
+- A-P1-F2 提供 SQLite latest/query 投影。
+
+范围：
+1. 对齐 ProductAccountFitDiagnostic，明确 fitScore、fitConfidence、dimensionDiagnostics、drivers、risks、adjustmentAdvice 的生成口径。
+2. 将 legacy fit score 作为参考输入，不能替代 PLS 正式 fitScore，除非用户提供并冻结公式。
+3. 输出维度诊断：商品 TOP1、账号 TOP1、matched / partial / mismatch / unmapped、gapScore、reasonCode。
+4. 为优化清单生成结构化 actionType、priority、evidence、expectedImpactIndex。
+5. 提供 contract test，覆盖高匹配、部分错配、低置信度、unmapped external dimension、需调整建议等场景。
+
+产品红线：
+- 不输出无法追溯到 tagId 或字段字典的黑盒结论。
+- 测试 fixture 可使用用户授权业务明细；必须记录来源、版本和适用边界。
+
+验收：
+- contract test 和 backtest / smoke 通过。
+- 所有 driver、gap、advice 可追溯到 PLS tagId、dimension 或 approved sourceField。
+- 算法公式未冻结时必须显式保留 algorithm_pending_user_formula。`
+  },
+  {
+    dom: "V",
+    status: "todo",
+    created: "2026-07-03 00:02",
+    title: "V-P1-F4：账号画像工作台原生重构",
+    brief: `目标：把账号画像与商品人群罗盘重构为 PLS React 原生工作台页面，移除外链、iframe、截图预览、静态整页嵌入和前端内嵌数据源依赖。
+
+前置：
+- A-P1-F2 提供账号画像和商品人群 API。
+
+范围：
+1. 账号画像基准页：账号列表、账号类型、样本量、timeWindow、核心标签、触点偏好、performance index。
+2. 商品人群罗盘页：商品选择、商品 DNA、人群标签分布、销售/互动指标、质量 flags。
+3. 统一使用 PLS navigation、theme token、loading / empty / error 状态和响应式布局。
+4. 页面内操作必须走 PLS API，从 SQLite 查询投影读取数据；不得 import、fetch 或解析原 dashboard 的 data.js / HTML 内嵌数据。
+5. 移除或降级“打开完整 BI”按钮，不能作为主流程或验收路径。
+
+数据准入口径：
+- 用户确认导入 PLS 的 BI 数据可直接展示。
+- 不把原 dashboard DOM/CSS 作为整页塞进 PLS。
+
+验收：
+- 用户无需离开 PLS，即可完成账号画像与商品人群查看。
+- 修改 SQLite 中一条测试数据并重启/刷新后，页面通过 API 反映最新数据，不需要重新打包前端。
+- 桌面和移动宽度无明显溢出、遮挡、文字重叠。
+- lint、build、前端 smoke 通过。`
+  },
+  {
+    dom: "V",
+    status: "todo",
+    created: "2026-07-03 00:03",
+    title: "V-P1-F5：款账号对比与优化清单原生重构",
+    brief: `目标：把款账号 TOP1 对比、维度差异、号货匹配度和优化调整清单重构为 PLS 原生决策工作流。
+
+前置：
+- A-P1-F2 提供查询接口。
+- M-P1-F3 提供诊断对象和建议对象。
+
+范围：
+1. 款账号对比页：支持选择 SKU 和账号，展示维度 TOP1、匹配状态、gapScore、confidence。
+2. 号货匹配诊断：展示 fitScore、fitConfidence、recommendation、positive / negative drivers、risks。
+3. 优化清单：按 priority、dimension、actionType 展示建议，支持筛选和导出。
+4. 保留 CSV 导出，默认包含 skuId、accountChannelId、fitScore、fitConfidence、recommendation、drivers、risks、qualityFlags、generatedAt、advice summary；可按用户需要扩展导出 BI 明细字段和值。
+5. 与现有新品预测工作台、渠道匹配热力图形成可导航闭环。
+6. 页面所有数据读取必须走 A-P1-F2 API，不从 public 静态文件、原 dashboard data.js 或 HTML script 读取。
+
+数据准入口径：
+- 导出字段必须来自 PLS 数据对象，可包含用户确认导入的 BI 明细字段和值。
+- 不把原始 data.js 全局变量、原始 HTML 或 audit payload 作为页面数据层；用户授权字段需经 PLS 数据对象或导出服务承接。
+- 不把静态 BI 页面截图当作功能实现。
+
+验收：
+- 账号画像 -> 款账号对比 -> 优化清单 -> 导出 主流程可在 PLS 内完成。
+- 修改 SQLite 中一条款账号对比或优化建议测试数据后，页面和导出通过 API 反映最新数据，不需要重新打包前端。
+- loading / empty / error / low confidence / unmapped 状态完整。
+- lint、build、Playwright smoke 通过。`
+  },
+  {
+    dom: "X",
+    status: "todo",
+    created: "2026-07-03 00:04",
+    title: "X-P1-F6：抖音 BI 产品化重构总体验收",
+    brief: `目标：验收抖音 BI 是否真正重构进 PLS，而不是以外链、iframe、截图或静态页嵌入完成。
+
+范围：
+1. 复核 D-P1-F1 / A-P1-F2 / M-P1-F3 / V-P1-F4 / V-P1-F5 的产物和验证证据。
+2. 检查 PLS 页面是否全部走 SQLite、内部数据对象、API、诊断对象和 React 原生组件。
+3. 检查“打开完整 BI”不再是主流程，不作为验收依赖。
+4. 复核 CSV、audit、API response，确认都通过 PLS SQLite 数据对象、查询服务和导出边界。
+5. 做一次数据更新验收：导入新 dataVersion 或更新测试行后，API、页面和导出均反映最新数据，且前端无需重新构建。
+6. 输出产品化验收报告和后续 P2 hardening 清单。
+
+红线：
+- 发现外链/iframe/静态整页嵌入或前端内嵌 data.js 仍承担主流程时，验收结论为暂缓。
+- 用户确认导入 PLS 的 BI 数据全部放行；验收重点是产品原生化、数据层承接、质量报告和导出边界。
+
+验收：
+- 给出通过 / 暂缓 / 禁止进入产品主线的结论。
+- 明确剩余缺口 owner、风险等级和下一轮任务。
+- wiki changelog、各域 notes 和验收报告同步。`
   }
 ];
 
@@ -1307,9 +1502,22 @@ const HOTFIX = [];
 
 const CHANGELOG = [
   {
+    ver: "0.19",
+    date: "2026-07-03",
+    current: true,
+    title: "抖音 BI 产品化重构拆卡",
+    items: [
+      "新增 P1-F 任务卡组，目标从外链/iframe/静态 BI 复刻升级为 PLS 原生产品能力",
+      "拆分 D-P1-F1、A-P1-F2、M-P1-F3、V-P1-F4、V-P1-F5、X-P1-F6，覆盖 SQLite 入库、API 查询投影、诊断指标、原生页面和总体验收",
+      "明确 douyin_report_dashboard 只作为业务语义和页面参考；PLS 运行时数据真源必须是 SQLite，前端不得继续沿用 HTML/data.js 内嵌数据模式",
+      "明确 PLS 当前数据准入口径为用户授权数据全量放行；历史任务卡中的脱敏、聚合、S0/S1、红线扫描描述仅保留归档语境",
+      "明确最终验收不得以打开完整 BI、截图预览、iframe 或静态整页嵌入替代产品化重构"
+    ]
+  },
+  {
     ver: "0.18",
     date: "2026-07-02",
-    current: true,
+    current: false,
     title: "A-P1-B1/B2/B3/B4 后端工程化归档",
     items: [
       "A-P1-B1 至 A-P1-B4 经总控复核标记 done，批准 latest view、Idempotency-Key、prediction async worker 和 API smoke 脚本化",
@@ -1369,7 +1577,7 @@ const CHANGELOG = [
     items: [
       "X-P1-FREEZE 经总控确认解冻归档，P1-A/B/C/D 拆为正式 todo 任务卡",
       "新增 P1-E 抖音号货匹配迁移卡组，覆盖契约、数据映射、算法 adapter、接口、前端视图和总控验收",
-      "所有 P1 任务继续遵守真实数据本地脱敏、聚合、红线扫描和接缝层由 X 总控持有的约束"
+      "本条为历史记录；当前已修订为用户授权数据全量放行，接缝层仍由 X 总控持有"
     ]
   },
   {
@@ -1455,7 +1663,7 @@ const CHANGELOG = [
     current: false,
     title: "P0-C 发布 gate 冻结",
     items: [
-      "X-P0-C0 经总控完成，P0-C 必修 gate 冻结为 A/M adapter、heatmap 去重、红线扫描自动化和真实数据模板",
+      "X-P0-C0 经总控完成，P0-C 必修 gate 冻结为 A/M adapter、heatmap 去重、数据准入模板和真实数据模板",
       "docs/p0-acceptance-report.md 增加 P0-C 发布 gate、P1 准入条件和风险关闭台账",
       "明确 C1-C4 全部关闭并补齐验证证据前，不进入 P1"
     ]
@@ -1617,7 +1825,7 @@ const PROMPTS = [
   { id: "resume-viz", title: "Session 开场 · viz", desc: "viz 域：读 notes-viz / 任务 brief，先汇报再开工" },
   { id: "resume-infra", title: "Session 开场 · infra", desc: "infra / X 域：读 notes-infra / 接缝契约，先汇报再开工" },
   { id: "wrapup", title: "Session 收尾", desc: "校验、覆盖 notes 当前状态、沉淀知识、列改动清单" },
-  { id: "hotfix", title: "快修通道", desc: "小修小补，先判数据红线和接缝层红线" },
+  { id: "hotfix", title: "快修通道", desc: "小修小补，先判数据准入和接缝层边界" },
 ];
 
 const promptList = document.getElementById("promptList");

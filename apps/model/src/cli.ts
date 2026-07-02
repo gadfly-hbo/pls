@@ -5,6 +5,8 @@ import {
   predictProductProfile,
   runBacktest,
   runCutoffBacktest,
+  runSegmentCalibrationReport,
+  runTokenGovernanceReport,
   toProductDNA,
   validateDemoTagIds,
 } from "./baseline.js";
@@ -48,6 +50,10 @@ if (command === "predict") {
   const result = validateDemoTagIds();
   printJson(result);
   if (!result.ok) process.exitCode = 1;
+} else if (command === "segment-calibration") {
+  printJson(runSegmentCalibrationReport({ inputPath: getArg("--input"), cutoffTimeWindow: getArg("--cutoff") }));
+} else if (command === "token-governance") {
+  printJson(runTokenGovernanceReport());
 } else {
-  throw new Error("Usage: cli.ts <predict|match|backtest|validate-tags> [--sku mock_sku_101] [--mode demo|cutoff] [--input path] [--cutoff timeWindow]");
+  throw new Error("Usage: cli.ts <predict|match|backtest|validate-tags|segment-calibration|token-governance> [--sku mock_sku_101] [--mode demo|cutoff] [--input path] [--cutoff timeWindow]");
 }

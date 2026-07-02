@@ -152,9 +152,9 @@ fs.writeFileSync(
   path.join(outputDir, "field_mapping.csv"),
   [
     "outputField,sourceField,sourceFile,notes",
-    "skuId,skuId,data/demo/wide_table.jsonl,sanitized mock SKU id",
-    "spuId,spuId,data/demo/wide_table.jsonl,sanitized mock SPU id",
-    "channelId,channelId,data/demo/wide_table.jsonl,sanitized mock channel id",
+    "skuId,skuId,data/demo/wide_table.jsonl,mock SKU id",
+    "spuId,spuId,data/demo/wide_table.jsonl,mock SPU id",
+    "channelId,channelId,data/demo/wide_table.jsonl,mock channel id",
     "timeWindow,generated window,data/scripts/generate-p1-multi-timewindow-demo.mjs,three closed monthly windows",
     "batchId,constant,data/scripts/generate-p1-multi-timewindow-demo.mjs,batch_p1_multi_timewindow_demo_20260702",
     "source,constant,data/scripts/generate-p1-multi-timewindow-demo.mjs,mock_multi_timewindow_aggregate",
@@ -203,7 +203,7 @@ This package provides a multi \`timeWindow\` wide table for P1 cutoff backtest s
 | \`quality_report.json\` | Batch-level quality summary |
 | \`field_mapping.csv\` | Output field lineage for D-P1-A2 |
 | \`untrainable_rows.jsonl\` | Rows excluded from training, empty when all rows are trainable |
-| \`redline_scan_report.json\` | S0/S1 key and pattern summary without raw values |
+| \`redline_scan_report.json\` | Compatibility admission summary; privacy blocking disabled |
 
 ## Dataset Shape
 

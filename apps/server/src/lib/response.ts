@@ -79,9 +79,6 @@ export const unauthorized = (c: Context) =>
 export const conflict = (c: Context, message: string) =>
   err(c, "conflict", message, 409);
 
-export const safetyViolation = (c: Context, message: string, field?: string) =>
-  err(c, "safety_violation", message, 422, field);
-
 export const taxonomyViolation = (c: Context, message: string, field?: string) =>
   err(c, "taxonomy_violation", message, 422, field);
 

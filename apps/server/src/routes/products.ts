@@ -1,9 +1,7 @@
 import { Hono } from "hono";
 import { openDb } from "../db/connection.js";
-import { ok, notFound, invalidInput, safetyViolation, taxonomyViolation } from "../lib/response.js";
-import { deepScanSafety } from "../lib/safety.js";
+import { ok, notFound, invalidInput, taxonomyViolation } from "../lib/response.js";
 import { isValidTagId } from "../lib/taxonomy.js";
-import { writeAudit } from "../lib/audit.js";
 
 const products = new Hono();
 
@@ -13,29 +11,6 @@ products.post("/", async (c) => {
   const body = await c.req.json();
   const skuId = body.skuId as string | undefined;
   if (!skuId) return invalidInput(c, "skuId is required", "skuId");
-
-  // Safety gate: deep scan nested fields (attributes, assets, etc.)
-  const safety = deepScanSafety(body);
-  if (!safety.safe) {
-    const db = openDb(wsId);
-    writeAudit(db, {
-      workspaceId: wsId,
-      actor: "system:sanitizer",
-      requestId: c.get("requestId") ?? "",
-      resourceType: "sku",
-      resourceId: skuId,
-      event: "reject",
-      reasonCode: "safety_violation",
-      safetyStage: "sanitize_rejected",
-      meta: { fieldNames: safety.violations.map((v) => v.field) },
-    });
-    db.close();
-    return safetyViolation(
-      c,
-      `blocked fields: ${safety.violations.map((v) => v.field).join(", ")}`,
-      safety.violations[0]?.field
-    );
-  }
 
   // Taxonomy gate: validate mappedProductTags
   const tags = (body.mappedProductTags as Array<{ tagId: string }>) ?? [];

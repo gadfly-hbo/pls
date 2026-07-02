@@ -117,6 +117,11 @@ CREATE TABLE IF NOT EXISTS match_result (
   recommendation TEXT,
   risks TEXT NOT NULL DEFAULT '[]',
   quality_flags TEXT NOT NULL DEFAULT '[]',
+  -- P1-E3: account-product diagnostic columns (nullable, backward-compatible)
+  fit_score REAL,
+  fit_confidence REAL,
+  mismatched_dimensions TEXT NOT NULL DEFAULT '[]',
+  adjustment_advice TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -132,7 +137,8 @@ CREATE VIEW IF NOT EXISTS match_result_latest AS
 SELECT match_id, workspace_id, task_id, prediction_id, sku_id, channel_id, channel_type,
        model_version, source, source_type, generated_at, match_score, match_confidence,
        rank, overlap, best_segment_id, best_segment_match, positive_drivers, negative_drivers,
-       recommendation, risks, quality_flags, created_at
+       recommendation, risks, quality_flags, fit_score, fit_confidence,
+       mismatched_dimensions, adjustment_advice, created_at
 FROM (
   SELECT match_result.*,
          ROW_NUMBER() OVER (
@@ -185,9 +191,9 @@ CREATE INDEX IF NOT EXISTS idx_audit_task ON audit_event(task_id);
 CREATE INDEX IF NOT EXISTS idx_audit_resource ON audit_event(resource_type, resource_id);
 
 -- P1-B2: Idempotency cache.
--- request_hash is a SHA-256 hex of the raw JSON body — no S0/S1 values stored.
--- response_body is the same JSON payload already returned by the safety-gated API,
--- so it inherits the API's redline surface.
+-- request_hash is a SHA-256 hex of the raw JSON body. User-authorized data is
+-- admitted by default; this cache stores only hashes plus the response body.
+-- response_body is the same JSON payload already returned by the API.
 -- PK is (workspace_id, method, path, key) so the same key across different
 -- endpoints does NOT collide — a caller may reuse a client-generated key
 -- across POST /predictions and POST /matches without cross-replay.

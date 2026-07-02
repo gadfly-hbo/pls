@@ -1,8 +1,8 @@
 // P1-B2: Idempotency-Key cache with 24h TTL, per-workspace isolation.
 //
 // Design:
-// - Request-hash is a SHA-256 of the raw request body (no S0/S1 stored).
-// - Response-body is the exact JSON the API already returned (safety-gated).
+// - Request-hash is a SHA-256 of the raw request body.
+// - Response-body is the exact JSON the API already returned.
 // - Path is used as an additional partition so the same key across different
 //   endpoints doesn't cross-contaminate.
 // - Header name follows RFC draft: Idempotency-Key.

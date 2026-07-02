@@ -11,6 +11,7 @@ import batches from "./routes/batches.js";
 import tasks from "./routes/tasks.js";
 import taxonomy from "./routes/taxonomy.js";
 import audit from "./routes/audit.js";
+import accountMatches from "./routes/account-matches.js";
 
 const app = new Hono();
 
@@ -30,6 +31,7 @@ api.route("/batches", batches);
 api.route("/tasks", tasks);
 api.route("/taxonomy", taxonomy);
 api.route("/audit", audit);
+api.route("/account-matches", accountMatches);
 
 app.route("/api/v0", api);
 

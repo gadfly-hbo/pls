@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-width=1.0">
+    <title>抖音商品全景分析</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        window.lucide = window.lucide || { createIcons: function () {} };
+    </script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <i data-lucide="compass"></i>
+                <h1 style="display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 1.1rem;">
+                    商品人群洞察罗盘 
+                    <span style="font-size: 0.65rem; color: var(--accent-color); background: rgba(240, 126, 91, 0.1); padding: 0.2rem 0.4rem; border-radius: 4px; font-weight: 500; letter-spacing: normal; -webkit-text-fill-color: var(--accent-color);">内容渠道</span>
+                </h1>
+            </div>
+
+            <!-- Main Navigation -->
+            <style>
+                .nav-group-title {
+                    display: flex; align-items: center; gap: 0.75rem; 
+                    padding: 0.8rem 1.5rem; color: var(--text); 
+                    font-size: 0.95rem; font-weight: 600;
+                }
+                .nav-group-title i { color: var(--accent-color); }
+                .sub-nav-items { padding-left: 2.8rem; display: flex; flex-direction: column; gap: 0.25rem; margin-right: 1rem; }
+                .sub-nav-btn {
+                    display: block; width: 100%; padding: 0.5rem 1rem; 
+                    background: transparent; border: none; color: var(--text-muted);
+                    font-size: 0.85rem; text-align: left; cursor: pointer;
+                    border-radius: 6px; transition: all 0.2s;
+                }
+                .sub-nav-btn:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+                .sub-nav-btn.active { background: rgba(240, 126, 91, 0.15); color: var(--accent-color); font-weight: 500; }
+            </style>
+
+            <div class="sidebar-nav" style="padding-top: 1rem;">
+                <div class="nav-group">
+                    <div class="nav-group-title">
+                        <i data-lucide="table"></i> 商品人群数据宽表
+                    </div>
+                    <div class="sub-nav-items" style="display: block;">
+                        <button class="sub-nav-btn preset-btn active" data-preset="all">全景视图</button>
+                        <button class="sub-nav-btn preset-btn" data-preset="sales">核心销售视图</button>
+                        <button class="sub-nav-btn preset-btn" data-preset="audience">人群洞察视图</button>
+                        <button class="sub-nav-btn preset-btn" data-preset="advantage">优势标签视图</button>
+                    </div>
+                </div>
+                
+                <button class="nav-btn" data-target="viewInsightsS1">
+                    <i data-lucide="users"></i> 账号画像基准
+                </button>
+                
+                <div class="nav-group" style="margin-top: 1rem;">
+                    <div class="nav-group-title">
+                        <i data-lucide="git-compare"></i> 标签诊断视图
+                    </div>
+                    <div class="sub-nav-items" style="display: block;">
+                        <button class="sub-nav-btn nav-btn" data-target="viewCompare">款vs账号对比</button>
+                        <button class="sub-nav-btn nav-btn" data-target="viewInsightsS3">优化调整清单</button>
+                    </div>
+                </div>
+            </div>
+            
+            <hr class="sidebar-divider">
+
+            <!-- Sidebar tools (Only visible in Table View) -->
+            <div id="sidebarTableTools">
+
+
+                <div class="sidebar-section">
+                    <h3>高级筛选</h3>
+                    <div class="filter-group">
+                        <label>全局搜索</label>
+                        <div class="search-box">
+                            <i data-lucide="search"></i>
+                            <input type="text" id="searchInput" placeholder="搜款号 / 名称...">
+                        </div>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label>实销层级</label>
+                        <select id="filterLevel" class="custom-select">
+                            <option value="">全部层级</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label>商品中类</label>
+                        <select id="filterCategory" class="custom-select">
+                            <option value="">全部中类</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label>性别修正</label>
+                        <select id="filterGender" class="custom-select">
+                            <option value="">全部性别</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Navigation & Actions -->
+            <header class="top-bar">
+                <div class="page-title">
+                    <h2 id="pageTitleText">商品人群数据宽表</h2>
+                    <span class="subtitle" id="pageSubtitleText">读取中...</span>
+                </div>
+                <div class="actions" id="topBarActions">
+                    <select id="accountSelect" class="custom-select hidden" style="margin-right: 0.5rem; width: 250px;">
+                        <!-- Options will be injected by JS -->
+                    </select>
+                    <button class="btn btn-primary" id="exportCsvBtn" style="margin-right: 0.5rem; padding: 0.5rem 0.75rem;" title="导出当前视图数据">
+                        <i data-lucide="download"></i>
+                        导出 CSV
+                    </button>
+                    <button class="btn btn-secondary" id="themeToggleBtn" title="切换亮/暗色模式" style="margin-right: 0.5rem; padding: 0.5rem 0.75rem;">
+                        <i data-lucide="sun"></i>
+                    </button>
+                    <button class="btn btn-secondary" id="columnToggleBtn">
+                        <i data-lucide="sliders-horizontal"></i>
+                        自定义显示字段
+                    </button>
+                </div>
+            </header>
+
+            <!-- VIEW 1: Table -->
+            <div id="viewTable" class="view-section active">
+                <div class="table-wrapper">
+                    <div class="table-container" id="tableContainer">
+                        <table id="dataTable">
+                            <thead>
+                                <tr id="tableHeadRow">
+                                    <!-- Headers -->
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody">
+                                <!-- Data -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div id="noDataMessage" class="no-data hidden">
+                        <i data-lucide="search-x"></i>
+                        <p>暂无符合条件的数据</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- INSIGHTS SHEET 1 VIEW -->
+        <div id="viewInsightsS1" class="view-section hidden">
+            <div class="insights-grid" id="insightsContainer" style="flex: 1; overflow-y: auto;">
+                <!-- Cards will be injected here -->
+            </div>
+        </div>
+
+        <!-- COMPARE SHEET 2 VIEW -->
+        <div id="viewCompare" class="view-section hidden" style="display: flex; flex-direction: column; height: 100%; padding-bottom: 1.5rem;">
+            <div class="table-wrapper">
+                <div class="table-container">
+                    <table class="dashboard-table" id="compareTable">
+                        <thead>
+                            <tr id="compareHeadRow"></tr>
+                        </thead>
+                        <tbody id="compareBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- SUGGESTIONS SHEET 3 VIEW -->
+        <div id="viewInsightsS3" class="view-section hidden" style="display: flex; flex-direction: column; height: 100%; overflow: hidden; padding-bottom: 1.5rem;">
+            <div id="summaryKPIs" style="display: flex; gap: 1rem; margin-bottom: 1.5rem;"></div>
+            <div class="table-wrapper">
+                <div class="table-container" style="flex: 1; overflow: auto; position: relative;">
+                    <table class="dashboard-table" id="suggestionsTable">
+                        <thead>
+                            <tr id="suggestionsHeadRow"></tr>
+                        </thead>
+                        <tbody id="suggestionsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        </main>
+    </div>
+
+    <!-- Column Selection Modal -->
+    <div class="modal-overlay hidden" id="columnModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>自定义字段显示</h2>
+                <div class="modal-search">
+                    <i data-lucide="search"></i>
+                    <input type="text" id="columnSearchInput" placeholder="搜索字段名...">
+                </div>
+                <button class="icon-btn" id="closeModalBtn">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="column-groups" id="columnGroupsContainer">
+                    <!-- Groups will be rendered here -->
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <div class="footer-actions-left">
+                    <button class="btn btn-sm btn-outline" id="selectAllBtn">全选所有</button>
+                    <button class="btn btn-sm btn-outline" id="deselectAllBtn">清空选择</button>
+                </div>
+                <button class="btn btn-primary" id="applyColumnsBtn">确认更改</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="data.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

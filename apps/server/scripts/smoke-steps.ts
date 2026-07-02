@@ -9,6 +9,19 @@ interface MatchData { taskId: string; channelMatches: unknown[] }
 interface HeatmapData { rows: Array<{ skuId: string; cells: Array<{ channelId: string }> }> }
 interface AuditPage { items: Array<{ auditId: string; action: string }> }
 interface AcceptedBatch { task: { taskId: string; resourceUrl?: string } }
+interface AccountDiagResponse {
+  taskId: string;
+  accountId: string;
+  skuId: string;
+  fitScore: number;
+  qualityFlags: string[];
+  mismatchedDimensions: unknown[];
+  adjustmentAdvice: unknown[];
+}
+interface AccountDiagItem { matchId: string; accountId: string; fitScore: number | null; mismatchedDimensions: unknown[]; adjustmentAdvice: unknown[] }
+interface AccountDiagPage { items: AccountDiagItem[] }
+interface AccountHeatmapCell { channelId: string; fitScore: number | null; mismatchedDimensions: unknown[] }
+interface AccountHeatmapPage { rows: Array<{ skuId: string; cells: AccountHeatmapCell[] }> }
 
 export async function runSteps(): Promise<void> {
   await step("health", async () => {
@@ -39,15 +52,20 @@ export async function runSteps(): Promise<void> {
     return { ok: true, status: r.status, detail: { count: data.items.length, skuId } };
   });
 
-  await step("safety_violation", async () => {
+  await step("user_data_admission_allows_sensitive_fields", async () => {
     const r = await request("POST", "/api/v0/products", {
-      body: { skuId: "smoke_bad_sku", phone: "13800138000" },
+      body: {
+        skuId: "smoke_user_data_allowed",
+        phone: "13800138000",
+        memberId: "member_001",
+        orderId: "order_001",
+        title: "User data admission smoke",
+      },
     });
-    if (r.status !== 422) return { ok: false, status: r.status, reason: "expected 422", detail: r.body };
-    const code = (r.body as { code?: string }).code;
-    if (code !== "safety_violation")
-      return { ok: false, status: r.status, reason: `expected code=safety_violation, got ${code}` };
-    return { ok: true, status: r.status };
+    if (r.status !== 200) return { ok: false, status: r.status, reason: "expected 200", detail: r.body };
+    const d = envelopeData<{ skuId: string }>(r.body);
+    if (d.skuId !== "smoke_user_data_allowed") return { ok: false, reason: "unexpected skuId", detail: d };
+    return { ok: true, status: r.status, detail: { skuId: d.skuId } };
   });
 
   let predictionId = "";
@@ -273,5 +291,101 @@ export async function runSteps(): Promise<void> {
     const d = envelopeData<AuditPage>(r.body);
     if (!d.items || d.items.length === 0) return { ok: false, reason: "audit is empty" };
     return { ok: true, status: r.status, detail: { count: d.items.length } };
+  });
+
+  // ── A-P1-E3: Account-product match diagnostics ──────────────────────
+
+  // Resolve a channel_id to use as the "accountId"
+  let accountId = "";
+  await step("e3_resolve_account", async () => {
+    const r = await request("GET", "/api/v0/channels?pageSize=1");
+    if (r.status !== 200) return { ok: false, status: r.status, reason: "expected 200", detail: r.body };
+    const d = envelopeData<{ items: Array<{ channelId: string }> }>(r.body);
+    if (!d.items || d.items.length === 0) return { ok: false, reason: "no seeded channels" };
+    accountId = d.items[0]!.channelId;
+    return { ok: true, status: r.status, detail: { accountId } };
+  });
+
+  let e3SkuId = "";
+  await step("e3_post_account_match", async () => {
+    if (!accountId || !skuId) return { ok: false, reason: "prerequisites missing" };
+    e3SkuId = skuId;
+    const r = await request("POST", "/api/v0/account-matches", {
+      body: { accountId, skuId },
+    });
+    if (r.status !== 200) return { ok: false, status: r.status, reason: "expected 200", detail: r.body };
+    const d = envelopeData<AccountDiagResponse>(r.body);
+    if (typeof d.fitScore !== "number")
+      return { ok: false, reason: "missing fitScore", detail: d };
+    if (!Array.isArray(d.qualityFlags))
+      return { ok: false, reason: "missing qualityFlags", detail: d };
+    if (!d.qualityFlags.includes("algorithm_pending_user_formula"))
+      return { ok: false, reason: "qualityFlags must include algorithm_pending_user_formula", detail: d };
+    if (!Array.isArray(d.mismatchedDimensions))
+      return { ok: false, reason: "missing mismatchedDimensions", detail: d };
+    if (!Array.isArray(d.adjustmentAdvice))
+      return { ok: false, reason: "missing adjustmentAdvice", detail: d };
+    if (d.accountId !== accountId)
+      return { ok: false, reason: `accountId mismatch: ${d.accountId} != ${accountId}`, detail: d };
+    return { ok: true, status: r.status, detail: { taskId: d.taskId, fitScore: d.fitScore } };
+  });
+
+  await step("e3_get_account_matches", async () => {
+    if (!accountId) return { ok: false, reason: "no accountId" };
+    const r = await request("GET", `/api/v0/account-matches?accountId=${accountId}&pageSize=10`);
+    if (r.status !== 200) return { ok: false, status: r.status, reason: "expected 200", detail: r.body };
+    const d = envelopeData<AccountDiagPage>(r.body);
+    if (!d.items || d.items.length === 0) return { ok: false, reason: "no diagnostic results", detail: d };
+    const first = d.items[0]!;
+    if (typeof first.fitScore !== "number")
+      return { ok: false, reason: "missing fitScore", detail: first };
+    if (!Array.isArray(first.mismatchedDimensions))
+      return { ok: false, reason: "missing mismatchedDimensions", detail: first };
+    if (!Array.isArray(first.adjustmentAdvice))
+      return { ok: false, reason: "missing adjustmentAdvice", detail: first };
+    return { ok: true, status: r.status, detail: { count: d.items.length } };
+  });
+
+  await step("e3_account_heatmap", async () => {
+    if (!accountId || !e3SkuId) return { ok: false, reason: "prerequisites missing" };
+    const r = await request("GET", `/api/v0/account-matches/heatmap?accountId=${accountId}&skuIds=${e3SkuId}`);
+    if (r.status !== 200) return { ok: false, status: r.status, reason: "expected 200", detail: r.body };
+    const d = envelopeData<AccountHeatmapPage>(r.body);
+    if (!d.rows || d.rows.length === 0) return { ok: false, reason: "no heatmap rows", detail: d };
+    const row = d.rows.find((row) => row.skuId === e3SkuId);
+    if (!row) return { ok: false, reason: `no heatmap row for skuId=${e3SkuId}` };
+    if (row.cells.length === 0) return { ok: false, reason: "empty cells", detail: row };
+    const cell = row.cells[0]!;
+    if (typeof cell.fitScore !== "number")
+      return { ok: false, reason: "cell missing fitScore", detail: cell };
+    return { ok: true, status: r.status, detail: { cells: row.cells.length } };
+  });
+
+  await step("e3_user_data_admission_still_allows_sensitive_fields", async () => {
+    // Verify account-match routes do not reintroduce privacy-field blocking.
+    const r = await request("POST", "/api/v0/products", {
+      body: {
+        skuId: "smoke_user_data_allowed_e3",
+        phone: "13800138000",
+        rawUserId: "raw_user_001",
+        title: "E3 user data admission smoke",
+      },
+    });
+    if (r.status !== 200) return { ok: false, status: r.status, reason: "expected 200", detail: r.body };
+    const d = envelopeData<{ skuId: string }>(r.body);
+    if (d.skuId !== "smoke_user_data_allowed_e3") return { ok: false, reason: "unexpected skuId", detail: d };
+    return { ok: true, status: r.status, detail: { skuId: d.skuId } };
+  });
+
+  await step("e3_taxonomy_violation_still_works", async () => {
+    // Verify taxonomy gate still intercepts invalid tagIds.
+    const r = await request("POST", "/api/v0/products", {
+      body: { skuId: "smoke_bad_sku_e3_tax", mappedProductTags: [{ tagId: "INVALID_TAG" }] },
+    });
+    if (r.status !== 422) return { ok: false, status: r.status, reason: "expected 422", detail: r.body };
+    const code = (r.body as { code?: string }).code;
+    if (code !== "taxonomy_violation")
+      return { ok: false, status: r.status, reason: `expected code=taxonomy_violation, got ${code}` };
+    return { ok: true, status: r.status };
   });
 }

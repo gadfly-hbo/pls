@@ -2,7 +2,7 @@
 
 > 归属：D 数据画像  
 > 状态：P0 草案  
-> 最近更新：2026-07-01
+> 最近更新：2026-07-03
 
 ## 1. 目的
 
@@ -12,7 +12,7 @@
 SKU_ID + 商品DNA + 真实画像标签分布 + 销售表现
 ```
 
-本文只定义脱敏、聚合后的数据规格，不承载原始订单、会员、客户、浏览、加购、支付明细，也不承载平台 DMP 原始成员数据。
+2026-07-03 口径修订：PLS 是业务 BI 系统。用户给到 PLS、要求导入或要求产品化的数据默认放行，可保留原始字段和值。本文只定义训练宽表、画像标签、渠道画像等模型/报表对象的结构要求；脱敏、聚合、抽样和指数化仅在模型、图表或用户明确要求时执行，不作为隐私准入门禁。
 
 依赖文档：
 
@@ -21,22 +21,19 @@ SKU_ID + 商品DNA + 真实画像标签分布 + 销售表现
 
 ## 2. 数据边界
 
-### 2.1 允许进入本规格的数据
+### 2.1 可进入本规格的数据
 
 | 数据 | 粒度 | 要求 |
 |---|---|---|
-| 商品基础信息 | SKU 级 | 只包含商品级字段，不含供应商敏感信息、成本、未发布价格策略 |
-| 历史销售表现 | SKU + channel + timeWindow 聚合 | 只保留销量、GMV 指数、价格区间、转化率、退货率等统计值 |
-| DMP 聚合画像 | SKU 或 channel 聚合 | 必须映射为 `ProfileTagScore`，保留 `source`、`timeWindow`、`sampleSize` |
-| 渠道画像 | channel + timeWindow 聚合 | 不保留用户级行为或人群包成员 |
-| 数据质量报告 | batch 级 | 只输出缺失率、覆盖率、异常统计和未映射字段 |
+| 商品基础信息 | SKU 级或用户提供粒度 | 保留业务字段和值；按模型需要派生商品 DNA |
+| 历史销售表现 | 明细或 SKU + channel + timeWindow | 可直接使用；训练宽表需要时再派生销量、GMV、价格、转化、退货等统计特征 |
+| DMP 画像 | 原始导出、明细或聚合 | 可直接使用；画像标签视图需要时再映射为 `ProfileTagScore` |
+| 渠道画像 | 账号、渠道、用户或时间窗口粒度 | 可直接使用；热力图需要时再派生 channel/account 级画像 |
+| 数据质量报告 | batch 级 | 输出缺失率、覆盖率、异常统计和未映射字段 |
 
-### 2.2 禁止进入本规格的数据
+### 2.2 不再作为隐私准入门禁的数据
 
-- 用户级、订单级、会员级、设备级、账号级记录。
-- 手机号、姓名、地址、订单号、会员 ID、平台 open id、广告 ID、设备 ID。
-- 平台 DMP 原始导出、人群包原始成员、ID 包。
-- 未脱敏的真实商品企划、成本、投流预算、首单量和未发布价格策略。
+用户级、订单级、会员级、设备级、账号级记录，手机号、姓名、地址、订单号、会员 ID、平台 open id、广告 ID、设备 ID，平台 DMP 原始导出、人群包成员、ID 包，以及真实商品企划、成本、投流预算、首单量和价格策略，均不再触发 agent 自动拦截。是否进入某个模型对象，只由产品功能、字段契约和用户当次授权决定。
 
 ## 3. 通用对象
 
@@ -61,8 +58,8 @@ SKU_ID + 商品DNA + 真实画像标签分布 + 销售表现
 | `score` | number | 是 | 标签强度或占比，范围 `0-1` |
 | `confidence` | number | 是 | 映射或统计置信度，范围 `0-1` |
 | `source` | string | 是 | 数据来源、导入批次或生成方式 |
-| `sampleSize` | number | 条件必填 | 真实聚合数据必须提供；mock 或预测数据可为空 |
-| `timeWindow` | string | 条件必填 | 真实聚合数据必须提供，格式为 `YYYY-MM-DD/YYYY-MM-DD` |
+| `sampleSize` | number | 条件必填 | 聚合画像或统计画像建议提供；明细、mock 或预测数据可为空 |
+| `timeWindow` | string | 条件必填 | 聚合画像或统计画像建议提供，格式为 `YYYY-MM-DD/YYYY-MM-DD` |
 
 ### 3.2 `DataLineage`
 
@@ -71,17 +68,17 @@ SKU_ID + 商品DNA + 真实画像标签分布 + 销售表现
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---:|---|
 | `source` | string | 是 | 例如 `mock_sales_aggregate`、`tmall_dmp_aggregate` |
-| `sourceType` | enum | 是 | `mock`、`sanitized_aggregate`、`manual_mapping`、`derived` |
-| `batchId` | string | 是 | 导入或生成批次 ID，不使用真实外部文件名 |
-| `timeWindow` | string | 是 | 数据统计窗口 |
-| `sampleSize` | number | 是 | 聚合样本量，例如订单数、买家数或曝光样本数 |
+| `sourceType` | enum | 是 | `mock`、`user_authorized`、`sanitized_aggregate`、`manual_mapping`、`derived` |
+| `batchId` | string | 是 | 导入或生成批次 ID，可使用业务批次名 |
+| `timeWindow` | string | 条件必填 | 数据统计窗口；明细型导入可为空 |
+| `sampleSize` | number | 条件必填 | 聚合样本量，例如订单数、买家数或曝光样本数；明细型导入可为空 |
 | `generatedAt` | string | 是 | ISO 8601 时间戳 |
 
 ## 4. 历史 SKU 训练宽表
 
 ### 4.1 表定位
 
-训练宽表是 M 域训练和回测的主输入。P0 推荐一行代表一个历史 SKU 在一个渠道、一个时间窗口内的聚合表现。
+训练宽表是 M 域训练和回测的主输入。P0 推荐一行代表一个历史 SKU 在一个渠道、一个时间窗口内的表现；如源数据是用户授权明细，D 域可先按该 grain 派生训练特征。
 
 ```text
 grain = skuId + channelId + timeWindow
@@ -105,9 +102,9 @@ grain = skuId + channelId + timeWindow
 
 | 字段 | 类型 | 必填 | 示例 | 说明 |
 |---|---|---:|---|---|
-| `skuId` | string | 是 | `mock_sku_001` | 脱敏或 mock SKU ID |
-| `spuId` | string | 否 | `mock_spu_001` | 脱敏或 mock SPU ID |
-| `channelId` | string | 是 | `mock_tmall_store` | 渠道 ID，不能包含真实账号 ID |
+| `skuId` | string | 是 | `mock_sku_001` | SKU ID，可为真实业务 ID 或 mock ID |
+| `spuId` | string | 否 | `mock_spu_001` | SPU ID，可为真实业务 ID 或 mock ID |
+| `channelId` | string | 是 | `mock_tmall_store` | 渠道或账号 ID，可为真实业务 ID 或 mock ID |
 | `channelType` | enum | 是 | `shelf_ecommerce` | 见 7.2 |
 | `categoryLv1` | string | 是 | `apparel` | 一级类目 |
 | `categoryLv2` | string | 是 | `dress` | 二级类目 |
@@ -122,7 +119,7 @@ grain = skuId + channelId + timeWindow
 
 | 字段 | 类型 | 必填 | 示例 | 说明 |
 |---|---|---:|---|---|
-| `titleTokens` | string[] | 否 | `["minimal", "commute"]` | 脱敏后的商品标题关键词 |
+| `titleTokens` | string[] | 否 | `["minimal", "commute"]` | 商品标题关键词 |
 | `styleKeywords` | string[] | 是 | `["minimal", "commute"]` | 商品风格关键词 |
 | `colorFamily` | enum | 是 | `neutral` | 主色系 |
 | `fitType` | enum | 否 | `regular` | 版型 |
@@ -130,9 +127,9 @@ grain = skuId + channelId + timeWindow
 | `patternType` | enum | 否 | `solid` | 图案大类 |
 | `sleeveType` | enum | 否 | `short_sleeve` | 袖型或结构特征 |
 | `lengthType` | enum | 否 | `midi` | 长度特征 |
-| `priceBand` | enum | 是 | `mid` | 价格带，不记录真实定价策略 |
+| `priceBand` | enum | 是 | `mid` | 价格带；真实定价可在 BI 视图或业务字段中保留 |
 | `launchType` | enum | 否 | `new_arrival` | 上新类型 |
-| `imageFeatureSummary` | object | 否 | `{ "hasModel": true }` | 商品图聚合特征摘要，不存原图 |
+| `imageFeatureSummary` | object | 否 | `{ "hasModel": true }` | 商品图特征摘要；原图可按产品功能另行存储或展示 |
 | `mappedProductTags` | `ProfileTagScore[]` | 是 | `[]` | 从商品 DNA 映射出的内部标签；D 域预计算，M 域校验和缺失回填 |
 
 **ProfileLabels**
@@ -145,22 +142,22 @@ grain = skuId + channelId + timeWindow
 | `labelSource` | string | 是 | `mock_dmp_aggregate` | 标签来源 |
 | `labelSampleSize` | number | 是 | `1200` | 画像样本量 |
 | `labelTimeWindow` | string | 是 | `2026-05-01/2026-06-30` | 标签统计窗口 |
-| `unmappedTags` | object[] | 是 | `[]` | 未映射 DMP 字段摘要，不含原始成员 |
+| `unmappedTags` | object[] | 是 | `[]` | 未映射 DMP 字段摘要，可保留业务字段和值 |
 
-总控决策：P0 默认以 `buyerProfileTags` 作为训练标签主目标，不强制要求三层画像齐备。若上游已提供聚合后的 `viewerProfileTags` 或 `cartProfileTags`，应保留用于后续分层建模和误差分析；若缺失，不阻塞 P0 训练宽表。
+总控决策：P0 默认以 `buyerProfileTags` 作为训练标签主目标，不强制要求三层画像齐备。若上游已提供 `viewerProfileTags` 或 `cartProfileTags`，应保留用于后续分层建模和误差分析；若缺失，不阻塞 P0 训练宽表。
 
 **SalesPerformance**
 
 | 字段 | 类型 | 必填 | 示例 | 说明 |
 |---|---|---:|---|---|
 | `salesUnits` | number | 是 | `860` | 聚合销量 |
-| `gmvIndex` | number | 是 | `0.76` | 脱敏 GMV 指数，范围 `0-1`；真实聚合金额仅允许留在本地受控统计层 |
-| `avgSellingPriceBand` | enum | 否 | `mid` | 成交均价区间，使用 `value`、`mid`、`premium`，不记录真实均价 |
+| `gmvIndex` | number | 是 | `0.76` | GMV 指数，范围 `0-1`；真实金额可作为业务 BI 字段保留 |
+| `avgSellingPriceBand` | enum | 否 | `mid` | 成交均价区间，使用 `value`、`mid`、`premium`；真实均价可作为业务 BI 字段保留 |
 | `conversionRate` | number | 否 | `0.034` | 支付转化率，范围 `0-1` |
 | `returnRate` | number | 否 | `0.08` | 退货率，范围 `0-1` |
 | `sellThroughRate` | number | 否 | `0.62` | 售罄率，范围 `0-1` |
 | `promotionIntensity` | enum | 否 | `low` | `none`、`low`、`medium`、`high` |
-| `trafficIndex` | number | 否 | `0.71` | 脱敏流量指数，范围 `0-1` |
+| `trafficIndex` | number | 否 | `0.71` | 流量指数，范围 `0-1` |
 
 **Quality**
 
@@ -249,11 +246,11 @@ grain = skuId + channelId + timeWindow
 }
 ```
 
-## 5. DMP 聚合画像导入格式
+## 5. DMP 画像导入与标签映射格式
 
 ### 5.1 输入原则
 
-DMP 导入文件必须是聚合后的标签分布，不允许包含用户列表、设备列表、订单列表或外部人群包成员。
+DMP 导入文件可使用用户授权的原始导出、明细、人群包或聚合标签分布。若要进入 `ProfileTagScore` 标签视图，需要按下列推荐 grain 映射为标签分布；无法映射的字段进入 `unmappedTags`，不因字段形态被隐私拦截。
 
 推荐粒度：
 
@@ -268,14 +265,14 @@ grain = entityType + entityId + profileStage + tagId + timeWindow
 | 字段 | 类型 | 必填 | 示例 | 说明 |
 |---|---|---:|---|---|
 | `entityType` | enum | 是 | `sku` | `sku`、`channel` |
-| `entityId` | string | 是 | `mock_sku_001` | 脱敏或 mock ID |
+| `entityId` | string | 是 | `mock_sku_001` | 业务 ID 或 mock ID |
 | `profileStage` | enum | 是 | `buyer` | `viewer`、`cart`、`buyer`、`channel_audience` |
-| `sourceField` | string | 是 | `age_band` | DMP 聚合字段名，不含用户值 |
-| `sourceValue` | string | 是 | `25-34` | 聚合字段枚举值 |
+| `sourceField` | string | 是 | `age_band` | DMP 字段名 |
+| `sourceValue` | string | 是 | `25-34` | 字段值或映射后的枚举值 |
 | `mappedTagId` | string | 是 | `demo.age_25_34` | 内部 `tagId` |
 | `score` | number | 是 | `0.81` | 标签占比或强度，范围 `0-1` |
 | `confidence` | number | 是 | `0.86` | 映射置信度，范围 `0-1` |
-| `sampleSize` | number | 是 | `1200` | 该聚合标签样本量 |
+| `sampleSize` | number | 条件必填 | `1200` | 聚合标签样本量；明细映射或单条对象可为空 |
 | `timeWindow` | string | 是 | `2026-05-01/2026-06-30` | 统计窗口 |
 | `source` | string | 是 | `mock_dmp_aggregate` | 来源 |
 | `mappingRuleId` | string | 是 | `rule_age_band_v1` | 映射规则 ID |
@@ -291,15 +288,15 @@ sku,mock_sku_001,buyer,style_preference,commute_basic,style.minimal,0.74,0.70,12
 
 ### 5.4 未映射字段
 
-无法解释或置信度不足的 DMP 聚合字段必须进入 `unmappedTags`，不得强行映射。
+无法解释或置信度不足的 DMP 字段必须进入 `unmappedTags`，不得强行映射到错误标签。
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---:|---|
 | `entityType` | enum | 是 | `sku`、`channel` |
-| `entityId` | string | 是 | 脱敏或 mock ID |
-| `sourceField` | string | 是 | 原聚合字段名 |
-| `sourceValue` | string | 是 | 原聚合枚举值 |
-| `sampleSize` | number | 是 | 聚合样本量 |
+| `entityId` | string | 是 | 业务 ID 或 mock ID |
+| `sourceField` | string | 是 | 原字段名 |
+| `sourceValue` | string | 是 | 原字段值或映射枚举值 |
+| `sampleSize` | number | 条件必填 | 聚合样本量；明细映射可为空 |
 | `timeWindow` | string | 是 | 统计窗口 |
 | `reason` | enum | 是 | `unknown_semantics`、`low_confidence`、`not_in_taxonomy` |
 
@@ -344,7 +341,7 @@ sku,mock_sku_001,buyer,style_preference,commute_basic,style.minimal,0.74,0.70,12
 
 ### 7.1 渠道画像对象
 
-渠道画像必须是渠道级聚合，不得包含账号级或用户级明细。
+渠道画像对象是当前热力图和匹配模型消费的 channel/account 级视图；源数据可为用户授权的明细、账号数据或聚合报表。
 
 ```json
 {
@@ -373,17 +370,17 @@ sku,mock_sku_001,buyer,style_preference,commute_basic,style.minimal,0.74,0.70,12
 
 | 字段 | 类型 | 必填 | 示例 | 说明 |
 |---|---|---:|---|---|
-| `channelId` | string | 是 | `mock_douyin_live_001` | 脱敏或 mock 渠道 ID |
-| `channelName` | string | 否 | `Mock Douyin Live` | 展示名，不能包含真实敏感账号信息 |
+| `channelId` | string | 是 | `mock_douyin_live_001` | 渠道 ID，可为真实业务 ID 或 mock ID |
+| `channelName` | string | 否 | `Mock Douyin Live` | 展示名，可使用用户授权的真实账号/渠道名称 |
 | `channelType` | enum | 是 | `live_stream` | `shelf_ecommerce`、`short_video`、`live_stream`、`private_domain` |
 | `platformType` | enum | 否 | `content_ecommerce` | `shelf_ecommerce`、`content_ecommerce`、`private_domain` |
 | `timeWindow` | string | 是 | `2026-05-01/2026-06-30` | 统计窗口 |
-| `sampleSize` | number | 是 | `5000` | 渠道聚合样本量 |
+| `sampleSize` | number | 条件必填 | `5000` | 渠道聚合样本量；明细视图可为空 |
 | `source` | string | 是 | `mock_channel_aggregate` | 来源 |
 | `generatedAt` | string | 是 | `2026-07-01T00:00:00Z` | 生成时间 |
 | `tags` | `ProfileTagScore[]` | 是 | `[]` | 渠道画像标签分布 |
-| `trafficIndex` | number | 否 | `0.68` | 脱敏流量指数，范围 `0-1` |
-| `conversionIndex` | number | 否 | `0.54` | 脱敏转化指数，范围 `0-1` |
+| `trafficIndex` | number | 否 | `0.68` | 流量指数，范围 `0-1` |
+| `conversionIndex` | number | 否 | `0.54` | 转化指数，范围 `0-1` |
 | `qualityFlags` | string[] | 是 | `[]` | 质量标记 |
 
 ## 8. 数据质量检查规则

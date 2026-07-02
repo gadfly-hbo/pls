@@ -67,7 +67,7 @@ export default function Dashboard({ currentSku, setCurrentSku, prediction, setPr
     <div className="dashboard-grid">
       <div className="card">
         <h3>录入新品</h3>
-        <p style={{ color: 'var(--muted-foreground)', fontSize: 13, marginTop: 4 }}>请勿上传含个人隐私或高敏经营机密的文件</p>
+        <p style={{ color: 'var(--muted-foreground)', fontSize: 13, marginTop: 4 }}>可录入用户授权进入 PLS 的业务数据</p>
         <form onSubmit={handleSubmit} style={{ marginTop: 16 }}>
           <div className="form-item">
             <label>SKU ID (联调用)</label>

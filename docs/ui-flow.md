@@ -44,11 +44,11 @@ P0 核心流程分为两个主要工作台视图：
 ### 阶段四：导出匹配报告 (CSV)
 - **触发**：在人货匹配热力图右上角点击“导出匹配报告”。
 - **数据来源**：仅使用当前页面已加载的 `MatchResult` / `/matches/heatmap` 派生结果。
-- **允许字段**：`skuId`、`channelId`、`matchScore`、`matchConfidence`、`recommendation`、`positiveDrivers.tagId`、`negativeDrivers.tagId`、`risks`、`generatedAt`。
-- **禁止字段**：原始商品图、原始上传文件、DMP 原始字段值、用户级明细、审计原始 payload。
+- **默认字段**：`skuId`、`channelId`、`matchScore`、`matchConfidence`、`recommendation`、`positiveDrivers.tagId`、`negativeDrivers.tagId`、`risks`、`generatedAt`。
+- **扩展字段**：用户授权导入或要求产品化的业务字段均可展示和导出；是否纳入 CSV 由页面场景和用户口径决定。
 
 ## 3. 设计原则约束
 1. **工作台心智**：非营销着陆页，无多余视觉装饰，首屏直接暴露核心输入输出，紧凑展示。
 2. **透明化（非黑盒）**：画像和匹配分数的旁边必须有“Explain”能力（通过 drivers 展示依据），让运营理解背后的原因。
-3. **安全与红线提示**：在数据上传和录入区域必须有安全提示（“请勿上传含个人隐私或高敏经营机密的文件”）。
-4. **导出安全**：CSV 导出只允许导出 S3/S4 派生结果和聚合展示字段，不允许导出 S0/S1 或原始输入内容。
+3. **数据准入提示**：上传和录入区域提示用户确认数据来源与授权范围；系统不按隐私字段形态拦截。
+4. **导出口径**：CSV 可导出用户授权数据和派生结果；具体字段由产品流程、页面上下文和用户要求控制。

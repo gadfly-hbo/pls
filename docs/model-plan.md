@@ -166,7 +166,7 @@ P0 使用规则表，源自 `data-spec.md §6.3` 与附录 B：
 | 字段 | 必填 | 说明 |
 |---|---:|---|
 | `predictionId` | 是 | P0-B 持久化 ID 由 A 域落库时生成；M 域 draft 可返回临时 ID 或留空 |
-| `skuId` | 是 | 脱敏或 mock SKU ID |
+| `skuId` | 是 | SKU ID，可为真实业务 ID 或 mock ID |
 | `generatedAt` | 是 | ISO 8601 时间戳 |
 | `modelVersion` | 是 | 语义化版本，用于回测对齐 |
 | `modelPath` | 是 | `gbdt` / `knn` / `rule`，声明本次结果的兜底层级 |

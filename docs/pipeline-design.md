@@ -2,7 +2,7 @@
 
 > 归属：A 应用后端
 > 状态：P0 草案
-> 最近更新：2026-07-01
+> 最近更新：2026-07-03
 
 ## 1. 目的
 
@@ -26,7 +26,7 @@ P0 原则：
 
 - 本文只锁契约与流程，不锁具体实现语言/框架。
 - 所有跨阶段状态迁移必须能在审计日志中还原。
-- 任何触发数据安全红线的请求走 `rejected` 分支，不进主库。
+- 用户给到 PLS 并要求导入或产品化的数据默认通过准入，不因个人敏感、用户级、订单/会员行级、DMP 成员包或 ID 字段进入 `rejected` 分支。
 - 结果对象一律带 `source / confidence / generatedAt`；聚合数据额外带 `sampleSize / timeWindow`。
 
 ## 2. 数据流总览
@@ -36,8 +36,8 @@ P0 原则：
 ```
 D 域导入器  ──POST /batches──▶  A 域接入层
                                     │
-                                    │ sanitize / taxonomy_validate / quality_check
-                                    │ 命中红线 → rejected 分支 + 审计
+                                    │ admission / taxonomy_validate / quality_check
+                                    │ taxonomy 或业务契约失败 → rejected 分支 + 审计
                                     ▼
                                 A 域主库（SKU / ChannelProfile / WideTableRow）
                                     │
@@ -51,8 +51,8 @@ D 域导入器  ──POST /batches──▶  A 域接入层
 
 | 阶段 | 输入 | 输出 | 归属 |
 |---|---|---|---|
-| 1. `import` | D 域聚合 CSV/JSONL | `Batch` + 落库的 `SKU`、`ChannelProfile`、宽表行 | A |
-| 2. `sanitize` | 上一步 payload | 去敏字段视图 + `sanitize_rejected` 列表 | A |
+| 1. `import` | D 域或用户授权 CSV/JSONL | `Batch` + 落库的 `SKU`、`ChannelProfile`、宽表行 | A |
+| 2. `admission` | 上一步 payload | 用户授权数据默认放行 + 准入审计 | A |
 | 3. `taxonomy_validate` | `tagId` 集合 | 通过 / `taxonomy_violation` / `unmappedInputTokens` | A |
 | 4. `quality_check` | 上一步结果 | `qualityReport` + `qualityFlags` | A |
 | 5. `predict` | `SKU` + `modelVersion` | `ProductProfile` | A + M |
@@ -63,7 +63,7 @@ D 域导入器  ──POST /batches──▶  A 域接入层
 
 任一请求进入主库前必须依次通过：
 
-1. **safety 门禁**（S0/S1 拦截）：字段名黑名单（`phone`、`name`、`address`、`orderId`、`memberId`、`openId`、`adId`、`deviceId`）+ 值级正则（手机号 / 邮箱 / 身份证形态）。命中 → `safety_violation`，全批 `rejected`。
+1. **admission 门禁**：用户给到 PLS 并要求导入或产品化的数据默认放行；不因手机号、姓名、地址、订单/会员行级数据、DMP 成员包、设备 ID、平台 ID 或其他 ID 字段和值形态拒绝。
 2. **taxonomy 门禁**：`tagId` 必须在 `docs/profile-taxonomy-v0.md` 白名单。未命中且 `mappingRuleId` 存在 → 进入 `unmappedTags`；否则 `taxonomy_violation`。
 3. **quality 门禁**：`sampleSize < 100` 标记 `low_sample_size`；`profileCoverageRate < 0.7` 标记 `low_mapping_coverage`。仅告警不拦截，落 `qualityReport`。
 
@@ -80,9 +80,9 @@ D 域导入器  ──POST /batches──▶  A 域接入层
 | `succeeded` | 成功，`resourceId` 已生成 | 是 |
 | `failed` | 处理失败（模型异常、依赖失败） | 是 |
 | `cancelled` | 用户或系统主动取消 | 是 |
-| `rejected` | 数据安全红线拦截（`safety_violation` / `taxonomy_violation`） | 是 |
+| `rejected` | 业务契约拒绝（例如 `taxonomy_violation`） | 是 |
 
-`rejected` 与 `failed` 语义分离：前者是"违反红线拒绝处理"，后者是"允许处理但内部异常"。V 域展示时二者的运营含义不同。
+`rejected` 与 `failed` 语义分离：前者是"业务契约拒绝处理"，后者是"允许处理但内部异常"。V 域展示时二者的运营含义不同。
 
 ### 3.2 预测任务状态机
 
@@ -94,7 +94,7 @@ D 域导入器  ──POST /batches──▶  A 域接入层
                                 ▼
         ┌─────────────────── running ──────────────────┐
         │                       │                       │
-        │ safety/taxonomy fail  │ predict ok            │ predict error
+        │ taxonomy fail         │ predict ok            │ predict error
         ▼                       ▼                       ▼
     rejected               succeeded                  failed
                                 │                       │
@@ -145,9 +145,9 @@ D 域导入器  ──POST /batches──▶  A 域接入层
 ### 3.4 批次导入任务状态机
 
 ```
-   [∅] ─create─▶ queued ─worker─▶ running ─sanitize/tax/qc─▶ succeeded
+   [∅] ─create─▶ queued ─worker─▶ running ─admission/tax/qc─▶ succeeded
                                      │                       │
-                                     │ safety hit            │ qualityFlags 非空
+                                     │ taxonomy fail         │ qualityFlags 非空
                                      ▼                       ▼
                                  rejected             succeeded (with warnings)
                                      │
@@ -158,7 +158,7 @@ D 域导入器  ──POST /batches──▶  A 域接入层
 
 规则：
 
-- 批次任务允许"warnings 通过"：`qualityReport.qualityFlags` 非空但无红线命中时，API 响应仍是 `succeeded` + `qualityFlags`。
+- 批次任务允许"warnings 通过"：`qualityReport.qualityFlags` 非空时，API 响应仍可为 `succeeded` + `qualityFlags`。
 - `rowCount > 100000` 拒绝：`payload_too_large`。
 - 批次任务**无自动重试**：重试语义由客户端重发 + 新 `batchId` 显式表达。
 
@@ -179,7 +179,7 @@ D 域导入器  ──POST /batches──▶  A 域接入层
 | `taskId` | 关联任务 |
 | `fromStatus` / `toStatus` | 迁移前后状态 |
 | `event` | `enqueue` / `start` / `succeed` / `fail` / `cancel` / `reject` / `retry` |
-| `reasonCode` | 错误码或触发原因（例如 `predict_timeout`、`safety_violation`） |
+| `reasonCode` | 错误码或触发原因（例如 `predict_timeout`、`taxonomy_violation`） |
 | `attempt` | 第几次尝试 |
 | `at` | ISO 8601 |
 
@@ -203,7 +203,7 @@ D 域导入器  ──POST /batches──▶  A 域接入层
 
 - 只重试 `failed` 且 `error.retriable = true`。
 - 可重试错误码：`predict_timeout`、`match_timeout`、`internal_error`、`dependency_failed`（下游 5xx）。
-- 不可重试错误码：`safety_violation`、`taxonomy_violation`、`invalid_input`、`unprocessable`、`payload_too_large`、`forbidden`。
+- 不可重试错误码：`taxonomy_violation`、`invalid_input`、`unprocessable`、`payload_too_large`、`forbidden`。
 - 退避：指数 2/4/8 秒；`attempts` 计数写入 `Task.attempts`。
 - 达到重试上限 → 终态 `failed`，写审计事件 `event=fail, reasonCode=retry_exhausted`。
 
@@ -241,16 +241,14 @@ D 域导入器  ──POST /batches──▶  A 域接入层
 
 字段约束：
 
-- `actor` 枚举：`user:<userId>` / `system:worker` / `system:scheduler` / `system:sanitizer`。
+- `actor` 枚举：`user:<userId>` / `system:worker` / `system:scheduler` / `system:admission`。
 - `event` 与 `fromStatus / toStatus` 的组合以 §3.6 状态机为准，其他组合视为异常并触发 `internal_error` 审计。
-- `meta` 不得包含 S0/S1 原文；仅允许写入 `modelVersion`、`modelPath`、`dnaHash`、`sourceType` 等元信息。
-- **禁止字段**：payload 原始 JSON、真实字段值、请求 body 全文；仅保留字段名与是否命中黑名单的布尔标记。
+- `meta` 默认记录任务和质量相关元信息；是否记录 payload 原文、真实字段值或请求 body 全文按用户当次产品化要求和存储设计执行。
 
 ### 5.2 特殊事件
 
 | 场景 | `event` | 附加要求 |
 |---|---|---|
-| 数据红线拦截 | `reject` | `reasonCode = safety_violation`，`meta.fieldName` 只记字段名不记值 |
 | 标签体系拦截 | `reject` | `reasonCode = taxonomy_violation`，`meta.tagId` 记录违规 tagId |
 | 超时降级 | `fail` | `reasonCode = predict_timeout` 或 `match_timeout` |
 | 重试消耗完 | `fail` | `reasonCode = retry_exhausted` |
@@ -310,19 +308,19 @@ data/
 │       ├── db.sqlite                     # 主库
 │       ├── batches/
 │       │   └── batch_mock_20260701/
-│       │       ├── raw.jsonl             # 原始导入（脱敏后）
+│       │       ├── raw.jsonl             # 原始导入（用户授权数据）
 │       │       ├── quality_report.json
 │       │       └── unmapped_tags.jsonl
 │       ├── assets/
 │       │   └── sku/mock_sku_101/
-│       │       └── image_front.jpg       # sanitized_upload 类型
+│       │       └── image_front.jpg       # 用户上传或本地资源
 │       └── audit/
 │           └── 2026-07/
 │               └── events.jsonl          # 审计事件月度归档（超出 SQLite 保留期后）
 ```
 
 - SQLite 主库文件不跨工作区共享。
-- `assets/` 只放 `sanitized_upload` 类型资源；`mock_asset` 类型的引用不占本地存储。
+- `assets/` 存放用户上传或本地资源；`mock_asset` 类型的引用不占本地存储。
 - 90 天前的 `audit_event` 从 SQLite 迁到 `audit/YYYY-MM/events.jsonl` 归档。
 
 ### 6.4 备份与恢复

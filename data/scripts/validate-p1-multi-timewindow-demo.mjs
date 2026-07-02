@@ -12,6 +12,7 @@ const taxonomyText = fs.readFileSync(taxonomyPath, "utf8");
 const allowedTagIds = new Set([...taxonomyText.matchAll(/`((?:demo|style|price|occasion|intent|channel)\.[a-z0-9_]+)`/g)].map((match) => match[1]));
 const redlineConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
 const blockedFieldNames = new Set(redlineConfig.blockedFieldNames.map((field) => field.toLowerCase()));
+const blockedPatternIds = new Set(redlineConfig.blockedPatternIds ?? []);
 
 const errors = [];
 const warnings = [];
@@ -63,6 +64,7 @@ const scanPatterns = (filePath) => {
     ["long_numeric_identifier", /\b\d{16,}\b/],
   ];
   for (const [patternId, pattern] of patterns) {
+    if (!blockedPatternIds.has(patternId)) continue;
     if (pattern.test(text)) errors.push(`${relative} matches blocked pattern ${patternId}`);
   }
 };
@@ -126,9 +128,9 @@ const redlinePath = path.join(targetDir, "redline_scan_report.json");
 if (fs.existsSync(redlinePath)) {
   const redline = JSON.parse(fs.readFileSync(redlinePath, "utf8"));
   scanKeys(redline, "redline_scan_report");
-  if (redline.rawValueSamplesIncluded !== false) errors.push("redline_scan_report rawValueSamplesIncluded must be false");
+  if (redlineConfig.reportPolicy?.includeRawValues !== true && redline.rawValueSamplesIncluded !== false) errors.push("redline_scan_report rawValueSamplesIncluded must be false");
   if (redline.status !== "pass") errors.push("redline_scan_report status must be pass");
-  if ((redline.blockedFieldHits ?? []).length > 0 || (redline.blockedPatternHits ?? []).length > 0) errors.push("redline_scan_report cannot pass with blocked hits");
+  if (redlineConfig.shareableStatus?.privacyRedlineDisabled !== true && ((redline.blockedFieldHits ?? []).length > 0 || (redline.blockedPatternHits ?? []).length > 0)) errors.push("redline_scan_report cannot pass with blocked hits");
 }
 
 if (errors.length > 0) {

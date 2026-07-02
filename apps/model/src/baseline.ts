@@ -80,6 +80,12 @@ export interface SegmentDraft {
   drivers: string[];
 }
 
+export interface SegmentTemplateReport {
+  segmentId: string;
+  name: string;
+  templateTags: Record<string, number>;
+}
+
 export interface ProductProfileDraft {
   skuId: string;
   modelVersion: string;
@@ -140,12 +146,76 @@ export interface BacktestReport {
   matchMetrics: {
     "matchNDCG@3": number;
   };
+  stratifiedMetrics?: BacktestSlice[];
   notes: string[];
+}
+
+export interface BacktestSlice {
+  dimension: "categoryLv2" | "channelType" | "sampleSizeBucket";
+  value: string;
+  trainSize: number;
+  testSize: number;
+  metrics: {
+    "topKTagHit@5"?: number;
+    segmentTop1Hit?: number;
+    driverPrecision?: number;
+    "matchNDCG@3"?: number;
+    positiveMatchRate?: number;
+  };
+  qualityFlags: string[];
 }
 
 export interface CutoffBacktestOptions {
   inputPath?: string;
   cutoffTimeWindow?: string;
+}
+
+export interface SegmentCalibrationReport {
+  reportId: string;
+  modelVersion: string;
+  inputPath: string;
+  baseline: {
+    segmentTop1Hit: number;
+    templateCount: number;
+    templates: SegmentTemplateReport[];
+  };
+  candidates: Array<{
+    candidateId: string;
+    description: string;
+    segmentTop1Hit: number;
+    delta: number;
+    qualityFlags: string[];
+  }>;
+  recommendation: "keep_current_weights" | "requires_more_data";
+  qualityFlags: string[];
+  notes: string[];
+}
+
+export interface TokenGovernanceReport {
+  reportId: string;
+  modelVersion: string;
+  structuralTokens: Array<{ token: string; field: string; action: "ignore"; reason: string }>;
+  mappableTokenReviewQueue: Array<{ token: string; proposedTagIds: string[]; reason: string }>;
+  unknownBusinessTokens: Array<{ token: string; occurrences: number; exampleSkuIds: string[] }>;
+  taxonomyChangeRequired: false;
+  notes: string[];
+}
+
+interface SkuBacktestResult {
+  skuId: string;
+  categoryLv2: string;
+  topKTagHitAt5: number;
+  segmentTop1Hit: number;
+  driverPrecision: number;
+}
+
+interface MatchBacktestResult {
+  skuId: string;
+  channelId: string;
+  channelType: string;
+  sampleSizeBucket: string;
+  relevance: number;
+  rankedRelevance: number;
 }
 
 interface SegmentTemplate {
@@ -219,6 +289,25 @@ const PRICE_TAGS: Record<string, string> = {
   value: "price.value",
   mid: "price.mid",
   premium: "price.premium",
+};
+
+const STRUCTURAL_TOKEN_RULES: Record<string, { field: string; reason: string }> = {
+  dress: { field: "categoryLv2", reason: "category structure, not an audience profile tag" },
+  top: { field: "categoryLv2", reason: "category structure, not an audience profile tag" },
+  bottom: { field: "categoryLv2", reason: "category structure, not an audience profile tag" },
+  outerwear: { field: "categoryLv2", reason: "category structure, not an audience profile tag" },
+  set: { field: "categoryLv2", reason: "category structure, not an audience profile tag" },
+  midi: { field: "lengthType", reason: "product length structure, not an audience profile tag" },
+  short: { field: "lengthType", reason: "product length structure, not an audience profile tag" },
+  regular: { field: "lengthType", reason: "product length structure, not an audience profile tag" },
+  long: { field: "lengthType", reason: "product length structure, not an audience profile tag" },
+  chiffon: { field: "fabricType", reason: "product material structure, not an audience profile tag" },
+  wool: { field: "fabricType", reason: "product material structure, not an audience profile tag" },
+  blazer: { field: "categoryLv2", reason: "category descriptor, not an audience profile tag" },
+};
+
+const TOKEN_REVIEW_CANDIDATES: Record<string, { proposedTagIds: string[]; reason: string }> = {
+  premium: { proposedTagIds: ["price.premium"], reason: "title token may duplicate existing priceBand mapping; D/X should decide whether keyword mapping is needed" },
 };
 
 export function loadAllowedTagIds(): Set<string> {
@@ -429,6 +518,8 @@ export function runCutoffBacktest(options: CutoffBacktestOptions = {}): Backtest
   const segmentTop1Hits: number[] = [];
   const driverPrecisions: number[] = [];
   const ndcgs: number[] = [];
+  const skuResults: SkuBacktestResult[] = [];
+  const matchResults: MatchBacktestResult[] = [];
   const channelProfiles = buildChannelProfilesFromRows(trainRows);
 
   for (const skuId of testSkuIds) {
@@ -440,19 +531,35 @@ export function runCutoffBacktest(options: CutoffBacktestOptions = {}): Backtest
     const truth = aggregateTruthTags(skuTestRows);
     const predictedTop5 = profile.predictedProfileTags.slice(0, 5).map((tag) => tag.tagId);
     const truthTop5 = truth.slice(0, 5).map((tag) => tag.tagId);
-    topKHits.push(intersectionSize(predictedTop5, truthTop5) / 5);
+    const topKHitAt5 = intersectionSize(predictedTop5, truthTop5) / 5;
+    topKHits.push(topKHitAt5);
 
     const predictedSegmentTop1 = profile.topSegments[0]?.segmentId ?? "";
     const truthSegmentTop1 = buildTopSegments(truth)[0]?.segmentId ?? "";
-    segmentTop1Hits.push(predictedSegmentTop1 !== "" && predictedSegmentTop1 === truthSegmentTop1 ? 1 : 0);
+    const segmentTop1Hit = predictedSegmentTop1 !== "" && predictedSegmentTop1 === truthSegmentTop1 ? 1 : 0;
+    segmentTop1Hits.push(segmentTop1Hit);
 
     const drivers = new Set(profile.topSegments.flatMap((segment) => segment.drivers));
     const driverHitCount = [...drivers].filter((tagId) => truthTop5.includes(tagId)).length;
-    driverPrecisions.push(drivers.size === 0 ? 0 : driverHitCount / drivers.size);
+    const driverPrecision = drivers.size === 0 ? 0 : driverHitCount / drivers.size;
+    driverPrecisions.push(driverPrecision);
 
     const matches = matchChannels(profile, channelProfiles);
     const relevanceByChannel = new Map(skuTestRows.map((row) => [row.channelId, isPositiveMatch(row) ? 1 : 0]));
-    ndcgs.push(ndcgAt3(matches.map((match) => relevanceByChannel.get(match.channelId) ?? 0)));
+    const rankedRelevances = matches.map((match) => relevanceByChannel.get(match.channelId) ?? 0);
+    ndcgs.push(ndcgAt3(rankedRelevances));
+    skuResults.push({ skuId, categoryLv2: inputRow.categoryLv2, topKTagHitAt5: topKHitAt5, segmentTop1Hit, driverPrecision });
+    for (const match of matches) {
+      const testRow = skuTestRows.find((row) => row.channelId === match.channelId);
+      matchResults.push({
+        skuId,
+        channelId: match.channelId,
+        channelType: match.channelType,
+        sampleSizeBucket: sampleSizeBucket(testRow?.sampleSize ?? 0),
+        relevance: relevanceByChannel.get(match.channelId) ?? 0,
+        rankedRelevance: relevanceByChannel.get(match.channelId) ?? 0,
+      });
+    }
   }
 
   return {
@@ -477,7 +584,69 @@ export function runCutoffBacktest(options: CutoffBacktestOptions = {}): Backtest
     matchMetrics: {
       "matchNDCG@3": round(mean(ndcgs)),
     },
+    stratifiedMetrics: buildBacktestSlices(trainRows, testRows, skuResults, matchResults),
     notes: buildCutoffNotes(timeWindows, trainRows, testRows),
+  };
+}
+
+export function runSegmentCalibrationReport(options: CutoffBacktestOptions = {}): SegmentCalibrationReport {
+  const cutoffReport = runCutoffBacktest(options);
+  const baselineSegmentTop1Hit = cutoffReport.predictionMetrics.segmentTop1Hit ?? 0;
+  const candidateFlags = cutoffReport.qualityFlags?.filter((flag) => flag === "low_sku_count" || flag === "mock_aggregate_input") ?? [];
+  return {
+    reportId: `segment_calibration_${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`,
+    modelVersion: MODEL_VERSION,
+    inputPath: cutoffReport.inputPath ?? resolve(P1_MULTI_TIMEWINDOW_DIR, "wide_table.jsonl"),
+    baseline: {
+      segmentTop1Hit: baselineSegmentTop1Hit,
+      templateCount: SEGMENT_TEMPLATES.length,
+      templates: SEGMENT_TEMPLATES.map((template) => ({ segmentId: template.segmentId, name: template.name, templateTags: template.templateTags })),
+    },
+    candidates: [
+      {
+        candidateId: "current_manual_weights",
+        description: "Keep X-approved P0 manual segment template weights.",
+        segmentTop1Hit: baselineSegmentTop1Hit,
+        delta: 0,
+        qualityFlags: candidateFlags,
+      },
+    ],
+    recommendation: candidateFlags.length > 0 ? "requires_more_data" : "keep_current_weights",
+    qualityFlags: [...new Set([...(cutoffReport.qualityFlags ?? []), "no_weight_change_applied"])].sort(),
+    notes: [
+      "No segmentId or template tag semantics were changed.",
+      "The current input is too small and mock-only; changing template weights would overfit smoke data.",
+      "Re-run calibration after real aggregate input reaches at least 30 SKUs and 6 time windows.",
+    ],
+  };
+}
+
+export function runTokenGovernanceReport(): TokenGovernanceReport {
+  const tokenOccurrences = new Map<string, { occurrences: number; skuIds: Set<string> }>();
+  for (const sku of loadDemoSkus()) {
+    for (const token of [...sku.attributes.titleTokens, ...sku.attributes.styleKeywords]) {
+      if (KEYWORD_TAGS[token] || STRUCTURAL_TOKEN_RULES[token] || TOKEN_REVIEW_CANDIDATES[token]) continue;
+      const current = tokenOccurrences.get(token) ?? { occurrences: 0, skuIds: new Set<string>() };
+      current.occurrences += 1;
+      current.skuIds.add(sku.skuId);
+      tokenOccurrences.set(token, current);
+    }
+  }
+
+  return {
+    reportId: `token_governance_${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`,
+    modelVersion: MODEL_VERSION,
+    structuralTokens: Object.entries(STRUCTURAL_TOKEN_RULES).map(([token, rule]) => ({ token, field: rule.field, action: "ignore", reason: rule.reason })),
+    mappableTokenReviewQueue: Object.entries(TOKEN_REVIEW_CANDIDATES).map(([token, candidate]) => ({ token, proposedTagIds: candidate.proposedTagIds, reason: candidate.reason })),
+    unknownBusinessTokens: [...tokenOccurrences.entries()]
+      .map(([token, value]) => ({ token, occurrences: value.occurrences, exampleSkuIds: [...value.skuIds].sort().slice(0, 3) }))
+      .sort((left, right) => right.occurrences - left.occurrences || left.token.localeCompare(right.token)),
+    taxonomyChangeRequired: false,
+    notes: [
+      "Structural tokens are ignored before unmappedInputTokens are emitted; they are not mapped to audience taxonomy tags.",
+      "No taxonomy expansion is required for the current demo token set; premium needs D/X keyword-mapping review only.",
+      "Future high-frequency unknown business tokens should be reviewed by D/X before any taxonomy change.",
+    ],
   };
 }
 
@@ -498,6 +667,9 @@ function buildRuleTags(input: ProductDNA, allowedTagIds: Set<string>): { ruleTag
 
   for (const token of [...input.styleKeywords, ...input.titleTokens]) {
     const mappedTags = KEYWORD_TAGS[token];
+    if (!mappedTags && STRUCTURAL_TOKEN_RULES[token]) {
+      continue;
+    }
     if (!mappedTags) {
       unmappedInputTokens.push(token);
       continue;
@@ -516,6 +688,88 @@ function buildRuleTags(input: ProductDNA, allowedTagIds: Set<string>): { ruleTag
   }
 
   return { ruleTags: [...tags.values()], unmappedInputTokens: [...new Set(unmappedInputTokens)] };
+}
+
+function buildBacktestSlices(trainRows: WideTableRow[], testRows: WideTableRow[], skuResults: SkuBacktestResult[], matchResults: MatchBacktestResult[]): BacktestSlice[] {
+  const slices: BacktestSlice[] = [];
+  const trainByCategory = groupBy(trainRows, (row) => row.categoryLv2);
+  const testByCategory = groupBy(testRows, (row) => row.categoryLv2);
+  const skuByCategory = groupBy(skuResults, (row) => row.categoryLv2);
+
+  for (const [categoryLv2, results] of [...skuByCategory.entries()].sort()) {
+    slices.push({
+      dimension: "categoryLv2",
+      value: categoryLv2,
+      trainSize: trainByCategory.get(categoryLv2)?.length ?? 0,
+      testSize: testByCategory.get(categoryLv2)?.length ?? 0,
+      metrics: {
+        "topKTagHit@5": round(mean(results.map((item) => item.topKTagHitAt5))),
+        segmentTop1Hit: round(mean(results.map((item) => item.segmentTop1Hit))),
+        driverPrecision: round(mean(results.map((item) => item.driverPrecision))),
+      },
+      qualityFlags: categoryQualityFlags(testByCategory.get(categoryLv2) ?? []),
+    });
+  }
+
+  const trainByChannelType = groupBy(trainRows, (row) => row.channelType);
+  const testByChannelType = groupBy(testRows, (row) => row.channelType);
+  const matchByChannelType = groupBy(matchResults, (row) => row.channelType);
+  for (const [channelType, results] of [...matchByChannelType.entries()].sort()) {
+    slices.push({
+      dimension: "channelType",
+      value: channelType,
+      trainSize: trainByChannelType.get(channelType)?.length ?? 0,
+      testSize: testByChannelType.get(channelType)?.length ?? 0,
+      metrics: {
+        "matchNDCG@3": round(mean(groupValuesBy(results, (item) => item.skuId).map((items) => ndcgAt3(items.map((item) => item.rankedRelevance))))),
+        positiveMatchRate: round(mean(results.map((item) => item.relevance))),
+      },
+      qualityFlags: categoryQualityFlags(testByChannelType.get(channelType) ?? []),
+    });
+  }
+
+  const trainBySampleBucket = groupBy(trainRows, (row) => sampleSizeBucket(row.sampleSize));
+  const testBySampleBucket = groupBy(testRows, (row) => sampleSizeBucket(row.sampleSize));
+  const matchBySampleBucket = groupBy(matchResults, (row) => row.sampleSizeBucket);
+  for (const [bucket, results] of [...matchBySampleBucket.entries()].sort()) {
+    slices.push({
+      dimension: "sampleSizeBucket",
+      value: bucket,
+      trainSize: trainBySampleBucket.get(bucket)?.length ?? 0,
+      testSize: testBySampleBucket.get(bucket)?.length ?? 0,
+      metrics: {
+        "matchNDCG@3": round(mean(groupValuesBy(results, (item) => item.skuId).map((items) => ndcgAt3(items.map((item) => item.rankedRelevance))))),
+        positiveMatchRate: round(mean(results.map((item) => item.relevance))),
+      },
+      qualityFlags: bucket === "lt_500" ? ["low_sample_bucket"] : [],
+    });
+  }
+
+  return slices;
+}
+
+function categoryQualityFlags(rows: WideTableRow[]): string[] {
+  const flags = new Set<string>();
+  if (rows.some((row) => row.sampleSize < 500)) flags.add("low_sample_rows_present");
+  if (rows.some((row) => row.profileCoverageRate < 0.7)) flags.add("low_coverage_rows_present");
+  if (rows.some((row) => row.lowConfidenceTagCount > 0)) flags.add("low_confidence_tags_present");
+  return [...flags].sort();
+}
+
+function sampleSizeBucket(sampleSize: number): string {
+  if (sampleSize < 500) return "lt_500";
+  if (sampleSize < 1000) return "500_999";
+  return "gte_1000";
+}
+
+function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  for (const item of items) grouped.set(key(item), [...(grouped.get(key(item)) ?? []), item]);
+  return grouped;
+}
+
+function groupValuesBy<T>(items: T[], key: (item: T) => string): T[][] {
+  return [...groupBy(items, key).values()];
 }
 
 function knnPredict(input: ProductDNA, trainRows: WideTableRow[]): ProfileTagScore[] {

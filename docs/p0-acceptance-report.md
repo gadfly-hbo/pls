@@ -81,13 +81,13 @@ npm run backtest
 cd apps/web
 npm run lint
 npm run build
-VITE_USE_MOCK=false npm run dev -- --host 127.0.0.1 --port 5173
+VITE_USE_MOCK=false npm run dev -- --host 127.0.0.1 --port 5174 --strictPort
 ```
 
 访问路径：
 
 - API health：`http://127.0.0.1:3100/health`
-- 前端工作台：`http://127.0.0.1:5173/`
+- 前端工作台：`http://127.0.0.1:5174/`
 - P0 token：`Authorization: Bearer pls-p0-demo-token`
 - Workspace：`X-PLS-Workspace: ws_demo`
 

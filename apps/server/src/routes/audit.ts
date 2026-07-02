@@ -60,7 +60,7 @@ audit.get("/", (c) => {
     resourceId: row.resource_id,
     requestId: row.request_id,
     modelVersion: row.meta ? (JSON.parse(row.meta as string) as Record<string, unknown>).modelVersion : null,
-    safetyStage: row.safety_stage,
+    admissionStage: row.safety_stage,
     occurredAt: row.occurred_at,
   }));
 

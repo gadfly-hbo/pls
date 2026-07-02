@@ -2,7 +2,7 @@
 
 > 归属：A 应用后端
 > 状态：P0 草案
-> 最近更新：2026-07-01
+> 最近更新：2026-07-03
 
 ## 1. 目的
 
@@ -11,7 +11,7 @@
 对象定义以以下文档为准，本文只做 API 层引用与补充：
 
 - `docs/profile-taxonomy-v0.md`：标签体系、`ProfileTagScore`、Segment 结构。
-- `docs/data-safety-policy.md`：数据红线、共享对象最小结构、`recommendation` 枚举。
+- `docs/data-safety-policy.md`：数据准入口径、共享对象最小结构、`recommendation` 枚举。
 - `docs/data-spec.md`：训练宽表、`ChannelProfile`、DMP 导入格式。
 - `docs/model-plan.md`：预测输出与匹配输出 schema、`modelVersion`、`modelPath`。
 
@@ -19,7 +19,7 @@ P0 原则：
 
 - 契约优先，不承诺实现细节。
 - 所有结果对象必须保留 `source`、`confidence`、`generatedAt`；真实聚合数据同时保留 `sampleSize`、`timeWindow`。
-- 不接收 S0/S1 原始明细，相关准入检查由数据导入层拦截。
+- 用户给到 PLS 并要求导入或产品化的数据默认全量放行；API 不因手机号、姓名、地址、订单/会员行级数据、DMP 成员包或 ID 字段自动拒绝。
 - JSON 字段一律 `camelCase`；`tagId` 内部继续使用 `<dimension>.<tag>` 点分格式。
 
 ## 2. 通用约定
@@ -81,7 +81,7 @@ P0 采用最小工作区隔离：
   "error": {
     "message": "field skuId is required",
     "field": "skuId",
-    "hint": "provide a sanitized or mock SKU identifier"
+    "hint": "provide a SKU identifier"
   }
 }
 ```
@@ -96,18 +96,17 @@ P0 采用最小工作区隔离：
 | `accepted` | 202 | 异步任务已受理 |
 | `invalid_input` | 400 | 请求字段缺失或格式错误 |
 | `unauthorized` | 401 | 未认证或 token 无效 |
-| `forbidden` | 403 | 工作区不匹配或数据分级不允许 |
+| `forbidden` | 403 | 工作区不匹配或权限不足 |
 | `not_found` | 404 | 目标资源不存在 |
 | `conflict` | 409 | 幂等键冲突或状态非法 |
 | `payload_too_large` | 413 | 单次导入超过上限 |
 | `unprocessable` | 422 | 语法校验通过但违反业务约束 |
 | `taxonomy_violation` | 422 | `tagId` 不在标签体系 |
-| `safety_violation` | 422 | 命中数据安全红线（S0/S1 明细） |
 | `dependency_failed` | 424 | 下游模型或数据依赖失败 |
 | `rate_limited` | 429 | 限流 |
 | `internal_error` | 500 | 内部错误 |
 
-`safety_violation` 与 `taxonomy_violation` 是必检错误码，V 域前端必须能显式展示。
+`taxonomy_violation` 是标签体系契约错误码，V 域前端必须能显式展示。隐私字段形态不再触发 API 拒绝。
 
 ### 2.5 分页与排序
 
@@ -124,7 +123,7 @@ P0 采用最小工作区隔离：
 - 同一个 `Idempotency-Key` 可在不同 endpoint 复用，不得跨 endpoint replay。
 - 缺省时按业务字段生成隐式幂等键，例如预测任务用 `skuId + dnaHash + modelVersion`。
 
-### 2.7 数据来源与安全元信息
+### 2.7 数据来源与质量元信息
 
 跨域流转的资源必须暴露如下元数据：
 
@@ -195,7 +194,7 @@ P0 采用最小工作区隔离：
 约束：
 
 - `attributes` 字段枚举以 `data-spec.md §6.2` 为准。
-- `assets[].source` 仅允许 `mock_asset` 或 `sanitized_upload`；原图存储位置不外暴。
+- `assets[].source` 可使用本地 mock、用户上传或外部资源标识；是否外暴原图位置由产品展示需求决定。
 - `mappedProductTags` 由 D 域预计算并透传；缺失时 M 域按 `model-plan.md §2.3` 回填。
 - 未在受控词表内的关键词进入预测结果的 `unmappedInputTokens`，不写入 `attributes`。
 
@@ -386,7 +385,7 @@ A 域对 M 域匹配输出的封装，等价于 `model-plan.md §4.4` 的 `chann
 ```
 
 `taskType`：`prediction` / `match` / `batch_import` / `taxonomy_validate`。
-`status`：`queued` / `running` / `succeeded` / `failed` / `cancelled` / `rejected`（红线拦截）。
+`status`：`queued` / `running` / `succeeded` / `failed` / `cancelled` / `rejected`（业务契约拒绝，例如 taxonomy）。
 
 ## 4. 接口清单
 
@@ -508,7 +507,7 @@ A 域对 M 域匹配输出的封装，等价于 `model-plan.md §4.4` 的 `chann
 - Content-Type `multipart/form-data`，字段 `file`（CSV / JSONL）+ 字段 `meta`（JSON 字符串）。
 - `meta` 至少包含 `batchType`、`source`、`sourceType`、`timeWindow`；缺项返回 `invalid_input`。
 - 单批最大 100MB；超过返回 `payload_too_large`。
-- 命中 S0/S1 明细样本时全批 `rejected`，返回 `safety_violation`。
+- 用户授权数据不因字段名或值形态被 privacy/safety 门禁拒绝；批次仍会校验 `meta` 必填项、体积上限、JSON 格式和业务质量字段。
 
 说明：P1-B2 只保证 JSON 批次创建路径幂等；multipart 上传的文件摘要与表单字段归一化需后续单独设计。
 
@@ -578,12 +577,12 @@ A 域对 M 域匹配输出的封装，等价于 `model-plan.md §4.4` 的 `chann
   "resourceId": "pred_20260701_0001",
   "requestId": "req_20260701_00001",
   "modelVersion": "m-p0-baseline-0.1",
-  "safetyStage": "sanitize_ok",
+  "admissionStage": "admission_ok",
   "occurredAt": "2026-07-01T02:15:00Z"
 }
 ```
 
-`safetyStage` 值：`sanitize_ok` / `sanitize_rejected` / `taxonomy_ok` / `taxonomy_rejected` / `quality_ok` / `quality_low`。任何 `*_rejected` 都必须写入审计，且原始输入不入库。
+`admissionStage` 值：`admission_ok` / `taxonomy_ok` / `taxonomy_rejected` / `quality_ok` / `quality_low`。`taxonomy_rejected` 等业务契约拒绝必须写入审计；用户授权原始输入可按产品需要入库或进入文件系统。
 
 ## 5. V 域视角关键接口组合
 
@@ -606,18 +605,18 @@ A 域对 M 域匹配输出的封装，等价于 `model-plan.md §4.4` 的 `chann
 
 ## 6. 与 D / M / V 的契约边界
 
-- **D → A：** 通过 `POST /batches` 单向进入 A 域；A 域负责 `sanitize` / `taxonomy_validate` / `quality_check` 三级准入，任何一环 `rejected` 全批入审计但不入库。
+- **D → A：** 通过 `POST /batches` 单向进入 A 域；A 域负责 `admission` / `taxonomy_validate` / `quality_check`。`admission` 对用户授权数据默认放行；taxonomy 和业务质量校验按产品契约处理。
 - **M → A：** M 域实现 `PredictService` / `MatchService` 两个内部接口（非公开 HTTP），A 域负责封装为公开 API 并注入 `taskId`、`requestId`。M 域不得直接写库，所有落库通过 A 域。
 - **A → V：** V 域只消费公开 HTTP API；不允许绕过 A 域直连 M 或 D 的存储。
 - **反馈闭环：** `POST /predictions/{predictionId}/feedback` 是 P1 预留接口。总控批准 P0 A 域先建 endpoint 骨架；P0 固定返回 `not_found`，`error.message = "feedback is not enabled in P0"`，避免 V 域后续接入时 URL 变更。
 
-## 7. 数据安全在 API 层的落点
+## 7. 数据准入在 API 层的落点
 
-- `/batches`：入口过滤器，拦截 S0/S1 明细字段；命中即 `safety_violation`。
-- `/products`：拒绝写入手机号、姓名、地址、订单号、会员 ID 等字段名；命中即 `safety_violation`。
+- `/batches`：入口只校验请求格式、必填 meta、体积上限和幂等；用户授权数据默认放行。
+- `/products`：允许写入用户提供或确认导入的业务字段和值，包括手机号、姓名、地址、订单号、会员 ID、平台 ID、DMP 成员字段等。
 - `/predictions`、`/matches` 响应：`inputSnapshot` / `positiveDrivers` / `negativeDrivers` 中 `tagId` 必须命中标签体系，否则退回 `taxonomy_violation` 或写入 `unmappedInputTokens`。
-- `/audit`：所有 `safety_violation` / `taxonomy_violation` 必须留痕但不留原始 payload；仅记录字段名与截断信息。
-- 数据分级 S2 商业机密（价格策略、成本、投放预算）不进入任何 API 字段，若客户端上送，服务端在 `sanitize` 阶段抛弃并在审计标记 `sanitize_rejected`。
+- `/audit`：taxonomy、质量告警、任务状态迁移和导入处理必须留痕；原始 payload 是否记录按用户当次产品化要求和存储设计执行。
+- 价格策略、成本、投放预算等业务字段不再因“数据分级”自动拒绝；是否展示、导出或建模由产品需求决定。
 
 ## 8. 总控决策与 P1 展望
 

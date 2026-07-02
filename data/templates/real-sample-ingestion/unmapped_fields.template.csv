@@ -1,3 +1,3 @@
 entityType,entityId,profileStage,sourceField,sourceValueBucket,sampleSize,timeWindow,reason,source,batchId,note
-sku,sku_hash8_001,buyer,platform_interest_cluster,cluster_opaque_001,1200,2026-05-01/2026-06-30,unknown_semantics,sanitized_platform_aggregate,batch_real_YYYYMMDD_001,opaque platform segment is not mapped
-channel,channel_hash8_001,channel_audience,merchant_custom_label,custom_bucket_001,5000,2026-05-01/2026-06-30,not_in_taxonomy,sanitized_platform_aggregate,batch_real_YYYYMMDD_001,no P0 taxonomy tag available
+sku,sku_001,buyer,platform_interest_cluster,cluster_opaque_001,1200,2026-05-01/2026-06-30,unknown_semantics,user_authorized_input,batch_real_YYYYMMDD_001,opaque platform segment is not mapped
+channel,channel_001,channel_audience,merchant_custom_label,custom_bucket_001,5000,2026-05-01/2026-06-30,not_in_taxonomy,user_authorized_input,batch_real_YYYYMMDD_001,no P0 taxonomy tag available

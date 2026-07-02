@@ -79,6 +79,9 @@ export interface ChannelProfile {
   channelName: string;
   channelType: string;
   platformType: string;
+  sampleSize?: number | null;
+  timeWindow?: string | null;
+  qualityFlags?: string[];
 }
 
 export interface MatchDriver {
@@ -128,4 +131,75 @@ export interface HeatmapData {
   modelVersion: string;
   generatedAt: string;
   rows: HeatmapRow[];
+}
+
+export interface AccountBaselineDimension {
+  dimension: string;
+  value: string;
+}
+
+export interface AccountComparisonDimension {
+  dimension: string;
+  accountTop1: { label: string; value: string };
+  skuTop1: { label: string; value: string };
+  isAligned: boolean;
+}
+
+export interface AdjustmentAdvice {
+  id: number;
+  item: string;
+  suggestion: string;
+  status: string;
+}
+
+export interface AccountMatchResult {
+  accountId: string;
+  skuId: string;
+  fitScore: number;
+  fitConfidence: number;
+  baseline: AccountBaselineDimension[];
+  comparison: AccountComparisonDimension[];
+  mismatchedDimensions: string[];
+  adjustmentAdvice: AdjustmentAdvice[];
+  qualityFlags: string[];
+}
+
+export interface AccountFitDriver {
+  dimension?: string;
+  tagId: string;
+  productScore: number;
+  accountScore: number;
+  contribution?: number;
+}
+
+export interface AccountFitAdjustmentAdvice {
+  adviceId: string | number;
+  priority: string;
+  dimension: string;
+  actionType: string;
+  direction?: string;
+  rationale?: string;
+  evidence?: string;
+}
+
+export interface AccountMatchApiItem {
+  accountId: string;
+  skuId: string;
+  fitScore: number;
+  fitConfidence: number;
+  mismatchedDimensions: string[];
+  adjustmentAdvice: AccountFitAdjustmentAdvice[];
+  qualityFlags: string[];
+  positiveDrivers?: AccountFitDriver[];
+  negativeDrivers?: AccountFitDriver[];
+}
+
+export interface AccountMatchApiResponse {
+  items: AccountMatchApiItem[];
+  page: {
+    cursor: string | null;
+    nextCursor: string | null;
+    pageSize: number;
+    hasMore: boolean;
+  };
 }

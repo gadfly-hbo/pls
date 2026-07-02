@@ -7,10 +7,9 @@
 // Exits non-zero on any failure. Emits a machine-readable JSON summary when
 // --json is set, otherwise a human-readable table + summary.
 //
-// Redline: fixtures come from the ws_demo workspace seeded by demo JSONL —
-// no real customer / order / DMP data. All request/response bodies logged on
-// failure are already S4 derived responses, so nothing leaves the S0/S1
-// boundary.
+// Data admission: user-provided data is allowed by default in PLS. Smoke
+// includes privacy-shaped fields to verify the API does not reintroduce
+// privacy blocking.
 
 import { argv, exit, stdout } from "node:process";
 

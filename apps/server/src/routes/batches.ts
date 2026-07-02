@@ -78,7 +78,7 @@ batches.post("/", idempotencyMiddleware(), async (c) => {
     event: "succeed",
     fromStatus: "queued",
     toStatus: "succeeded",
-    safetyStage: "sanitize_ok",
+    admissionStage: "admission_ok",
     meta: { batchType, source },
   });
 

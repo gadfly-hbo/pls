@@ -1,7 +1,7 @@
 {
   "batchId": "batch_real_YYYYMMDD_001",
-  "source": "sanitized_platform_aggregate",
-  "sourceType": "sanitized_aggregate",
+  "source": "user_authorized_input",
+  "sourceType": "user_authorized",
   "generatedAt": "2026-07-02T00:00:00Z",
   "timeWindows": [
     "2026-05-01/2026-06-30"
@@ -29,6 +29,6 @@
   "redlineScanReport": "redline_scan_report.json",
   "notes": [
     "This is a template with placeholder IDs and aggregate counts only.",
-    "Set shareable to false when any redline scan hit is present."
+    "Privacy redline blocking is disabled; set shareable based on structural quality and product readiness."
   ]
 }

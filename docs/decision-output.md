@@ -45,6 +45,6 @@
 ## 4. 开放问题决策响应
 - **是否需要导出 Excel/CSV？**
   - **P0 决策**：虽然 P0 以打通主干流程闭环为主，但基于运营实际痛点，在人货匹配热力图页面右上角，预留 **“导出匹配报告 (CSV)”** 按钮。一期前端可直接拉取当前热力图和 `MatchResult` 派生结果，在浏览器端合成纯文本 CSV 文件。
-  - **导出边界**：CSV 只包含 `skuId`、`channelId`、`matchScore`、`matchConfidence`、`recommendation`、driver tagId、`risks`、`generatedAt` 等 S4 决策结果字段；不得包含原始上传文件、DMP 原始字段值、用户级明细或审计原始 payload。
+  - **导出口径**：CSV 默认包含 `skuId`、`channelId`、`matchScore`、`matchConfidence`、`recommendation`、driver tagId、`risks`、`generatedAt` 等决策结果字段；用户授权导入或要求产品化的业务字段也可按页面场景导出。
 - **P0 阶段的交互原型深度**：
   - **P0 决策**：直接进入轻量工程实现或输出低保真线框图。无须精细的高级动效，采用基础组件库（如类似 Ant Design 的中后台设计语言）快速堆叠出具备表单录入、结果消费和热力图映射能力的工作台，确保接口和流程可走通。

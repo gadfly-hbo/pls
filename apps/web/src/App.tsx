@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import type { SKU, ProductProfile } from './types';
 import Dashboard from './pages/Dashboard';
 import ChannelHeatmap from './pages/ChannelHeatmap';
+import AccountComparison from './pages/AccountComparison';
 
 function App() {
-  const [currentView, setCurrentView] = useState<'dashboard' | 'heatmap'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'heatmap' | 'account-comparison'>('dashboard');
   const [currentSku, setCurrentSku] = useState<SKU | null>(null);
   const [prediction, setPrediction] = useState<ProductProfile | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -42,6 +43,12 @@ function App() {
           >
             渠道匹配热力图
           </button>
+          <button 
+            className={currentView === 'account-comparison' ? 'active' : ''} 
+            onClick={() => setCurrentView('account-comparison')}
+          >
+            账号画像与对比
+          </button>
           <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 8px', alignSelf: 'center' }} />
           <button onClick={toggleTheme} title="切换主题">
             {theme === 'dark' ? '☀️ 亮色' : '🌙 暗色'}
@@ -61,6 +68,9 @@ function App() {
         )}
         {currentView === 'heatmap' && (
           <ChannelHeatmap />
+        )}
+        {currentView === 'account-comparison' && (
+          <AccountComparison />
         )}
       </main>
     </div>

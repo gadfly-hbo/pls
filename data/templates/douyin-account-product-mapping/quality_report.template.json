@@ -1,0 +1,42 @@
+{
+  "batchId": "batch_douyin_mapping_template",
+  "source": "douyin_dashboard_structure",
+  "sourceType": "manual_mapping",
+  "generatedAt": "2026-07-02T00:00:00Z",
+  "timeWindows": [],
+  "fieldInventoryRowCount": 25,
+  "mappingRuleCount": 32,
+  "unmappedFieldCount": 6,
+  "coveredSourceAreas": [
+    "product_basic",
+    "product_performance",
+    "account_profile",
+    "fit_comparison",
+    "adjustment_advice"
+  ],
+  "coveredDimensions": [
+    "age",
+    "gender",
+    "consumption_power",
+    "life_stage",
+    "city_tier",
+    "interest_behavior",
+    "touchpoint_preference"
+  ],
+  "mappingCoverageRate": 0.84,
+  "lowConfidenceMappingCount": 0,
+  "blockedFieldHitCount": 0,
+  "blockedPatternHitCount": 0,
+  "qualityFlags": [
+    "template_only",
+    "no_real_data",
+    "requires_x_review_for_external_segments"
+  ],
+  "shareable": true,
+  "redlineScanReport": "redline_scan_report.template.json",
+  "notes": [
+    "This template contains field categories and placeholder buckets only.",
+    "It does not include dashboard data.js values, real account names, real product codes, real sales amounts, or user-level details.",
+    "Device fields and external consumer segments remain unmapped unless X approves taxonomy changes."
+  ]
+}

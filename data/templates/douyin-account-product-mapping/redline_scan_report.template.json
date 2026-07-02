@@ -1,0 +1,9 @@
+{
+  "batchId": "batch_douyin_mapping_template",
+  "scannedAt": "2026-07-02T00:00:00Z",
+  "inputScope": "douyin_account_product_mapping_template",
+  "blockedFieldHits": [],
+  "blockedPatternHits": [],
+  "rawValueSamplesIncluded": false,
+  "status": "pass"
+}

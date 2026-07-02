@@ -1,0 +1,131 @@
+{
+  "batchId": "batch_douyin_bi_20260703",
+  "dataVersion": "v1_20260703",
+  "generatedAt": "2026-07-03T00:00:00Z",
+  "timeWindow": "2026-05-01/2026-05-31",
+  "targetDatabase": "pls",
+  "tables": [
+    {
+      "name": "douyin_accounts",
+      "file": "accounts.jsonl",
+      "businessKey": [
+        "channelId"
+      ],
+      "upsertKey": [
+        "channelId",
+        "sourceBatchId",
+        "dataVersion"
+      ],
+      "writeMode": "upsert"
+    },
+    {
+      "name": "douyin_account_benchmark_tags",
+      "file": "account_benchmark_tags.jsonl",
+      "businessKey": [
+        "channelId",
+        "dimension",
+        "optionLabel"
+      ],
+      "upsertKey": [
+        "channelId",
+        "dimension",
+        "optionLabel",
+        "sourceBatchId",
+        "dataVersion"
+      ],
+      "writeMode": "upsert"
+    },
+    {
+      "name": "douyin_account_reports",
+      "file": "account_reports.jsonl",
+      "businessKey": [
+        "channelId",
+        "reportKind"
+      ],
+      "upsertKey": [
+        "channelId",
+        "reportKind",
+        "sourceBatchId",
+        "dataVersion"
+      ],
+      "writeMode": "upsert"
+    },
+    {
+      "name": "douyin_products",
+      "file": "products.jsonl",
+      "businessKey": [
+        "skuId"
+      ],
+      "upsertKey": [
+        "skuId",
+        "sourceBatchId",
+        "dataVersion"
+      ],
+      "writeMode": "upsert"
+    },
+    {
+      "name": "douyin_product_account_fits",
+      "file": "product_account_fits.jsonl",
+      "businessKey": [
+        "fitId"
+      ],
+      "upsertKey": [
+        "skuId",
+        "accountChannelId",
+        "sourceBatchId",
+        "dataVersion"
+      ],
+      "writeMode": "upsert"
+    },
+    {
+      "name": "douyin_comparison_dimensions",
+      "file": "comparison_dimensions.jsonl",
+      "businessKey": [
+        "fitId",
+        "dimension"
+      ],
+      "upsertKey": [
+        "fitId",
+        "dimension",
+        "sourceBatchId",
+        "dataVersion"
+      ],
+      "writeMode": "upsert"
+    },
+    {
+      "name": "douyin_adjustment_advice",
+      "file": "adjustment_advice.jsonl",
+      "businessKey": [
+        "adviceId"
+      ],
+      "upsertKey": [
+        "skuId",
+        "accountChannelId",
+        "dimension",
+        "orderIndex",
+        "sourceBatchId",
+        "dataVersion"
+      ],
+      "writeMode": "upsert"
+    },
+    {
+      "name": "douyin_summary_metrics",
+      "file": "summary_metrics.jsonl",
+      "businessKey": [
+        "metricName",
+        "orderIndex"
+      ],
+      "upsertKey": [
+        "metricName",
+        "orderIndex",
+        "sourceBatchId",
+        "dataVersion"
+      ],
+      "writeMode": "upsert"
+    }
+  ],
+  "notes": [
+    "SQLite schema and migration are owned by X orchestrator; this manifest only exposes intended target tables, business keys and upsert keys.",
+    "All rows carry sourceBatchId + dataVersion so re-imports over the same version are idempotent under upsert."
+  ]
+}

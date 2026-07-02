@@ -1,0 +1,37 @@
+{
+  "batchId": "batch_douyin_bi_20260703",
+  "dataVersion": "v1_20260703",
+  "generatedAt": "2026-07-03T00:00:00Z",
+  "timeWindow": "2026-05-01/2026-05-31",
+  "source": {
+    "file": "/Users/huangbo/Downloads/douyin_report_dashboard/data.js",
+    "bytes": 2530978,
+    "sha256": "9fe9eb231669119fa7373658a00acb3efe457632264624e7f36a189b48270f16"
+  },
+  "objectCounts": {
+    "accounts": 13,
+    "account_benchmark_tags": 26,
+    "account_reports": 12,
+    "products": 73,
+    "product_account_fits": 73,
+    "comparison_dimensions": 365,
+    "adjustment_advice": 105,
+    "summary_metrics": 25
+  },
+  "totalRows": 692,
+  "coverage": {
+    "accountsWithBenchmarkTags": 1,
+    "accountBenchmarkTagsWithTaxonomyMapping": 0.3846,
+    "productsWithProfileDistribution": 1,
+    "productsWithLegacyFitScore": 1,
+    "fitsWithLegacyScore": 1
+  },
+  "qualityFlags": [
+    "algorithm_pending_user_formula",
+    "single_baseline_account_only"
+  ],
+  "admissionPolicy": "user_authorized_full_passthrough",
+  "reproduce": {
+    "command": "node data/scripts/generate-p1-douyin-bi.mjs --source /Users/huangbo/Downloads/douyin_report_dashboard/data.js --batchId batch_douyin_bi_20260703 --dataVersion v1_20260703"
+  }
+}

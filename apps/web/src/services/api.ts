@@ -1,4 +1,4 @@
-import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile } from '../types';
+import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountMatchApiResponse } from '../types';
 
 // Feature flag for local mock vs real backend
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
@@ -251,5 +251,90 @@ export const api = {
     if (matches.length === 0) throw new Error('Match not found');
     matches.sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime());
     return { code: 'ok', data: matches[0] };
+  },
+
+  getAccountMatch: async (skuId: string, accountId: string): Promise<{ code: string; data: AccountMatchResult }> => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<AccountMatchApiResponse>(`/account-matches?skuId=${skuId}&accountId=${accountId}&pageSize=1`);
+      const item = res.data.items?.[0];
+      if (!item) {
+        throw new Error('Account match not found');
+      }
+
+      // Generate View Model for baseline/comparison from the API fields
+      const baseline = [
+        { dimension: '账号标识', value: item.accountId },
+        { dimension: '预测契合度', value: `Fit Score: ${(item.fitScore * 100).toFixed(0)}` }
+      ];
+
+      const comparison: AccountMatchResult['comparison'] = [];
+      const misSet = new Set(item.mismatchedDimensions || []);
+      const posSet = new Set(item.positiveDrivers?.map(d => d.tagId) || []);
+      const negSet = new Set(item.negativeDrivers?.map(d => d.tagId) || []);
+
+      const allTags = new Set([...misSet, ...posSet, ...negSet]);
+      if (allTags.size === 0) allTags.add('综合标签匹配');
+
+      allTags.forEach(tag => {
+        const isAligned = !misSet.has(tag) && !negSet.has(tag);
+        comparison.push({
+          dimension: tag,
+          accountTop1: { label: '账号特征', value: '提取结果' },
+          skuTop1: { label: '商品特征', value: isAligned ? '高度吻合' : '存在偏离' },
+          isAligned
+        });
+      });
+
+      const adjustmentAdvice = (item.adjustmentAdvice || []).map((adv, idx) => ({
+        id: typeof adv.adviceId === 'number' ? adv.adviceId : (Number(adv.adviceId) || Date.now() + idx),
+        item: `[${adv.priority}] ${adv.actionType} - ${adv.dimension}`,
+        suggestion: adv.rationale || adv.direction || '建议调整',
+        status: 'pending'
+      }));
+
+      return { 
+        code: 'ok', 
+        data: {
+          accountId: item.accountId,
+          skuId: item.skuId,
+          fitScore: item.fitScore,
+          fitConfidence: item.fitConfidence,
+          baseline,
+          comparison,
+          mismatchedDimensions: item.mismatchedDimensions || [],
+          adjustmentAdvice,
+          qualityFlags: item.qualityFlags || []
+        }
+      };
+    }
+    
+    // Return synthetic desensitized data
+    const mockMatch: AccountMatchResult = {
+      accountId,
+      skuId,
+      fitScore: 0.85,
+      fitConfidence: 0.92,
+      baseline: [
+        { dimension: '核心受众性别', value: '女性主导 (90%+)' },
+        { dimension: '核心年龄层', value: '青年人群 (主力)' },
+        { dimension: '消费特征', value: '中高消费偏好' },
+        { dimension: '品类偏好', value: '服饰、美妆' },
+        { dimension: '互动偏好', value: '泛娱乐、生活记录' },
+      ],
+      comparison: [
+        { dimension: '预测性别', accountTop1: { label: '女', value: 'mock_90%' }, skuTop1: { label: '女', value: 'mock_85%' }, isAligned: true },
+        { dimension: '预测年龄段', accountTop1: { label: '青年群', value: 'mock_40%' }, skuTop1: { label: '青年群', value: 'mock_45%' }, isAligned: true },
+        { dimension: '地域分布', accountTop1: { label: '一线及新一线', value: 'mock_30%' }, skuTop1: { label: '二三线', value: 'mock_25%' }, isAligned: false },
+        { dimension: '消费群体', accountTop1: { label: '白领/学生', value: 'mock_50%' }, skuTop1: { label: '白领/学生', value: 'mock_45%' }, isAligned: true },
+        { dimension: '消费能力', accountTop1: { label: '高消费', value: 'mock_60%' }, skuTop1: { label: '高消费', value: 'mock_55%' }, isAligned: true },
+      ],
+      mismatchedDimensions: ['地域分布'],
+      adjustmentAdvice: [
+        { id: 1, item: '地域人群破圈', suggestion: '商品潜在受众在二三线较多，建议增加相应地域定向投流素材', status: 'pending' },
+        { id: 2, item: '互动形式优化', suggestion: '针对受众特点，可适当增加自然生活场景演绎比例', status: 'pending' },
+      ],
+      qualityFlags: ['数据充足_置信度高']
+    };
+    return { code: 'ok', data: mockMatch };
   }
 };

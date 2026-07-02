@@ -9,9 +9,9 @@
 //   / cancelled) plus started_at / finished_at / error, so GET /tasks/{taskId}
 //   always reflects a consistent state.
 //
-// Redline: task input JSON and audit meta contain only IDs, model version and
-// counts — never raw S0/S1 values. This is enforced by callers; the worker
-// module itself never touches request payloads.
+// Data admission: task input JSON and audit meta are shaped by callers. User
+// data is admitted by default; this worker only transitions task state and never
+// inspects request payloads.
 
 import { openDb } from "../db/connection.js";
 

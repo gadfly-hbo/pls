@@ -1,0 +1,26 @@
+sourceArea,sourceField,sourceValuePolicy,targetObject,targetField,shareableDataClass,handlingRule,notes
+product_basic,product_category,bucket_only,ProductDNA,categoryLv1/categoryLv2,S3,map_to_existing_category,Use apparel category buckets only
+product_basic,product_title_tokens,sanitized_tokens_only,ProductDNA,titleTokens,S3,sanitize_then_tokenize,No real product title or product code
+product_basic,product_style_keywords,bucket_only,ProductDNA/style tag features,styleKeywords/mappedProductTags,S3,map_to_taxonomy,Use controlled style keyword buckets
+product_basic,product_price_position,band_only,ProductDNA/price tag features,priceBand/mappedProductTags,S3,map_to_price_band,No real price
+product_performance,sales_volume,aggregated_index,ProductPerformanceIndex,salesVolumeIndex,S3,index_only,No raw unit or order detail
+product_performance,sales_amount,aggregated_index,ProductPerformanceIndex/revenueIndex,gmvIndex/revenueIndex,S3,index_only,No real amount
+product_performance,conversion_rate,rate_only,ProductPerformanceIndex,conversionIndex,S3,rate_or_index_only,Aggregate rate only
+account_profile,account_kind,enum_bucket,AccountProfile,accountKind,S3,map_to_channel_kind,Douyin account/shop/live/short video buckets
+account_profile,audience_age_band,aggregate_bucket,AccountProfile.tags,demo.*,S3,map_to_taxonomy,Age distribution only
+account_profile,audience_gender_tendency,aggregate_bucket,AccountProfile.tags,demo.female/demo.male,S3,map_to_taxonomy,Gender tendency aggregate only
+account_profile,audience_city_tier,aggregate_bucket,AccountProfile.tags,demo.city_high_tier/demo.city_lower_tier,S3,map_to_taxonomy,City tier aggregate only
+account_profile,audience_consumption_power,aggregate_bucket,AccountProfile.tags,price.*,S3,map_to_taxonomy,Consumption power bucket only
+account_profile,audience_life_stage,aggregate_bucket,AccountProfile.tags,demo/occasion/intent,S3,semantic_mapping_or_unmapped,Only explainable buckets map
+account_profile,audience_interest_behavior,aggregate_bucket,AccountProfile.tags,style/occasion/intent,S3,map_to_taxonomy_or_unmapped,Non-taxonomy interests stay unmapped
+account_profile,touchpoint_preference,aggregate_bucket,AccountProfile.tags,channel.*,S3,map_to_taxonomy,Short video/live/shop/private buckets
+account_profile,active_level,aggregated_index,AccountProfile.performance,contentInteractionIndex/rankBucket,S3,index_or_rank_bucket_only,No user event rows
+account_profile,device_brand_bucket,aggregate_bucket,AccountProfile.unmappedFields,unmapped,S3,unmapped_not_in_taxonomy,Device info is not PLS taxonomy
+account_profile,device_price_bucket,aggregate_bucket,AccountProfile.unmappedFields,unmapped,S3,unmapped_not_in_taxonomy,Device price is not consumer price tag
+fit_comparison,product_top1_dimension,derived_tag_only,ProductAccountFitDiagnostic.dimensionDiagnostics,productTopTagId,S4,derive_from_profile_tags,No raw dashboard label value
+fit_comparison,account_top1_dimension,derived_tag_only,ProductAccountFitDiagnostic.dimensionDiagnostics,accountTopTagId,S4,derive_from_account_tags,No raw dashboard label value
+fit_comparison,dimension_gap_score,index_only,ProductAccountFitDiagnostic.dimensionDiagnostics,gapScore,S4,index_only,No raw formula payload
+fit_comparison,legacy_fit_score,index_only,ProductAccountFitDiagnostic.legacyFitScore,score,S4,diagnostic_reference_only,Not formal PLS fitScore
+adjustment_advice,issue_dimension,enum_bucket,AdjustmentAdvice,dimension,S4,map_to_dimension,No original business copy
+adjustment_advice,action_recommendation,controlled_enum,AdjustmentAdvice,actionType,S4,map_to_controlled_action,No original dashboard wording
+adjustment_advice,expected_impact,aggregated_index,AdjustmentAdvice,expectedImpactIndex,S4,index_only,No real amount or ad budget

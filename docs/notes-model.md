@@ -2,48 +2,45 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-02（X-P1-A4 准入暂缓）
+最近更新：2026-07-02（model session 收尾）
 
 进度：
 
-- M-P0-2 已通过 X 总控终审并 `done`，产出 `docs/model-plan.md` v0.1（418 行）。
-- 交付要点：商品 DNA 特征集合、预测输出 schema、匹配算法、回测指标、6 个 P0 Segment 模板、14 词受控词表。
-- 收尾校验：taxonomy tagId 全覆盖（0 越界）、markdown fence 平衡、3 段 JSON 全部可解析、跨文档引用可达（profile-taxonomy-v0 / data-spec / data-safety-policy 均存在）。
-- M-P0-B3 已通过 X 总控终审并 `done`，新增 `apps/model/`，只读消费 `data/demo/` 与 `docs/profile-taxonomy-v0.md`。
-- `ProductProfileDraft` 输出包含 `modelVersion`、`modelPath`、`predictedProfileTags`、Top 3 `topSegments`、`qualityFlags`、`unmappedInputTokens`。
-- `ChannelMatchDraft[]` 输出包含 `matchScore`、`matchConfidence`、`rank`、`overlap`、`bestSegmentId`、`bestSegmentMatch`、positive/negative drivers、`qualityFlags`。
-- demo 回测采用 `demo_only_leave_one_sku_out`：`topKTagHit@5 = 0.667`，`driverPrecision = 0.617`，`matchNDCG@3 = 1`。
-- 已通过 `npm run typecheck`、`npm run validate-tags`、`npm run predict -- --sku mock_sku_101`、`npm run match -- --sku mock_sku_101`、`npm run backtest`。
-- X-P0-B5 复验通过：`topKTagHit@5 = 0.667`，`driverPrecision = 0.617`，`matchNDCG@3 = 1`；A 端尚未接入真实 M baseline adapter。
-- M-P0-C3 已完成准备稿 `docs/model-c3-prep.md`：明确 `midi` / `dress` 不回流画像词表，作为已有 ProductDNA 结构字段处理。
-- P1 时间切分回测输入要求已明确：至少 3 个连续 `timeWindow` 才能做 smoke，正式可解释回测建议 6 个窗口、30 个 SKU、4 个 channel。
-- 已新增 A adapter contract test：`apps/model/src/contract-test.ts` 与 `npm run contract-test`，校验 `ProductProfileDraft` / `ChannelMatchDraft[]` 必备字段和分数范围。
-- M-P0-C3 已通过总控审核归档；`npm run typecheck`、`npm run contract-test`、`npm run validate-tags`、`npm run predict -- --sku mock_sku_101`、`npm run match -- --sku mock_sku_101`、`npm run backtest` 均通过。
-- M-P1-A3 已实现 cutoff 时间切分 backtest：新增 `npm run backtest:cutoff`，默认读取 `data/p1/multi-timewindow-demo/wide_table.jsonl`，训练早于 cutoff 的窗口并验证 cutoff 窗口。
-- 本次 cutoff smoke 指标：`topKTagHit@5 = 0.8`，`segmentTop1Hit = 0.667`，`driverPrecision = 0.556`，`matchNDCG@3 = 0.754`；报告见 `docs/model-p1-a3-cutoff-backtest.md`。
-- 已通过 `npm run typecheck`、`npm run contract-test`、`npm run validate-tags`、`npm run backtest`、`npm run backtest:cutoff`。
-- M-P1-A3 已经 X 总控复核标记 done；总控复验确认 cutoff 训练窗口和验证窗口隔离，channel profile 由训练窗口聚合，当前结果仅代表 D-P1-A2 mock aggregate cutoff smoke。
-- X-P1-A4 已归档，真实样例下游准入结论为暂缓；M 域当前 cutoff 指标只能作为 mock aggregate smoke，不得声明真实样本泛化能力。
+- 已完成 M-P1-A3 cutoff 时间切分回测实现：`npm run backtest:cutoff` / `npm run backtest:panel` 默认读取 `data/p1/multi-timewindow-demo/wide_table.jsonl`，训练早于 cutoff 的窗口并验证 cutoff 窗口。
+- cutoff smoke 指标：`topKTagHit@5 = 0.8`，`segmentTop1Hit = 0.667`，`driverPrecision = 0.556`，`matchNDCG@3 = 0.754`；报告见 `docs/model-p1-a3-cutoff-backtest.md` 与 `docs/model-p1-d1-backtest-panel.md`。
+- 已完成 M-P1-D1 指标面板：输出样本量、时间窗口、训练/验证切分、核心指标、`qualityFlags`，并按 `categoryLv2`、`channelType`、`sampleSizeBucket` 分层。
+- 已完成 M-P1-D2 segment template 校准报告：当前 mock + 低 SKU 样本不足以支撑调权，保持 6 个 X-approved P0 segment template 权重不变。
+- 已完成 M-P1-D3 token 治理：结构 token（如 `midi`、`dress`、`chiffon`、`wool`）不进入 `unmappedInputTokens` 且不映射为画像 tag；`premium` 进入 D/X review queue。
+- 已完成 M-P1-D4 prediction feedback 样本回流设计草案，对齐 A 域 `/predictions/{predictionId}/feedback` 预留接口，不涉及 schema/API 落地。
+- 已完成 M-P1-E2 号货匹配度算法 adapter：`apps/model/src/account-fit.ts` 定义稳定 `AccountFitAdapterInput` / `AccountFitDiagnostic`，rule baseline 输出 `fitScore`、`fitConfidence`、matched/mismatched dimensions、positive/negative drivers、`adjustmentAdvice` 和 `qualityFlags`。
+- M-P1-E2 contract test 覆盖 matched、partial_mismatch、high_priority_adjustment、low_confidence 四类场景；当前 adapter 固定输出 `algorithm_pending_user_formula`，不得包装成正式号货匹配算法。
 
 下一步：
 
 - 等待 D-P1-A5 完成真实样例本地脱敏聚合，并由 D 域基于真实聚合结果重做多 `timeWindow` 宽表；拿到 X 总控准入后重新运行 cutoff backtest。
+- Segment 权重校准需等待更大真实聚合样本；达到至少 30 个 SKU、6 个连续 `timeWindow` 后再评估是否调权。
+- `premium` keyword 是否映射到既有 `price.premium` 需 D/X review，不由 M 域单独决定。
+- 等待用户提供正式号货匹配公式；公式接入前，M-P1-E2 输出不得包装成正式算法结论。
 
 阻塞：
 
 - 无实现阻塞。D-P1-A2 mock 多窗口输入已存在，但当前结果只能作为 cutoff smoke，不能声明真实泛化能力。
+- 真实样例下游准入当前仍为暂缓；正式泛化回测和正式号货匹配算法都依赖后续输入/公式。
 
 已解决问题：
 
 - P0 baseline 定为 LightGBM per-tag 多标签回归 + kNN 相似检索 + 规则三级兜底（可解释、样本稀疏可退化）。
 - 多峰人群输出定为 Top 3 segment（基于固定模板 + 分布重合分数），P1 再切换到真实聚类。
+- cutoff 回测必须用早于 cutoff 的训练窗口聚合 channel profile，不能用验证窗口构造匹配参照。
+- 号货匹配 adapter 的正式算法替换点固定为 `diagnoseAccountFit` 内部评分逻辑；外部 input/output interface 需保持稳定。
 
 开放问题：
 
-- `segmentTemplate` 权重当前手工设定，P1 可在样本量足够后用真实分布聚类校准。
+- `segmentTemplate` 权重当前手工设定；M-P1-D2 已判定当前 mock 样本不足以调权，后续需真实聚合样本校准。
 - `channel.*` 加成在实现阶段需要通过 smoke case 检查，避免与 `channelType` 硬对齐重复计权。
-- demo 数据只有一个 `timeWindow`，无法做正式时间切分回测；当前脚手架用 leave-one-SKU-out 作为 P0-B 替代说明。
-- `midi` / `dress` 已判定不回流画像词表；若结构 token 高频污染 `unmappedInputTokens`，建议 D 域后续输出 `structuralTokens` 或在 title token 生成阶段过滤。
+- P1 mock 多窗口数据已支持 cutoff smoke，但仍不能声明真实泛化能力。
+- `midi` / `dress` 等结构 token 已由 M 域过滤出 `unmappedInputTokens`；D 域后续仍建议显式输出 `structuralTokens`。
+- M-P1-E2 rule baseline 只用于 contract test；正式 fitScore、recommendation、adjustmentAdvice 需等待用户公式校准。
 
 ---
 

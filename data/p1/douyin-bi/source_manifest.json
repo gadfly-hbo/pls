@@ -1,0 +1,22 @@
+{
+  "batchId": "batch_douyin_bi_20260703",
+  "dataVersion": "v1_20260703",
+  "generatedAt": "2026-07-03T00:00:00Z",
+  "timeWindow": "2026-05-01/2026-05-31",
+  "admissionPolicy": "user_authorized_full_passthrough",
+  "sources": [
+    {
+      "sourceKey": "douyin_report_dashboard",
+      "sourceType": "user_authorized",
+      "file": "/Users/huangbo/Downloads/douyin_report_dashboard/data.js",
+      "bytes": 2530978,
+      "sha256": "9fe9eb231669119fa7373658a00acb3efe457632264624e7f36a189b48270f16",
+      "role": "primary_bi_snapshot",
+      "note": "Legacy dashboard data.js snapshot. Retained values are user-authorized BI data."
+    }
+  ],
+  "mappingTemplate": {
+    "path": "data/templates/douyin-account-product-mapping",
+    "version": "v1_2026-07-02"
+  }
+}

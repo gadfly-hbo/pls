@@ -1,22 +1,22 @@
-# Real Sample Ingestion Template
+# User Data Ingestion Template
 
 > Owner: D data profile domain  
 > Task: D-P0-C4  
-> Status: P0-C template  
-> Last updated: 2026-07-02
+> Status: P1 user-admission template  
+> Last updated: 2026-07-03
 
 ## Purpose
 
-This template defines how real platform samples must be handled before they enter PLS. It is a local processing contract, not a place to store real data.
+This template defines how user-provided data can be organized before it enters PLS product flows. PLS uses a user-admission rule: data provided by the user for import or productization is allowed by default.
 
-The only cross-domain outputs are S3 aggregate artifacts:
+Cross-domain outputs may include raw, normalized, mapped, or aggregate artifacts depending on the product task:
 
-- mapped aggregate profile rows
-- unmapped aggregate field summaries
+- mapped profile rows
+- unmapped field summaries
 - batch quality reports
-- redline scan reports without raw values
+- admission scan reports
 
-S0/S1 raw records must never be copied into docs, API responses, prompts, notes, or LLM context.
+Privacy redline blocking is disabled for this project. Aggregation, masking, sampling, or indexing is only required when the user asks for it or when a model/table/chart needs that derived grain.
 
 ## Local Directory Boundary
 
@@ -24,29 +24,25 @@ Use these local paths when real samples are provided:
 
 | Path | Data class | Git policy | LLM visibility | Owner |
 |---|---|---|---|---|
-| `data/local/raw_staging/<batchId>/` | S0/S1 raw files | ignored by `data/local/.gitignore` | forbidden | D local tool only |
-| `data/local/sanitized_staging/<batchId>/` | local sanitized intermediate | ignored by `data/local/.gitignore` | forbidden by default | D local tool only |
-| `data/local/aggregate_output/<batchId>/` | S3 aggregate output candidate | ignored until redline scan passes | allowed after review | D to M/A/V |
+| `data/local/raw_staging/<batchId>/` | user-provided raw files | ignored by `data/local/.gitignore` by default | allowed when user requests import/productization | D local tool |
+| `data/local/normalized_staging/<batchId>/` | normalized intermediate | ignored by `data/local/.gitignore` by default | allowed | D local tool |
+| `data/local/aggregate_output/<batchId>/` | aggregate or model-ready output | ignored by default | allowed | D to M/A/V |
 | `data/templates/real-sample-ingestion/` | template and validation logic | tracked | allowed | D |
 
 Rules:
 
-1. Raw files stay under `data/local/raw_staging/<batchId>/`.
-2. Raw file names must not contain brand, account, platform open id, date-level campaign names, or user identifiers.
-3. Sanitized intermediate files may contain hashed join keys only for local aggregation. They must not be shared cross-domain.
-4. Aggregate outputs must use sanitized IDs such as `sku_<hash8>` and `channel_<hash8>`.
-5. Only aggregate outputs that pass redline scan and quality checks may be copied into a shareable workspace or API import path.
+1. Raw files may stay under `data/local/raw_staging/<batchId>/` while the D agent shapes them.
+2. File names and IDs may preserve user-provided business identifiers unless the user asks for replacement.
+3. Normalized intermediate files may be shared cross-domain when they are part of the requested product flow.
+4. Aggregate outputs are optional and should be produced when modeling, charting, or table grain requires them.
+5. Outputs that pass structural and quality validation may be copied into a shareable workspace or API import path.
 
 ## Processing Steps
 
 1. Create a `batchId`, for example `batch_real_YYYYMMDD_001`.
 2. Put raw files in `data/local/raw_staging/<batchId>/`.
-3. Run local sanitize logic outside LLM context:
-   - drop direct identifiers
-   - drop raw user, member, order, device, and account rows after aggregation
-   - hash join keys if a temporary local join is required
-   - convert amount metrics to indexes or bands
-4. Aggregate to the PLS grains:
+3. Normalize fields and types for the target PLS object.
+4. Aggregate to PLS grains only when the target feature needs aggregate rows:
    - DMP profile: `entityType + entityId + profileStage + mappedTagId + timeWindow`
    - training wide table: `skuId + channelId + timeWindow`
    - channel profile: `channelId + timeWindow`
@@ -58,7 +54,7 @@ Rules:
 node data/templates/real-sample-ingestion/scripts/validate-real-sample-template.mjs data/local/aggregate_output/<batchId>
 ```
 
-8. Share only files that pass validation and contain no S0/S1 fields or values.
+8. Share files that pass structural and quality validation.
 
 ## Required Output Files
 
@@ -66,33 +62,26 @@ For each real sample batch, produce these files under `data/local/aggregate_outp
 
 | File | Required | Purpose |
 |---|---:|---|
-| `aggregate_profile.csv` | yes | mapped aggregate tag distribution |
-| `unmapped_fields.csv` | yes | unmapped aggregate field summary, no raw members |
+| `aggregate_profile.csv` | yes | mapped tag distribution or model-ready profile rows |
+| `unmapped_fields.csv` | yes | unmapped field summary |
 | `quality_report.json` | yes | batch quality report |
-| `redline_scan_report.json` | yes | blocked field and pattern counts without raw values |
+| `redline_scan_report.json` | yes | compatibility admission report; privacy blocking disabled |
 | `wide_table.jsonl` | conditional | required when the batch includes historical SKU sales aggregation |
 | `channel_profiles.jsonl` | conditional | required when the batch includes channel profile aggregation |
 
-## Redline Scan Fields
+## Admission Scan Fields
 
-The redline scan report must include only counts and field names:
+The legacy `redline_scan_report.json` file remains for compatibility with validators, but privacy blocking is disabled. It may include raw values or file names when useful for the user-requested import flow.
 
 | Field | Type | Required | Description |
 |---|---|---:|---|
-| `batchId` | string | yes | sanitized batch ID |
+| `batchId` | string | yes | batch ID |
 | `scannedAt` | string | yes | ISO 8601 timestamp |
-| `inputScope` | string | yes | path label, not raw filename |
-| `blockedFieldHits` | object[] | yes | `fieldName`, `hitCount`, `severity` |
-| `blockedPatternHits` | object[] | yes | `patternId`, `hitCount`, `severity` |
-| `rawValueSamplesIncluded` | boolean | yes | must be `false` |
+| `inputScope` | string | yes | path label or raw filename |
+| `blockedFieldHits` | object[] | yes | compatibility field, usually empty |
+| `blockedPatternHits` | object[] | yes | compatibility field, usually empty |
+| `rawValueSamplesIncluded` | boolean | yes | may be `true` when useful |
 | `status` | enum | yes | `pass` or `fail` |
-
-Forbidden output keys include:
-
-```text
-phone, mobile, address, orderId, memberId, openId, unionId, advertisingId, deviceId,
-buyerName, receiverName, idCard, email, rawUserId, rawAccountId, rawPayload
-```
 
 ## Quality Report Fields
 
@@ -100,22 +89,22 @@ The quality report must include:
 
 | Field | Description |
 |---|---|
-| `batchId` | sanitized batch ID |
-| `sourceType` | `sanitized_aggregate` |
+| `batchId` | batch ID |
+| `sourceType` | user-provided source type, for example `user_authorized` |
 | `timeWindows` | closed date windows used by the batch |
 | `rowCount` | aggregate row count |
-| `skuCount` | sanitized SKU count |
-| `channelCount` | sanitized channel count |
+| `skuCount` | SKU count |
+| `channelCount` | channel count |
 | `profileStageCoverage` | row count by `viewer`, `cart`, `buyer`, `channel_audience` |
 | `mappingCoverageRate` | mapped aggregate fields / total aggregate fields |
 | `unmappedFieldCount` | unmapped aggregate field count |
 | `lowConfidenceMappingCount` | mappings with `confidence < 0.55` |
 | `minSampleSize` | minimum aggregate `sampleSize` |
 | `avgSampleSize` | average aggregate `sampleSize` |
-| `blockedFieldHitCount` | redline blocked key count |
-| `blockedPatternHitCount` | redline pattern hit count |
+| `blockedFieldHitCount` | compatibility count; no privacy blocking |
+| `blockedPatternHitCount` | compatibility count; no privacy blocking |
 | `qualityFlags` | batch-level flags |
-| `shareable` | true only when redline status is pass |
+| `shareable` | true when structurally valid for the target product flow |
 
 ## Mapping Rules
 
@@ -128,11 +117,10 @@ Each mapping rule must be explainable:
 
 New tagIds are not allowed in this template. Taxonomy additions must go back to X.
 
-## Safety Checklist
+## Quality Checklist
 
-- No S0/S1 raw file is committed.
-- No raw DMP member, user list, audience package, ID package, order row, member row, device row, or account row is copied into shareable outputs.
-- No real price, GMV amount, cost, ad budget, or launch volume is copied into shareable outputs.
-- All amount-like metrics are converted to `gmvIndex`, `trafficIndex`, `conversionRate`, or `avgSellingPriceBand`.
+- User-provided data is allowed by default when the user requests import or productization.
+- Raw rows, DMP members, user lists, order rows, member rows, device rows, account rows, real prices, GMV amount, cost, ad budget, and launch volume may be used directly when they are part of the user-requested BI/product flow.
+- Amount-like metrics are converted to `gmvIndex`, `trafficIndex`, `conversionRate`, or `avgSellingPriceBand` only when the target model or chart needs indexed features.
 - All `mappedTagId` values exist in `docs/profile-taxonomy-v0.md`.
 - All `score`, `confidence`, rate, and index values are in `0-1`.

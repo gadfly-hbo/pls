@@ -4,8 +4,12 @@
 
 cd "$(dirname "$0")" || exit 1
 
-WEB_URL="http://localhost:5174"
-API_HEALTH_URL="http://localhost:3100/health"
+WEB_HOST="127.0.0.1"
+WEB_PORT="5174"
+API_HOST="127.0.0.1"
+API_PORT="3100"
+WEB_URL="http://${WEB_HOST}:${WEB_PORT}"
+API_HEALTH_URL="http://${API_HOST}:${API_PORT}/health"
 
 is_ready() {
   curl -fsS -o /dev/null "$WEB_URL" 2>/dev/null &&
@@ -47,8 +51,8 @@ if [ ! -d "apps/server/node_modules" ]; then
   (cd apps/server && npm install) || { echo "❌ 后端 npm install 失败"; echo "按回车关闭…"; read; exit 1; }
 fi
 
-kill_port_listeners 5174
-kill_port_listeners 3100
+kill_port_listeners "$WEB_PORT"
+kill_port_listeners "$API_PORT"
 
 export VITE_USE_MOCK=false
 
@@ -57,15 +61,15 @@ echo "🚀 启动后端服务 (Port 3100)..."
 BACKEND_PID=$!
 
 echo "🚀 启动前端工作台 (Port 5174)..."
-(cd apps/web && npm run dev) &
+(cd apps/web && npm run dev -- --host "$WEB_HOST" --port "$WEB_PORT" --strictPort) &
 FRONTEND_PID=$!
 
 cleanup() {
   echo "\n🛑 正在停止 PLS 服务..."
   kill "$FRONTEND_PID" 2>/dev/null
   kill "$BACKEND_PID" 2>/dev/null
-  kill_port_listeners 5174
-  kill_port_listeners 3100
+  kill_port_listeners "$WEB_PORT"
+  kill_port_listeners "$API_PORT"
 }
 trap cleanup INT TERM EXIT
 
@@ -90,7 +94,7 @@ fi
 echo "\n———————————————————————————————"
 echo "  PLS 服务运行中，端口如下："
 echo "  - 前端工作台: $WEB_URL"
-echo "  - 后端API: http://localhost:3100"
+echo "  - 后端API: http://${API_HOST}:${API_PORT}"
 echo ""
 echo "  关闭此终端窗口或按 Ctrl+C 即停止所有服务"
 echo "———————————————————————————————"

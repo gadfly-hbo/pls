@@ -10,7 +10,6 @@ mkdirSync(wsDir, { recursive: true });
 const db = openDb("ws_demo");
 
 // P1-B2 migration: rebuild idempotency_key so the PK includes method+path.
-// Cache entries are ephemeral (24h TTL) and safe to drop on schema upgrade.
 const idemRow = db
   .prepare(
     "SELECT sql FROM sqlite_master WHERE type='table' AND name='idempotency_key'"
@@ -22,6 +21,27 @@ if (idemRow?.sql && !/PRIMARY KEY \(workspace_id, method, path, key\)/.test(idem
 }
 
 db.exec(SCHEMA_DDL);
+
+// P1-E3: ensure match_result_latest view picks up new columns.
+// CREATE VIEW IF NOT EXISTS is a no-op when the view already exists,
+// so drop first to force recreation with the updated column list.
+db.exec("DROP VIEW IF EXISTS match_result_latest");
+db.exec(SCHEMA_DDL);
+
+// P1-E3 migration: add diagnostic columns to match_result.
+const E3_COLS = [
+  `ALTER TABLE match_result ADD COLUMN fit_score REAL`,
+  `ALTER TABLE match_result ADD COLUMN fit_confidence REAL`,
+  `ALTER TABLE match_result ADD COLUMN mismatched_dimensions TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE match_result ADD COLUMN adjustment_advice TEXT NOT NULL DEFAULT '[]'`,
+];
+for (const sql of E3_COLS) {
+  try {
+    db.exec(sql);
+  } catch {
+    // Column already exists — SQLite doesn't support IF NOT EXISTS on ADD COLUMN
+  }
+}
 
 // Ensure workspace row exists
 db.prepare(

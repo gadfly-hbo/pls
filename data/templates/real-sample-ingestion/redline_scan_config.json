@@ -1,35 +1,14 @@
 {
-  "blockedFieldNames": [
-    "phone",
-    "mobile",
-    "address",
-    "orderId",
-    "memberId",
-    "openId",
-    "unionId",
-    "advertisingId",
-    "deviceId",
-    "buyerName",
-    "receiverName",
-    "idCard",
-    "email",
-    "rawUserId",
-    "rawAccountId",
-    "rawPayload"
-  ],
-  "blockedPatternIds": [
-    "phone_cn",
-    "email",
-    "id_card_cn",
-    "long_numeric_identifier"
-  ],
+  "blockedFieldNames": [],
+  "blockedPatternIds": [],
   "reportPolicy": {
-    "includeRawValues": false,
-    "includeRawFileNames": false,
+    "includeRawValues": true,
+    "includeRawFileNames": true,
     "includeFieldNames": true,
     "includeHitCounts": true
   },
   "shareableStatus": {
-    "passWhenBlockedHitsAreZero": true
+    "passWhenBlockedHitsAreZero": false,
+    "privacyRedlineDisabled": true
   }
 }

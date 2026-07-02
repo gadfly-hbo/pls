@@ -1,4 +1,4 @@
 entityType,entityId,profileStage,sourceField,sourceValue,mappedTagId,score,confidence,sampleSize,timeWindow,source,sourceType,batchId,mappingRuleId,mappingNote
-sku,sku_hash8_001,buyer,age_band,25-34,demo.age_25_34,0.81,0.92,1200,2026-05-01/2026-06-30,sanitized_platform_aggregate,sanitized_aggregate,batch_real_YYYYMMDD_001,rule_age_band_v1,direct age band mapping
-sku,sku_hash8_001,buyer,style_preference,commute_basic,style.minimal,0.69,0.72,1200,2026-05-01/2026-06-30,sanitized_platform_aggregate,sanitized_aggregate,batch_real_YYYYMMDD_001,rule_style_v1,semantic style mapping
-channel,channel_hash8_001,channel_audience,content_touchpoint,short_video,channel.short_video,0.88,0.9,5000,2026-05-01/2026-06-30,sanitized_platform_aggregate,sanitized_aggregate,batch_real_YYYYMMDD_001,rule_channel_v1,direct channel mapping
+sku,sku_001,buyer,age_band,25-34,demo.age_25_34,0.81,0.92,1200,2026-05-01/2026-06-30,user_authorized_input,user_authorized,batch_real_YYYYMMDD_001,rule_age_band_v1,direct age band mapping
+sku,sku_001,buyer,style_preference,commute_basic,style.minimal,0.69,0.72,1200,2026-05-01/2026-06-30,user_authorized_input,user_authorized,batch_real_YYYYMMDD_001,rule_style_v1,semantic style mapping
+channel,channel_001,channel_audience,content_touchpoint,short_video,channel.short_video,0.88,0.9,5000,2026-05-01/2026-06-30,user_authorized_input,user_authorized,batch_real_YYYYMMDD_001,rule_channel_v1,direct channel mapping

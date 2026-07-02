@@ -13,7 +13,7 @@ interface AuditEventInput {
   reasonCode?: string;
   attempt?: number;
   meta?: Record<string, unknown>;
-  safetyStage?: string;
+  admissionStage?: string;
 }
 
 export function writeAudit(
@@ -40,7 +40,7 @@ export function writeAudit(
     input.reasonCode ?? null,
     input.attempt ?? null,
     JSON.stringify(input.meta ?? {}),
-    input.safetyStage ?? null
+    input.admissionStage ?? null
   );
   return auditId;
 }

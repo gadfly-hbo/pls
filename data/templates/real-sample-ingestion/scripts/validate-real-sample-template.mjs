@@ -12,6 +12,7 @@ const taxonomy = fs.readFileSync(taxonomyPath, "utf8");
 const tagIds = new Set([...taxonomy.matchAll(/`((?:demo|style|price|occasion|intent|channel)\.[a-z0-9_]+)`/g)].map((match) => match[1]));
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
 const blockedFieldNames = new Set(config.blockedFieldNames.map((field) => field.toLowerCase()));
+const blockedPatternIds = new Set(config.blockedPatternIds ?? []);
 
 const requiredFiles = [
   "aggregate_profile.csv",
@@ -92,6 +93,7 @@ const scanTextPatterns = (filePath) => {
     ["long_numeric_identifier", /\b\d{16,}\b/],
   ];
   for (const [patternId, pattern] of patterns) {
+    if (!blockedPatternIds.has(patternId)) continue;
     if (pattern.test(text)) {
       errors.push(`${relative} matches blocked pattern ${patternId}`);
     }
@@ -117,7 +119,6 @@ if (aggregatePath) {
     if (row.score) assertNumberRange(row.score, `${rowLabel} score`);
     if (row.confidence) assertNumberRange(row.confidence, `${rowLabel} confidence`);
     if (row.sampleSize) assertPositiveInteger(row.sampleSize, `${rowLabel} sampleSize`);
-    if (row.sourceType && row.sourceType !== "sanitized_aggregate") warnings.push(`${rowLabel} sourceType should be sanitized_aggregate for real samples`);
   });
 }
 
@@ -143,9 +144,8 @@ if (qualityPath) {
   for (const field of ["batchId", "source", "sourceType", "generatedAt", "timeWindows", "rowCount", "mappingCoverageRate", "unmappedFieldCount", "blockedFieldHitCount", "blockedPatternHitCount", "qualityFlags", "shareable"]) {
     if (!(field in quality)) errors.push(`quality_report missing ${field}`);
   }
-  if (quality.sourceType && quality.sourceType !== "sanitized_aggregate") errors.push("quality_report sourceType must be sanitized_aggregate");
   if ("mappingCoverageRate" in quality) assertNumberRange(quality.mappingCoverageRate, "quality_report mappingCoverageRate");
-  if (quality.shareable === true && ((quality.blockedFieldHitCount ?? 0) > 0 || (quality.blockedPatternHitCount ?? 0) > 0)) {
+  if (config.shareableStatus?.privacyRedlineDisabled !== true && quality.shareable === true && ((quality.blockedFieldHitCount ?? 0) > 0 || (quality.blockedPatternHitCount ?? 0) > 0)) {
     errors.push("quality_report cannot be shareable when redline hits are present");
   }
 }
@@ -154,9 +154,9 @@ const redlinePath = resolveInput("redline_scan_report.json");
 if (redlinePath) {
   const report = JSON.parse(fs.readFileSync(redlinePath, "utf8"));
   scanObjectKeys(report, "redline_scan_report");
-  if (report.rawValueSamplesIncluded !== false) errors.push("redline_scan_report rawValueSamplesIncluded must be false");
+  if (config.reportPolicy?.includeRawValues !== true && report.rawValueSamplesIncluded !== false) errors.push("redline_scan_report rawValueSamplesIncluded must be false");
   if (!["pass", "fail"].includes(report.status)) errors.push("redline_scan_report status must be pass or fail");
-  if (report.status === "pass") {
+  if (config.shareableStatus?.privacyRedlineDisabled !== true && report.status === "pass") {
     const fieldHits = Array.isArray(report.blockedFieldHits) ? report.blockedFieldHits.length : 0;
     const patternHits = Array.isArray(report.blockedPatternHits) ? report.blockedPatternHits.length : 0;
     if (fieldHits > 0 || patternHits > 0) errors.push("redline_scan_report cannot pass with blocked hits");

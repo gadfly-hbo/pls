@@ -11,7 +11,11 @@ npm run predict -- --sku mock_sku_101
 npm run match -- --sku mock_sku_101
 npm run backtest
 npm run backtest:cutoff
+npm run backtest:panel
+npm run segment-calibration
+npm run token-governance
 npm run contract-test
+npm run account-fit-contract-test
 npm run validate-tags
 npm run typecheck
 ```
@@ -36,6 +40,25 @@ npm run backtest -- --mode cutoff --cutoff 2026-05-01/2026-05-31
 ```
 
 The current D-P1-A2 input is mock aggregate smoke data, so the report must not be represented as real-sample generalization evidence.
+
+`npm run backtest:panel` emits the same cutoff report with stratified slices for `categoryLv2`, `channelType`, and `sampleSizeBucket`.
+
+## P1 Model Quality Reports
+
+- `npm run segment-calibration` reports whether current segment template weights should change. With the current mock, low-SKU input it keeps the existing X-approved weights.
+- `npm run token-governance` classifies structural tokens, D/X review candidates, and unknown business tokens without expanding taxonomy.
+
+## P1-E Account Fit Adapter
+
+`src/account-fit.ts` defines the stable `AccountFitAdapterInput` / `AccountFitDiagnostic` interface for Douyin account-product fit. Until the user provides the formal fit formula, `diagnoseAccountFit` uses an explainable rule baseline and always emits `algorithm_pending_user_formula`.
+
+Replacement point after the formula is provided: keep exported input/output interfaces stable and replace only the scoring internals inside `diagnoseAccountFit`.
+
+Contract test:
+
+```bash
+npm run account-fit-contract-test
+```
 
 ## C3 Follow-Up
 

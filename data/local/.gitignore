@@ -1,3 +1,4 @@
-# Local-only data staging. Do not commit raw or sanitized platform samples.
+# Local staging is ignored by default to avoid accidental fixture churn.
+# User-authorized data may be promoted to tracked project paths when the task requires it.
 *
 !.gitignore

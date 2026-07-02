@@ -1,0 +1,33 @@
+mappingRuleId,sourceArea,sourceField,sourceValuePattern,mappedTagId,dimension,confidence,ruleType,targetObject,owner,version,note
+dy_age_18_24_v1,account_profile,audience_age_band,age_18_24,demo.age_18_24,demo,0.95,direct,AccountProfile.tags,D,1,Aggregate age bucket mapping
+dy_age_25_34_v1,account_profile,audience_age_band,age_25_34,demo.age_25_34,demo,0.95,direct,AccountProfile.tags,D,1,Aggregate age bucket mapping
+dy_age_35_44_v1,account_profile,audience_age_band,age_35_44,demo.age_35_44,demo,0.95,direct,AccountProfile.tags,D,1,Aggregate age bucket mapping
+dy_age_45_plus_v1,account_profile,audience_age_band,age_45_plus,demo.age_45_plus,demo,0.95,direct,AccountProfile.tags,D,1,Aggregate age bucket mapping
+dy_gender_female_v1,account_profile,audience_gender_tendency,female_high,demo.female,demo,0.9,direct,AccountProfile.tags,D,1,Aggregate gender tendency mapping
+dy_gender_male_v1,account_profile,audience_gender_tendency,male_high,demo.male,demo,0.9,direct,AccountProfile.tags,D,1,Aggregate gender tendency mapping
+dy_city_high_v1,account_profile,audience_city_tier,high_tier,demo.city_high_tier,demo,0.88,direct,AccountProfile.tags,D,1,Aggregate city tier mapping
+dy_city_lower_v1,account_profile,audience_city_tier,lower_tier,demo.city_lower_tier,demo,0.88,direct,AccountProfile.tags,D,1,Aggregate city tier mapping
+dy_consumption_value_v1,account_profile,audience_consumption_power,value,price.value,price,0.82,semantic,AccountProfile.tags,D,1,Consumption power maps to price preference
+dy_consumption_mid_v1,account_profile,audience_consumption_power,mid,price.mid,price,0.82,semantic,AccountProfile.tags,D,1,Consumption power maps to price preference
+dy_consumption_premium_v1,account_profile,audience_consumption_power,premium,price.premium,price,0.82,semantic,AccountProfile.tags,D,1,Consumption power maps to price preference
+dy_consumption_promo_v1,account_profile,audience_consumption_power,promo_sensitive,price.promo_sensitive,price,0.76,semantic,AccountProfile.tags,D,1,Promotion sensitivity bucket mapping
+dy_life_stage_student_v1,account_profile,audience_life_stage,student,demo.age_18_24,demo,0.62,semantic,AccountProfile.tags,D,1,Life stage proxy requires low confidence
+dy_life_stage_new_career_v1,account_profile,audience_life_stage,new_career,occasion.work,occasion,0.68,semantic,AccountProfile.tags,D,1,Career stage maps to work occasion
+dy_life_stage_family_v1,account_profile,audience_life_stage,family,occasion.daily,occasion,0.58,semantic,AccountProfile.tags,D,1,Family stage maps to daily occasion
+dy_life_stage_gift_v1,account_profile,audience_life_stage,gift_buyer,intent.gift,intent,0.7,semantic,AccountProfile.tags,D,1,Gift buying stage maps to intent
+dy_interest_minimal_v1,account_profile,audience_interest_behavior,minimal_style,style.minimal,style,0.78,semantic,AccountProfile.tags,D,1,Interest bucket maps to style tag
+dy_interest_trendy_v1,account_profile,audience_interest_behavior,trendy_fashion,style.trendy,style,0.78,semantic,AccountProfile.tags,D,1,Interest bucket maps to style tag
+dy_interest_sweet_v1,account_profile,audience_interest_behavior,sweet_style,style.sweet,style,0.76,semantic,AccountProfile.tags,D,1,Interest bucket maps to style tag
+dy_interest_sport_v1,account_profile,audience_interest_behavior,sport_lifestyle,style.sporty,style,0.76,semantic,AccountProfile.tags,D,1,Interest bucket maps to style tag
+dy_interest_street_v1,account_profile,audience_interest_behavior,street_style,style.street,style,0.76,semantic,AccountProfile.tags,D,1,Interest bucket maps to style tag
+dy_interest_travel_v1,account_profile,audience_interest_behavior,travel_content,occasion.travel,occasion,0.74,semantic,AccountProfile.tags,D,1,Interest bucket maps to occasion
+dy_interest_try_new_v1,account_profile,audience_interest_behavior,new_product_seed,intent.try_new,intent,0.7,semantic,AccountProfile.tags,D,1,Content seeding interest maps to try-new intent
+dy_touchpoint_short_video_v1,account_profile,touchpoint_preference,short_video,channel.short_video,channel,0.94,direct,AccountProfile.tags,D,1,Douyin short video touchpoint
+dy_touchpoint_live_v1,account_profile,touchpoint_preference,live_stream,channel.live_stream,channel,0.94,direct,AccountProfile.tags,D,1,Douyin live touchpoint
+dy_touchpoint_shop_v1,account_profile,touchpoint_preference,shop_window,channel.shelf_ecommerce,channel,0.86,semantic,AccountProfile.tags,D,1,Douyin shop or window touchpoint
+dy_touchpoint_private_v1,account_profile,touchpoint_preference,private_domain,channel.private_domain,channel,0.84,semantic,AccountProfile.tags,D,1,Private-domain follow-up touchpoint
+dy_product_style_minimal_v1,product_basic,product_style_keywords,minimal,style.minimal,style,0.85,direct,ProductDNA.mappedProductTags,D,1,Product style keyword mapping
+dy_product_style_elegant_v1,product_basic,product_style_keywords,elegant,style.elegant,style,0.85,direct,ProductDNA.mappedProductTags,D,1,Product style keyword mapping
+dy_product_price_value_v1,product_basic,product_price_position,value,price.value,price,0.9,direct,ProductDNA.mappedProductTags,D,1,Product price band mapping
+dy_product_price_mid_v1,product_basic,product_price_position,mid,price.mid,price,0.9,direct,ProductDNA.mappedProductTags,D,1,Product price band mapping
+dy_product_price_premium_v1,product_basic,product_price_position,premium,price.premium,price,0.9,direct,ProductDNA.mappedProductTags,D,1,Product price band mapping
