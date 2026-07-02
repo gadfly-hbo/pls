@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-02（V-P0-D1 归档完成）
+最近更新：2026-07-02（A-P1-B1-B4 总控归档）
 
 进度：
 
@@ -21,19 +21,29 @@
 - 已完成 M-P0-C3，`midi` / `dress` 不回流画像词表，P1 时间切分输入要求和 A adapter contract test 已通过总控审核。
 - 已完成 D-P0-C4，真实样例本地脱敏、聚合、tag mapping、quality report、redline scan 模板已通过总控终审。
 - 已完成 V-P0-D1，PLS 前端已参考苍耳工作台完成 neutral/dark token 化和 UI refresh；API 契约、CSV 字段和数据红线保持不变。
+- 已按总控确认解冻 P1 任务池；`X-P1-FREEZE` 已归档为 done，P1-A/B/C/D 已拆为正式 todo 任务卡。
+- 已新增 P1-E 抖音号货匹配迁移卡组，覆盖契约冻结、字段映射、算法 adapter、接口承接、前端视图和总控验收；号货匹配度算法公式待用户后续提供。
+- 已完成 X-P1-A4，产出 `docs/p1-a4-real-sample-admission-report.md`；真实样例下游准入结论为暂缓，当前仅允许使用 mock/demo 数据推进工程化和契约工作。
+- 已完成 A-P1-B1/B2/B3/B4 后端工程化归档：match_result latest view、Idempotency-Key、prediction async worker / timeout fallback 和 API smoke 脚本均通过总控复核。
+- `docs/api-contract.md` 已补充 P1-B API 语义：幂等 scope、`Idempotency-Replay`、`GET /matches?history=true`、`POST /predictions.timeoutMs` 和 JSON `/batches`。
 
 下一步：
 
-- 执行 P0-C 总体验收 smoke，确认 C1-C4 验证证据可复现后再判断是否进入 P1。
+- 按 wiki 派发 P1 任务；真实样例进入模型、工作台或报告前，必须先完成 D-P1-A5 并回流 X 总控复核。
+- P1-B/C/D/E 可继续使用 mock/demo 数据推进工程化、工作台、模型脚手架和号货匹配契约，但不得宣称真实样例验证通过。
+- 若 V 域需要 match 也走 async，需单独派发 A 后续任务；当前 A-P1-B3 只要求 predictions 链路支持 async / timeout fallback。
 
 阻塞：
 
 - 暂无 P0-B 实现阻塞。
 - 如用户提供真实数据，必须先完成本地脱敏、聚合和安全检查。
+- D-P1-A5 阻塞于 `data/local/raw_staging/<batchId>/` 真实样例输入缺失。
+- P1-E 的号货匹配度算法公式尚未冻结；M 域只能先实现 adapter interface 和 contract test，待用户提供算法后替换 implementation。
+- multipart `/batches` 幂等未纳入当前契约，未来若需要需设计文件摘要 + form fields hash。
 
 开放问题：
 
-- P1 是否扩展线下门店、区域商圈、会员生命周期和品牌私域分层，需等待 P0-C 总体验收后再拍板。
+- 真实款号、账号名、销售金额在 PLS 中的展示策略需 X 总控单独拍板；默认脱敏和指数化。
 
 ---
 

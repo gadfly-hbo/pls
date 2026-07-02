@@ -4,6 +4,7 @@ import {
   matchChannels,
   predictProductProfile,
   runBacktest,
+  runCutoffBacktest,
   toProductDNA,
   validateDemoTagIds,
 } from "./baseline.js";
@@ -35,11 +36,18 @@ if (command === "predict") {
   const profile = predictProductProfile(toProductDNA(findSku(skuId)));
   printJson({ skuId, channelMatches: matchChannels(profile, loadChannelProfiles()) });
 } else if (command === "backtest") {
-  printJson(runBacktest());
+  const mode = getArg("--mode") ?? "demo";
+  if (mode === "cutoff") {
+    printJson(runCutoffBacktest({ inputPath: getArg("--input"), cutoffTimeWindow: getArg("--cutoff") }));
+  } else if (mode === "demo") {
+    printJson(runBacktest());
+  } else {
+    throw new Error(`Unknown backtest mode: ${mode}`);
+  }
 } else if (command === "validate-tags") {
   const result = validateDemoTagIds();
   printJson(result);
   if (!result.ok) process.exitCode = 1;
 } else {
-  throw new Error("Usage: cli.ts <predict|match|backtest|validate-tags> [--sku mock_sku_101]");
+  throw new Error("Usage: cli.ts <predict|match|backtest|validate-tags> [--sku mock_sku_101] [--mode demo|cutoff] [--input path] [--cutoff timeWindow]");
 }

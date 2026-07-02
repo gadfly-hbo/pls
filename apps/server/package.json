@@ -8,6 +8,7 @@
     "start": "tsx src/index.ts",
     "migrate": "tsx src/db/migrate.ts",
     "seed": "tsx scripts/seed.ts",
+    "smoke": "tsx scripts/smoke.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

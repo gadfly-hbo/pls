@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-02（M-P0-C3 总控归档）
+最近更新：2026-07-02（X-P1-A4 准入暂缓）
 
 进度：
 
@@ -19,14 +19,19 @@
 - P1 时间切分回测输入要求已明确：至少 3 个连续 `timeWindow` 才能做 smoke，正式可解释回测建议 6 个窗口、30 个 SKU、4 个 channel。
 - 已新增 A adapter contract test：`apps/model/src/contract-test.ts` 与 `npm run contract-test`，校验 `ProductProfileDraft` / `ChannelMatchDraft[]` 必备字段和分数范围。
 - M-P0-C3 已通过总控审核归档；`npm run typecheck`、`npm run contract-test`、`npm run validate-tags`、`npm run predict -- --sku mock_sku_101`、`npm run match -- --sku mock_sku_101`、`npm run backtest` 均通过。
+- M-P1-A3 已实现 cutoff 时间切分 backtest：新增 `npm run backtest:cutoff`，默认读取 `data/p1/multi-timewindow-demo/wide_table.jsonl`，训练早于 cutoff 的窗口并验证 cutoff 窗口。
+- 本次 cutoff smoke 指标：`topKTagHit@5 = 0.8`，`segmentTop1Hit = 0.667`，`driverPrecision = 0.556`，`matchNDCG@3 = 0.754`；报告见 `docs/model-p1-a3-cutoff-backtest.md`。
+- 已通过 `npm run typecheck`、`npm run contract-test`、`npm run validate-tags`、`npm run backtest`、`npm run backtest:cutoff`。
+- M-P1-A3 已经 X 总控复核标记 done；总控复验确认 cutoff 训练窗口和验证窗口隔离，channel profile 由训练窗口聚合，当前结果仅代表 D-P1-A2 mock aggregate cutoff smoke。
+- X-P1-A4 已归档，真实样例下游准入结论为暂缓；M 域当前 cutoff 指标只能作为 mock aggregate smoke，不得声明真实样本泛化能力。
 
 下一步：
 
-- 等待 D-P0-C4 提供真实样例脱敏映射模板和多 `timeWindow` 输入准备；拿到多窗口宽表后，M 域把 `runBacktest` 从 `demo_only_leave_one_sku_out` 升级为 cutoff 时间切分。
+- 等待 D-P1-A5 完成真实样例本地脱敏聚合，并由 D 域基于真实聚合结果重做多 `timeWindow` 宽表；拿到 X 总控准入后重新运行 cutoff backtest。
 
 阻塞：
 
-- 无阻塞。D 域 `data/demo/` 已存在且 tagId 白名单校验通过。
+- 无实现阻塞。D-P1-A2 mock 多窗口输入已存在，但当前结果只能作为 cutoff smoke，不能声明真实泛化能力。
 
 已解决问题：
 

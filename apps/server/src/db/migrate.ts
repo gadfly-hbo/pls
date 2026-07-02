@@ -9,6 +9,18 @@ mkdirSync(wsDir, { recursive: true });
 
 const db = openDb("ws_demo");
 
+// P1-B2 migration: rebuild idempotency_key so the PK includes method+path.
+// Cache entries are ephemeral (24h TTL) and safe to drop on schema upgrade.
+const idemRow = db
+  .prepare(
+    "SELECT sql FROM sqlite_master WHERE type='table' AND name='idempotency_key'"
+  )
+  .get() as { sql?: string } | undefined;
+if (idemRow?.sql && !/PRIMARY KEY \(workspace_id, method, path, key\)/.test(idemRow.sql)) {
+  console.log("Migrating idempotency_key to (workspace_id, method, path, key) PK");
+  db.exec("DROP TABLE idempotency_key");
+}
+
 db.exec(SCHEMA_DDL);
 
 // Ensure workspace row exists

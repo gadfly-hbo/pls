@@ -123,6 +123,25 @@ CREATE TABLE IF NOT EXISTS match_result (
 CREATE INDEX IF NOT EXISTS idx_match_workspace ON match_result(workspace_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_match_prediction ON match_result(prediction_id);
 CREATE INDEX IF NOT EXISTS idx_match_sku_channel ON match_result(workspace_id, sku_id, channel_id);
+CREATE INDEX IF NOT EXISTS idx_match_latest_lookup
+  ON match_result(workspace_id, sku_id, channel_id, generated_at DESC);
+
+-- Latest projection: one row per (workspace_id, sku_id, channel_id) with the newest generated_at.
+-- P1-B1: match_result is now append-only; historical rows remain queryable via GET /matches?history=true.
+CREATE VIEW IF NOT EXISTS match_result_latest AS
+SELECT match_id, workspace_id, task_id, prediction_id, sku_id, channel_id, channel_type,
+       model_version, source, source_type, generated_at, match_score, match_confidence,
+       rank, overlap, best_segment_id, best_segment_match, positive_drivers, negative_drivers,
+       recommendation, risks, quality_flags, created_at
+FROM (
+  SELECT match_result.*,
+         ROW_NUMBER() OVER (
+           PARTITION BY workspace_id, sku_id, channel_id
+           ORDER BY generated_at DESC, rowid DESC
+         ) AS _latest_rank
+  FROM match_result
+)
+WHERE _latest_rank = 1;
 
 CREATE TABLE IF NOT EXISTS task (
   task_id TEXT PRIMARY KEY,
@@ -164,4 +183,27 @@ CREATE TABLE IF NOT EXISTS audit_event (
 CREATE INDEX IF NOT EXISTS idx_audit_workspace ON audit_event(workspace_id, occurred_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_task ON audit_event(task_id);
 CREATE INDEX IF NOT EXISTS idx_audit_resource ON audit_event(resource_type, resource_id);
+
+-- P1-B2: Idempotency cache.
+-- request_hash is a SHA-256 hex of the raw JSON body — no S0/S1 values stored.
+-- response_body is the same JSON payload already returned by the safety-gated API,
+-- so it inherits the API's redline surface.
+-- PK is (workspace_id, method, path, key) so the same key across different
+-- endpoints does NOT collide — a caller may reuse a client-generated key
+-- across POST /predictions and POST /matches without cross-replay.
+CREATE TABLE IF NOT EXISTS idempotency_key (
+  workspace_id TEXT NOT NULL,
+  method TEXT NOT NULL,
+  path TEXT NOT NULL,
+  key TEXT NOT NULL,
+  request_hash TEXT NOT NULL,
+  response_body TEXT NOT NULL,
+  resource_id TEXT,
+  status_code INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL,
+  PRIMARY KEY (workspace_id, method, path, key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_idem_expires ON idempotency_key(expires_at);
 `;

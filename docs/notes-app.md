@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-02（A-P0-C1 收尾校验完成）
+最近更新：2026-07-02（A-P1-B1/B2/B3/B4 总控归档）
 
 进度：
 
@@ -30,6 +30,53 @@
   - Smoke 验证：重复两次 `POST /matches` 后，`heatmap cells=4 unique=4`，`/matches?skuId=` 也为 `items=4 unique=4`
   - 收尾校验：`apps/server` 与 `apps/model` 双 `typecheck` 通过；预测仍返回 `topSegments=3`
 - X-P0-B5 端到端 API smoke 通过：`/products` → `/predictions` → `/matches` → `/matches/heatmap` → `/matches?skuId=` → `/audit`。
+- **A-P1-B1 已完稿**：match_result 升级为 append-only + `match_result_latest` view
+  - `src/db/schema.ts`：新增 `match_result_latest` VIEW（按 `workspace_id + sku_id + channel_id` ROW_NUMBER 取最新），新增 `idx_match_latest_lookup` 复合索引
+  - `src/routes/matches.ts`：POST /matches 去掉 `DELETE` overwrite；GET /matches/heatmap 直接 `SELECT FROM match_result_latest`，SQL 从内嵌 window function 简化为一层查询；GET /matches 默认读 view，`?history=true` 读全量
+  - 前端读取路径零变更（heatmap / list 默认口径不变）
+  - 验证：重复 POST /matches 后 heatmap `cells=4 unique_channels=4`，`?skuId=&pageSize=100` latest=4，`&history=true&pageSize=100` history=12
+- **A-P1-B2 已完稿并通过总控复核**：Idempotency-Key + 24h TTL 缓存
+  - 新表 `idempotency_key(workspace_id, method, path, key, request_hash, response_body, resource_id, status_code, created_at, expires_at)`，PK `(workspace_id, method, path, key)`
+  - 新 lib `src/lib/idempotency.ts`：SHA-256 hash raw JSON body（不存原文，仅 hash + 已经过 safety 门禁的响应 body）；middleware 只对 POST + `application/json` + `Idempotency-Key` header 生效；multipart /batches 缺 JSON body 时自动跳过
+  - 覆盖 POST /predictions、POST /matches、POST /batches（后者仅在 JSON payload 场景生效）；同一 key 跨 endpoint 按 method + path 隔离，不 cross-replay
+  - Key 校验 `^[A-Za-z0-9._~+/=-]{8,128}$`，命中重放返回原 body + `Idempotency-Replay: true` header
+  - 冲突：same key + 不同 request_hash → 409 conflict；每次读时先 prune 过期行
+  - 验证：same key + same body → 同 predictionId + replay header；different body → 409；bad key → 400
+- **A-P1-B3 已完稿并通过总控复核**：真正异步 task worker + timeout fallback
+  - 新 lib `src/lib/worker.ts`：`markTask()` 单点写 task 状态转换（started_at / finished_at / error / attempts）；`runWithTimeout(job, timeoutMs)` race，超时返回 `{ kind:"timeout", work }` 让调用方 detach
+  - POST /predictions 重构：SKU preflight（404 快返，不写 task）→ 写 `queued` task + audit `queue` → `mode=async` 立即 202 + queued；`mode=sync`（默认）走 `runWithTimeout(job, timeoutMs ?? 8000)`，超时 fallback 到 202 + `task.fallbackReason: "sync_timeout"`
+  - `job` 内部：`markTask(running)` → 计算 → INSERT prediction → `markTask(succeeded)` + audit `succeed`；异常路径 `markTask(failed)` + audit `fail`
+  - Body 新增可选 `mode`、`timeoutMs`；测试延迟 hook 改为非公开 header `X-PLS-Test-Delay-Ms`，且 `NODE_ENV=production` 禁用
+  - 验证：sync 快任务 succeeded；async mode 立即返 queued，~1s 后 succeeded；delay 3s + timeoutMs 500ms → 202 + fallbackReason=sync_timeout，后台继续跑到 succeeded；bad SKU → 404 not_found
+  - matches 路径保留 sync 语义（沿用 P0-C1 baseline adapter），未接入 async worker——B3 range 只要求“至少 prediction 或 match 一条链路支持 async”
+- **A-P1-B4 已完稿并通过总控复核**：API smoke 一条命令脚本化
+  - `scripts/smoke.ts` + `scripts/smoke-steps.ts`（step 定义拆分），`package.json` 增加 `npm run smoke`
+  - 覆盖 18 步：health、auth 401、workspace 400、products_list、safety_violation、predict_sync、task_poll_prediction、predict_async、predict_sync_timeout_fallback、match、heatmap_unique、match_history_vs_latest、idempotency_first / replay / conflict / **endpoint_isolation** / **batches_json_idempotent**、audit_recent
+  - CLI flags：`--base` `--token` `--workspace` `--json` `--verbose`；`--json` 打机器可读 summary；退出码 all pass → 0，任一失败 → 1
+  - Fixture 只用 ws_demo seed 数据（mock），不依赖真实业务
+  - 验证：`npm run smoke` → 18/18 PASS exit 0；`--json` 可解析；`--token bogus` → 16 FAIL exit 1
+
+总控审核阻塞修复（本轮回流）：
+
+- **B2-1 Idempotency-Key 按 endpoint 隔离**（Blocker 1 fix）
+  - `idempotency_key` PK 由 `(workspace_id, key)` 改为 `(workspace_id, method, path, key)`
+  - `src/lib/idempotency.ts` lookup 和 INSERT OR REPLACE 均带 method + path
+  - `src/db/migrate.ts` 添加 PK 检测：老表 PK 缺 method+path 时自动 DROP 重建（24h TTL 缓存，重建安全）
+  - 验证：same key 分别打 /predictions 和 /matches → 各自返 fresh response 且无 `Idempotency-Replay` header；smoke 新增 `idempotency_endpoint_isolation` 防回归
+- **B2-2 /batches JSON 幂等路径可用**（Blocker 2 fix）
+  - `src/routes/batches.ts` 按 Content-Type 分派：`application/json` → `readJson<{meta}>()`（支持 object 或字符串形式的 meta），multipart → 原 `parseBody()` 路径
+  - middleware 侧不变，仍只对 `application/json` 生效；multipart 上传自动跳过幂等（保持 P0-B2 原有 CSV 通路契约）
+  - 验证：first POST 202 + resourceUrl；replay 202 + 同 batchId + `Idempotency-Replay: true`；smoke 新增 `batches_json_idempotent` 防回归
+- **B3 simulatedDelayMs 从公开 body 移除**（Blocker 3 fix）
+  - `PredictBody` 不再声明 `simulatedDelayMs`；body 里带该字段会被静默忽略（验证：body `simulatedDelayMs:3000` + `timeoutMs:500` → 94ms 内返回 200）
+  - 改为内部 header `X-PLS-Test-Delay-Ms`，通过 `readTestDelay()` 读取
+  - `NODE_ENV === "production"` 时 `readTestDelay` 恒返 `undefined`，生产环境无法触发
+  - 上限 30_000ms，防止 header 被滥用
+  - smoke 更新为通过 header 传递
+- **总控最终归档**：
+  - `npm run typecheck`、`npm run migrate`、`npm run seed`、`npm run smoke` 均通过。
+  - 手工复验同 key 跨 `/predictions` 与 `/matches` 不 cross-replay；`/batches` JSON replay 返回同一 `resourceUrl` 且带 `Idempotency-Replay: true`。
+  - `docs/api-contract.md` 已补充幂等 scope、replay header、`GET /matches?history=true`、`POST /predictions.timeoutMs` 和 JSON `/batches` 口径。
 
 关键决策：
 
@@ -39,6 +86,11 @@
 - feedback endpoint 骨架返回 `not_found`（`"feedback is not enabled in P0"`）
 - 批次导入只建 endpoint + task，不做 CSV 解析（D-P0-B1 已提供 JSONL seed）
 - 去重口径：P0 采用 latest-result overwrite，不新增幂等键表
+- P1-B1 起 match_result 升级为 append-only；latest 通过 `match_result_latest` view 提供，避免读改写路径侵入
+- P1-B2 幂等 hash 只对 `application/json` 生效；multipart 上传（当前只有 /batches）暂不做幂等（JSON payload 场景仍支持）
+- P1-B2 幂等 replay 用原样返回缓存 body，保留 `requestId` 与 `generatedAt` 是首次响应的值（重放语义清晰）
+- P1-B3 worker 用同进程 + `runWithTimeout`，不引入外部队列；未来切 BullMQ 时 markTask / runWithTimeout 接口保持不变
+- P1-B3 `simulatedDelayMs` 仅作为 smoke 用的 test hook，不改变业务字段口径
 
 回补记录（总控审核 3 项阻塞）：
 
@@ -48,8 +100,9 @@
 
 下一步：
 
-- 真实 worker 调度与异步 pipeline（目前全部同步返回）仍为 P1 前风险。
-- 如需保留完整 `match_result` 历史，P1 可从 overwrite 升级到显式幂等键 + latest view。
+- P1-B 序列全部关闭；若继续 P1，候选 A-P1-E3（抖音账号货匹配接口）需先等 X-P1-E0 契约冻结。
+- match 链路是否也接入 async worker + timeout fallback 视 V 域需求；当前 P1-B3 交付边界满足。
+- 真实 worker 调度与异步 pipeline：prediction 链路已支持；match / batches 仍走同步主路径。
 
 阻塞：
 
@@ -57,8 +110,10 @@
 
 开放问题：
 
-- P0-C 是否继续保留 M baseline 同进程 adapter，还是 P1 拆成单独 model-serving 进程。
-- heatmap 已完成 latest 去重；SKU×channel 量大时再评估缓存或物化视图。
+- P0-C 保留问题：M baseline adapter 是否 P1 拆成单独 model-serving 进程（未变）。
+- P1-B2 幂等缓存 prune 目前每次读时执行一次 DELETE；量大后可改成后台定期 job（P1 后再评估）。
+- P1-B4 smoke 需 server 已在 3100 运行；CI 层需先 `npm start` 或改脚本自动拉起子进程。
+- 如需保留完整 `match_result` 历史查询接口（当前需带 `?history=true`），可评估是否升级为独立 endpoint。
 
 ---
 

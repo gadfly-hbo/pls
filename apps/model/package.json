@@ -7,6 +7,7 @@
     "predict": "../server/node_modules/.bin/tsx src/cli.ts predict",
     "match": "../server/node_modules/.bin/tsx src/cli.ts match",
     "backtest": "../server/node_modules/.bin/tsx src/cli.ts backtest",
+    "backtest:cutoff": "../server/node_modules/.bin/tsx src/cli.ts backtest --mode cutoff",
     "contract-test": "../server/node_modules/.bin/tsx src/contract-test.ts",
     "validate-tags": "../server/node_modules/.bin/tsx src/cli.ts validate-tags",
     "typecheck": "../server/node_modules/.bin/tsc --noEmit -p tsconfig.json"

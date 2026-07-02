@@ -1,0 +1,9 @@
+{
+  "batchId": "batch_p1_multi_timewindow_demo_20260702",
+  "scannedAt": "2026-07-02T00:00:00Z",
+  "inputScope": "data/p1/multi-timewindow-demo",
+  "blockedFieldHits": [],
+  "blockedPatternHits": [],
+  "rawValueSamplesIncluded": false,
+  "status": "pass"
+}

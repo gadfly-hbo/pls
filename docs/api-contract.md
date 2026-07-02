@@ -119,7 +119,9 @@ P0 采用最小工作区隔离：
 ### 2.6 幂等
 
 - 创建型接口（`POST /predictions`、`POST /matches`、`POST /batches`）支持 `Idempotency-Key` 头。
-- 服务端在工作区内保留幂等键 24 小时；重复请求返回同一资源 ID 与原响应体。
+- 服务端在工作区 + HTTP method + path 内保留幂等键 24 小时；重复请求返回同一资源 ID 与原响应体。
+- 命中缓存时响应头包含 `Idempotency-Replay: true`。
+- 同一个 `Idempotency-Key` 可在不同 endpoint 复用，不得跨 endpoint replay。
 - 缺省时按业务字段生成隐式幂等键，例如预测任务用 `skuId + dnaHash + modelVersion`。
 
 ### 2.7 数据来源与安全元信息
@@ -423,11 +425,13 @@ A 域对 M 域匹配输出的封装，等价于 `model-plan.md §4.4` 的 `chann
 {
   "skuId": "mock_sku_101",
   "modelVersion": "m-p0-baseline-0.1",
-  "mode": "sync"
+  "mode": "sync",
+  "timeoutMs": 8000
 }
 ```
 
 - `mode`：`sync`（默认，同步返回预测结果，最长 30s）或 `async`（立即返回 `202` + `Task`）。
+- `timeoutMs`：同步等待上限，缺省由服务端配置决定；超时返回 `202 accepted` 与 `Task`，后台任务继续执行。
 - 若 `skuId` 不存在返回 `not_found`。
 - 若 `modelVersion` 缺省，服务端使用当前默认模型版本。
 
@@ -458,6 +462,8 @@ A 域对 M 域匹配输出的封装，等价于 `model-plan.md §4.4` 的 `chann
 | `GET` | `/matches/{matchId}` | 单条匹配结果 |
 | `GET` | `/matches` | 列表；至少提供 `predictionId` 或 `skuId` 之一 |
 | `GET` | `/matches/heatmap` | 热力图专用聚合视图，见 §4.6 |
+
+`GET /matches` 默认读取 latest 投影，即每个 `workspaceId + skuId + channelId` 只返回最新匹配结果。调试或复盘历史时可传 `history=true` 返回 append-only 历史记录。
 
 **`POST /matches` 请求：**
 
@@ -498,10 +504,13 @@ A 域对 M 域匹配输出的封装，等价于 `model-plan.md §4.4` 的 `chann
 
 `POST /batches` 上传格式：
 
+- Content-Type `application/json`，请求体为 `{ "meta": { ... } }` 或 `{ "meta": "<json string>" }`；该路径支持 `Idempotency-Key`。
 - Content-Type `multipart/form-data`，字段 `file`（CSV / JSONL）+ 字段 `meta`（JSON 字符串）。
 - `meta` 至少包含 `batchType`、`source`、`sourceType`、`timeWindow`；缺项返回 `invalid_input`。
 - 单批最大 100MB；超过返回 `payload_too_large`。
 - 命中 S0/S1 明细样本时全批 `rejected`，返回 `safety_violation`。
+
+说明：P1-B2 只保证 JSON 批次创建路径幂等；multipart 上传的文件摘要与表单字段归一化需后续单独设计。
 
 **响应：** 直接返回 `202` 与 `Task`。批次实际处理见 `pipeline-design.md §4`。
 

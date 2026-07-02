@@ -4,13 +4,14 @@ import { ok, accepted, notFound, invalidInput, dependencyFailed } from "../lib/r
 import { writeAudit } from "../lib/audit.js";
 import { placeholders } from "../lib/sql.js";
 import { matchFromPredictionAndChannels } from "../services/model-adapter.js";
+import { idempotencyMiddleware, readJson, storeIdempotent } from "../lib/idempotency.js";
 
 const matches = new Hono();
 
 // POST /matches
-matches.post("/", async (c) => {
+matches.post("/", idempotencyMiddleware(), async (c) => {
   const wsId = c.get("workspaceId");
-  const body = await c.req.json();
+  const body = await readJson<Record<string, unknown>>(c);
   const predictionId = body.predictionId as string | undefined;
   const skuId = body.skuId as string | undefined;
   const channelIds = body.channelIds as string[] | undefined;
@@ -122,11 +123,8 @@ matches.post("/", async (c) => {
     return dependencyFailed(c, `match failed for SKU ${resolvedSkuId}`);
   }
 
-  // latest-result overwrite strategy: keep only newest cell per skuId + channelId
-  db.prepare(
-    `DELETE FROM match_result
-     WHERE workspace_id = ? AND sku_id = ? AND channel_id IN (${placeholders(topMatches.length)})`
-  ).run(wsId, resolvedSkuId, ...topMatches.map((match) => match.channelId));
+  // P1-B1: match_result is append-only; latest view (match_result_latest) picks the newest
+  // row per (workspace_id, sku_id, channel_id). No DELETE needed.
 
   for (let i = 0; i < topMatches.length; i++) {
     const m = topMatches[i]!;
@@ -197,9 +195,9 @@ matches.post("/", async (c) => {
   db.close();
 
   if (mode === "async") {
-    return accepted(c, { task: { taskId, status: "succeeded" } });
+    return storeIdempotent(c, accepted(c, { task: { taskId, status: "succeeded" } }), taskId);
   }
-  return ok(c, result);
+  return storeIdempotent(c, ok(c, result), taskId);
 });
 
 // GET /matches/heatmap - must be before /:matchId
@@ -233,18 +231,10 @@ matches.get("/heatmap", (c) => {
 
   const rows = db
     .prepare(
-      `SELECT ranked.sku_id, ranked.channel_id, ranked.match_score, ranked.match_confidence, ranked.recommendation
-       FROM (
-         SELECT sku_id, channel_id, match_score, match_confidence, recommendation,
-           ROW_NUMBER() OVER (
-             PARTITION BY sku_id, channel_id
-             ORDER BY generated_at DESC, rowid DESC
-           ) AS row_num
-         FROM match_result
-         WHERE ${conditions.join(" AND ")}
-       ) AS ranked
-       WHERE ranked.row_num = 1
-       ORDER BY ranked.sku_id, ranked.match_score DESC`
+      `SELECT sku_id, channel_id, match_score, match_confidence, recommendation
+       FROM match_result_latest
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY sku_id, match_score DESC`
     )
     .all(...params) as Array<Record<string, unknown>>;
 
@@ -318,6 +308,7 @@ matches.get("/", (c) => {
   const predictionId = c.req.query("predictionId");
   const skuId = c.req.query("skuId");
   const cursor = c.req.query("cursor");
+  const history = c.req.query("history") === "true";
   const pageSize = Math.min(parseInt(c.req.query("pageSize") ?? "20"), 100);
 
   if (!predictionId && !skuId) {
@@ -341,9 +332,12 @@ matches.get("/", (c) => {
     params.push(cursor);
   }
 
+  // P1-B1: default reads match_result_latest (one row per skuId+channelId).
+  // history=true returns append-only historical rows.
+  const table = history ? "match_result" : "match_result_latest";
   const rows = db
     .prepare(
-      `SELECT * FROM match_result WHERE ${conditions.join(" AND ")} ORDER BY match_score DESC LIMIT ?`
+      `SELECT * FROM ${table} WHERE ${conditions.join(" AND ")} ORDER BY match_score DESC LIMIT ?`
     )
     .all(...params, pageSize + 1) as Array<Record<string, unknown>>;
 

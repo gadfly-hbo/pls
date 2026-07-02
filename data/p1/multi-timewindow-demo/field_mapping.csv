@@ -1,0 +1,11 @@
+outputField,sourceField,sourceFile,notes
+skuId,skuId,data/demo/wide_table.jsonl,sanitized mock SKU id
+spuId,spuId,data/demo/wide_table.jsonl,sanitized mock SPU id
+channelId,channelId,data/demo/wide_table.jsonl,sanitized mock channel id
+timeWindow,generated window,data/scripts/generate-p1-multi-timewindow-demo.mjs,three closed monthly windows
+batchId,constant,data/scripts/generate-p1-multi-timewindow-demo.mjs,batch_p1_multi_timewindow_demo_20260702
+source,constant,data/scripts/generate-p1-multi-timewindow-demo.mjs,mock_multi_timewindow_aggregate
+sourceType,constant,data/scripts/generate-p1-multi-timewindow-demo.mjs,mock
+sampleSize,sampleSize,data/demo/wide_table.jsonl,scaled aggregate count
+profileCoverageRate,profileCoverageRate,data/demo/wide_table.jsonl,scaled coverage rate
+qualityFlags,quality rules,data/scripts/generate-p1-multi-timewindow-demo.mjs,row-level flags only

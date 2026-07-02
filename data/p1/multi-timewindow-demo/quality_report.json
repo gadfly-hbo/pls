@@ -1,0 +1,33 @@
+{
+  "batchId": "batch_p1_multi_timewindow_demo_20260702",
+  "source": "mock_multi_timewindow_aggregate",
+  "sourceType": "mock",
+  "generatedAt": "2026-07-02T00:00:00Z",
+  "timeWindows": [
+    "2026-03-01/2026-03-31",
+    "2026-04-01/2026-04-30",
+    "2026-05-01/2026-05-31"
+  ],
+  "rowCount": 36,
+  "skuCount": 3,
+  "channelCount": 4,
+  "trainableRowRate": 1,
+  "avgSampleSize": 747,
+  "profileCoverageRate": 0.843,
+  "missingFieldRate": 0.039,
+  "unmappedFieldCount": 0,
+  "lowConfidenceMappingCount": 6,
+  "qualityFlags": [
+    "demo_only",
+    "mock_aggregate",
+    "multi_timewindow_cutoff_smoke",
+    "real_sample_input_absent"
+  ],
+  "fieldMapping": "field_mapping.csv",
+  "untrainableRows": "untrainable_rows.jsonl",
+  "redlineScanReport": "redline_scan_report.json",
+  "notes": [
+    "Derived from data/demo mock aggregate rows because no real raw staging batch is present.",
+    "Usable for D-P1-A2/M-P1-A3 cutoff smoke only; not a formal real-sample backtest dataset."
+  ]
+}

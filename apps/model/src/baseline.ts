@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 export const MODEL_VERSION = "m-p0-baseline-0.1";
 
 const ROOT_DIR = resolve(import.meta.dirname, "../../..");
 const DEMO_DIR = resolve(ROOT_DIR, "data/demo");
+const P1_MULTI_TIMEWINDOW_DIR = resolve(ROOT_DIR, "data/p1/multi-timewindow-demo");
 const TAXONOMY_PATH = resolve(ROOT_DIR, "docs/profile-taxonomy-v0.md");
 
 export interface ProfileTagScore {
@@ -49,6 +50,9 @@ export interface WideTableRow extends ProductDNA {
   channelId: string;
   channelType: string;
   timeWindow: string;
+  source?: string;
+  sourceType?: string;
+  batchId?: string;
   buyerProfileTags: ProfileTagScore[];
   sampleSize: number;
   profileCoverageRate: number;
@@ -117,17 +121,31 @@ export interface ChannelMatchDraft {
 export interface BacktestReport {
   reportId: string;
   modelVersion: string;
-  evaluationMode: "demo_only_leave_one_sku_out";
+  evaluationMode: "demo_only_leave_one_sku_out" | "cutoff_time_split";
+  inputPath?: string;
+  cutoffTimeWindow?: string;
+  trainWindows?: string[];
+  validationWindows?: string[];
   trainSize: number;
   testSize: number;
+  trainSkuCount?: number;
+  testSkuCount?: number;
+  channelCount?: number;
+  qualityFlags?: string[];
   predictionMetrics: {
     "topKTagHit@5": number;
+    segmentTop1Hit?: number;
     driverPrecision: number;
   };
   matchMetrics: {
     "matchNDCG@3": number;
   };
   notes: string[];
+}
+
+export interface CutoffBacktestOptions {
+  inputPath?: string;
+  cutoffTimeWindow?: string;
 }
 
 interface SegmentTemplate {
@@ -221,6 +239,10 @@ export function loadDemoSkus(): DemoSku[] {
 
 export function loadWideTable(): WideTableRow[] {
   return readJsonl<WideTableRow>(resolve(DEMO_DIR, "wide_table.jsonl"));
+}
+
+export function loadP1MultiTimeWindowWideTable(inputPath = resolve(P1_MULTI_TIMEWINDOW_DIR, "wide_table.jsonl")): WideTableRow[] {
+  return readJsonl<WideTableRow>(inputPath);
 }
 
 export function loadChannelProfiles(): ChannelProfile[] {
@@ -379,6 +401,83 @@ export function runBacktest(): BacktestReport {
       "Demo data has one timeWindow; production time split is not meaningful yet.",
       "LightGBM is deferred; P0 baseline uses rule + kNN only.",
     ],
+  };
+}
+
+export function runCutoffBacktest(options: CutoffBacktestOptions = {}): BacktestReport {
+  const inputPath = resolve(options.inputPath ?? resolve(P1_MULTI_TIMEWINDOW_DIR, "wide_table.jsonl"));
+  if (!existsSync(inputPath)) {
+    throw new Error(`Cutoff backtest input not found: ${inputPath}`);
+  }
+
+  const rows = loadP1MultiTimeWindowWideTable(inputPath).filter((row) => row.isTrainable !== false);
+  const allRows = loadP1MultiTimeWindowWideTable(inputPath);
+  const timeWindows = [...new Set(allRows.map((row) => row.timeWindow))].sort();
+  const cutoffTimeWindow = options.cutoffTimeWindow ?? timeWindows.at(-1);
+  if (!cutoffTimeWindow) {
+    throw new Error("Cutoff backtest input has no timeWindow values.");
+  }
+
+  const trainRows = rows.filter((row) => row.timeWindow < cutoffTimeWindow);
+  const testRows = rows.filter((row) => row.timeWindow === cutoffTimeWindow);
+  const trainWindows = [...new Set(trainRows.map((row) => row.timeWindow))].sort();
+  const validationWindows = [...new Set(testRows.map((row) => row.timeWindow))].sort();
+  const testSkuIds = [...new Set(testRows.map((row) => row.skuId))].sort();
+  const qualityFlags = collectCutoffQualityFlags(allRows, trainRows, testRows, timeWindows);
+
+  const topKHits: number[] = [];
+  const segmentTop1Hits: number[] = [];
+  const driverPrecisions: number[] = [];
+  const ndcgs: number[] = [];
+  const channelProfiles = buildChannelProfilesFromRows(trainRows);
+
+  for (const skuId of testSkuIds) {
+    const skuTestRows = testRows.filter((row) => row.skuId === skuId);
+    const inputRow = skuTestRows[0];
+    if (!inputRow) continue;
+
+    const profile = predictProductProfile(inputRow, trainRows);
+    const truth = aggregateTruthTags(skuTestRows);
+    const predictedTop5 = profile.predictedProfileTags.slice(0, 5).map((tag) => tag.tagId);
+    const truthTop5 = truth.slice(0, 5).map((tag) => tag.tagId);
+    topKHits.push(intersectionSize(predictedTop5, truthTop5) / 5);
+
+    const predictedSegmentTop1 = profile.topSegments[0]?.segmentId ?? "";
+    const truthSegmentTop1 = buildTopSegments(truth)[0]?.segmentId ?? "";
+    segmentTop1Hits.push(predictedSegmentTop1 !== "" && predictedSegmentTop1 === truthSegmentTop1 ? 1 : 0);
+
+    const drivers = new Set(profile.topSegments.flatMap((segment) => segment.drivers));
+    const driverHitCount = [...drivers].filter((tagId) => truthTop5.includes(tagId)).length;
+    driverPrecisions.push(drivers.size === 0 ? 0 : driverHitCount / drivers.size);
+
+    const matches = matchChannels(profile, channelProfiles);
+    const relevanceByChannel = new Map(skuTestRows.map((row) => [row.channelId, isPositiveMatch(row) ? 1 : 0]));
+    ndcgs.push(ndcgAt3(matches.map((match) => relevanceByChannel.get(match.channelId) ?? 0)));
+  }
+
+  return {
+    reportId: `backtest_${new Date().toISOString().slice(0, 10).replaceAll("-", "")}_cutoff`,
+    modelVersion: MODEL_VERSION,
+    evaluationMode: "cutoff_time_split",
+    inputPath,
+    cutoffTimeWindow,
+    trainWindows,
+    validationWindows,
+    trainSize: trainRows.length,
+    testSize: testRows.length,
+    trainSkuCount: new Set(trainRows.map((row) => row.skuId)).size,
+    testSkuCount: testSkuIds.length,
+    channelCount: new Set(allRows.map((row) => row.channelId)).size,
+    qualityFlags,
+    predictionMetrics: {
+      "topKTagHit@5": round(mean(topKHits)),
+      segmentTop1Hit: round(mean(segmentTop1Hits)),
+      driverPrecision: round(mean(driverPrecisions)),
+    },
+    matchMetrics: {
+      "matchNDCG@3": round(mean(ndcgs)),
+    },
+    notes: buildCutoffNotes(timeWindows, trainRows, testRows),
   };
 }
 
@@ -588,6 +687,57 @@ function aggregateTruthTags(rows: WideTableRow[]): ProfileTagScore[] {
       timeWindow: null,
     }))
     .sort((left, right) => right.score - left.score);
+}
+
+function buildChannelProfilesFromRows(rows: WideTableRow[]): ChannelProfile[] {
+  const byChannel = new Map<string, WideTableRow[]>();
+  for (const row of rows) {
+    byChannel.set(row.channelId, [...(byChannel.get(row.channelId) ?? []), row]);
+  }
+
+  return [...byChannel.entries()].map(([channelId, channelRows]) => {
+    const first = channelRows[0];
+    const sampleSize = channelRows.reduce((sum, row) => sum + (row.sampleSize || 0), 0);
+    const tags = aggregateTruthTags(channelRows).map((tag) => ({ ...tag, source: "cutoff_train_channel_profile" }));
+    const qualityFlags: string[] = [];
+    if (sampleSize < 500) qualityFlags.push("low_channel_sample");
+    if (mean(channelRows.map((row) => row.profileCoverageRate)) < 0.7) qualityFlags.push("low_profile_coverage");
+    if (channelRows.some((row) => row.lowConfidenceTagCount > 0)) qualityFlags.push("low_confidence_tags_present");
+
+    return {
+      channelId,
+      channelType: first?.channelType ?? "unknown",
+      sampleSize,
+      tags,
+      qualityFlags,
+    };
+  });
+}
+
+function collectCutoffQualityFlags(allRows: WideTableRow[], trainRows: WideTableRow[], testRows: WideTableRow[], timeWindows: string[]): string[] {
+  const flags = new Set<string>();
+  if (timeWindows.length < 3) flags.add("low_timewindow_count");
+  if (new Set(allRows.map((row) => row.skuId)).size < 30) flags.add("low_sku_count");
+  if (new Set(allRows.map((row) => row.channelId)).size < 4) flags.add("low_channel_count");
+  if (trainRows.length === 0) flags.add("empty_train_split");
+  if (testRows.length === 0) flags.add("empty_validation_split");
+  if (allRows.some((row) => row.sourceType === "mock")) flags.add("mock_aggregate_input");
+  if (allRows.some((row) => row.sampleSize < 500)) flags.add("low_sample_rows_present");
+  if (allRows.some((row) => row.profileCoverageRate < 0.7)) flags.add("low_coverage_rows_present");
+  if (allRows.some((row) => row.buyerProfileTags.length === 0)) flags.add("missing_label_rows_present");
+  if (allRows.some((row) => row.lowConfidenceTagCount > 0)) flags.add("low_confidence_tags_present");
+  return [...flags].sort();
+}
+
+function buildCutoffNotes(timeWindows: string[], trainRows: WideTableRow[], testRows: WideTableRow[]): string[] {
+  const notes = [
+    "Cutoff split trains only on windows earlier than cutoffTimeWindow and validates on cutoffTimeWindow.",
+    "Input is D-P1-A2 mock aggregate smoke data; do not claim real-sample generalization from this report.",
+    "No raw order, member, customer, DMP member, device, account, or ID package data is read.",
+  ];
+  if (timeWindows.length < 6) notes.push("Formal explainable production backtest still needs at least 6 windows, 30 SKUs, and 4 channels.");
+  if (trainRows.length === 0 || testRows.length === 0) notes.push("Split is not usable because train or validation rows are empty.");
+  return notes;
 }
 
 function isPositiveMatch(row: WideTableRow): boolean {

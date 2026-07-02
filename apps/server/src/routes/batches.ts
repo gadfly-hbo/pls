@@ -2,22 +2,45 @@ import { Hono } from "hono";
 import { openDb } from "../db/connection.js";
 import { ok, accepted, notFound, invalidInput } from "../lib/response.js";
 import { writeAudit } from "../lib/audit.js";
+import { idempotencyMiddleware, readJson, storeIdempotent } from "../lib/idempotency.js";
 
 const batches = new Hono();
 
 // POST /batches
-batches.post("/", async (c) => {
+// Content-type handling:
+//  - application/json → body = { meta: {...} } (also accepts { meta: "<json>" })
+//    This path is idempotency-eligible; the middleware hashes the raw JSON body.
+//  - multipart/form-data → legacy path: body.meta is a JSON string, plus files.
+//    The middleware short-circuits for non-JSON so idempotency is skipped here.
+batches.post("/", idempotencyMiddleware(), async (c) => {
   const wsId = c.get("workspaceId");
-  const body = await c.req.parseBody();
-  const metaStr = body.meta as string | undefined;
-
-  if (!metaStr) return invalidInput(c, "meta field is required", "meta");
+  const contentType = (c.req.header("content-type") ?? "").toLowerCase();
 
   let meta: Record<string, unknown>;
-  try {
-    meta = JSON.parse(metaStr);
-  } catch {
-    return invalidInput(c, "meta must be valid JSON", "meta");
+  if (contentType.startsWith("application/json")) {
+    const body = await readJson<{ meta?: Record<string, unknown> | string }>(c);
+    const metaField = body.meta;
+    if (metaField === undefined || metaField === null) {
+      return invalidInput(c, "meta field is required", "meta");
+    }
+    if (typeof metaField === "string") {
+      try {
+        meta = JSON.parse(metaField) as Record<string, unknown>;
+      } catch {
+        return invalidInput(c, "meta must be valid JSON", "meta");
+      }
+    } else {
+      meta = metaField;
+    }
+  } else {
+    const form = await c.req.parseBody();
+    const metaStr = form.meta as string | undefined;
+    if (!metaStr) return invalidInput(c, "meta field is required", "meta");
+    try {
+      meta = JSON.parse(metaStr) as Record<string, unknown>;
+    } catch {
+      return invalidInput(c, "meta must be valid JSON", "meta");
+    }
   }
 
   const batchType = meta.batchType as string | undefined;
@@ -61,9 +84,13 @@ batches.post("/", async (c) => {
 
   db.close();
 
-  return accepted(c, {
-    task: { taskId, status: "succeeded", resourceUrl: `/api/v0/batches/${batchId}` },
-  });
+  return storeIdempotent(
+    c,
+    accepted(c, {
+      task: { taskId, status: "succeeded", resourceUrl: `/api/v0/batches/${batchId}` },
+    }),
+    batchId
+  );
 });
 
 // GET /batches/:batchId

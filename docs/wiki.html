@@ -301,7 +301,7 @@
 </div>
 
 <script>
-const VERSION = "0.12";
+const VERSION = "0.18";
 
 const DOMAINS = {
   X: { name: "总控", agent: "主控 Agent", color: "var(--x)" },
@@ -702,24 +702,17 @@ const TASKS = [
   },
   {
     dom: "X",
-    status: "todo",
+    status: "done",
     created: "2026-07-02 17:10",
-    title: "X-P1-FREEZE：P1 推进计划待解冻",
-    brief: `目标：暂存 P0-C 之后的下一阶段推进计划，作为后续解冻 P1 前的任务池，不立即执行。
+    title: "X-P1-FREEZE：P1 推进计划解冻归档",
+    brief: `目标：暂存 P0-C 之后的下一阶段推进计划，并在总控确认后拆分为正式 P1 任务卡。
 
 状态：
-- 待解冻，暂缓执行。
-- 不视为已派发任务，不要求域 agent 立即开工。
-- 解冻前必须先由 X 总控确认 P0-C 总体验收结论和 P1 准入范围。
+- 已解冻并归档。
+- P1-A / P1-B / P1-C / P1-D 已拆分为正式 todo 任务卡。
+- 抖音号货匹配迁移已新增为 P1-E 正式任务卡组。
 
-解冻前置：
-1. 执行 X-P0-C5：P0-C 总体验收与 P1 准入判断。
-2. 复跑 A/M/V/D 关键验证证据。
-3. 验证前端真实后端模式：Dashboard → Prediction → Matches → Heatmap → Drawer → CSV。
-4. 复核红线：demo 数据、API 响应、CSV、audit、real sample template。
-5. 更新 docs/p0-acceptance-report.md，明确进入 P1 或暂缓进入 P1。
-
-候选阶段：
+解冻范围：
 1. P1-A 真实样例接入准备：
    - D-P1-A1：真实样例本地脱敏聚合试跑。
    - D-P1-A2：多 timeWindow 宽表样例生成。
@@ -740,16 +733,573 @@ const TASKS = [
    - M-P1-D2：Segment template 权重校准。
    - M-P1-D3：unmapped / structural token 治理。
    - M-P1-D4：prediction feedback 样本回流设计。
+5. P1-E 抖音号货匹配迁移：
+   - X-P1-E0：迁移契约冻结。
+   - D-P1-E1：账号与商品画像字段映射模板。
+   - M-P1-E2：号货匹配度算法 adapter。
+   - A-P1-E3：账号货匹配结果存储与读取接口。
+   - V-P1-E4：账号画像基准与款账号对比视图。
+   - X-P1-E5：真实业务数据红线复核与验收。
 
 红线：
-- 未完成 X-P0-C5 前不得拆分派发 P1-A/B/C/D 任务。
 - 不得把真实 S0/S1 原始明细放入 docs、API 响应、CSV、audit 或 LLM 上下文。
-- 不得直接从 P0-C 跳到 P1 商业扩展，必须先有准入结论。
+- 真实业务样例进入 PLS 前必须先完成本地脱敏、聚合、映射和红线扫描。
+- 接缝层、共享类型、DB schema、API 命名仍由 X 总控持有。
 
-解冻验收：
-- X 总控确认 P0-C 总体验收通过。
-- 将本卡拆分为独立 P1 任务卡，并更新 docs/notes-infra.md。
-- 本卡保持为计划归档，不承载具体实现交付。`
+归档验收：
+- 独立 P1 任务卡已创建。
+- docs/notes-infra.md 已更新当前状态。
+- 本卡不再承载具体实现交付。`
+  },
+  {
+    dom: "D",
+    status: "done",
+    created: "2026-07-02 18:20",
+    title: "D-P1-A1：真实样例本地脱敏聚合 preflight",
+    brief: `目标：在未提供真实 raw staging 输入时，先完成真实样例接入前置检查，明确输入缺口和本地处理边界。
+
+范围：
+1. 使用 data/templates/real-sample-ingestion/ 作为处理模板。
+2. 检查 data/local/raw_staging/<batchId>/ 是否存在真实样例输入。
+3. 如无输入，仅记录 no-input preflight，不伪造 sanitized / aggregate 输出。
+4. 明确原始文件只允许进入 data/local/raw_staging/<batchId>/，不得提交、不得进入 docs、不得进入 LLM 上下文。
+
+红线：
+- 不把真实订单、会员、客户、设备、DMP 原始成员或 ID 包写入仓库。
+- no-input preflight 不得被包装成真实样例试跑完成。
+
+验收：
+- 本地模板校验脚本通过。
+- 明确当前是否存在 raw staging 输入。
+- 无输入时写入本地 no-input 记录，并标记 shareable = false。
+
+总控归档：
+- 当前仅完成 no-input preflight；缺少 data/local/raw_staging/<batchId>/ 真实样例输入。
+- 本卡标记 done 仅代表 preflight 归档，不代表真实样例本地脱敏聚合试跑完成。
+- 真实样例试跑已拆为独立后续卡 D-P1-A5。`
+  },
+  {
+    dom: "D",
+    status: "done",
+    created: "2026-07-02 18:21",
+    title: "D-P1-A2：多 timeWindow 宽表样例生成",
+    brief: `目标：基于脱敏聚合样例生成多 timeWindow 训练宽表，为 cutoff 时间切分回测提供输入。
+
+范围：
+1. 生成至少两个 timeWindow 的 SKU × channel 聚合宽表样例。
+2. 对齐 docs/data-spec.md 的 grain = skuId + channelId + timeWindow。
+3. 保留 batchId、source、sourceType、sampleSize、profileCoverageRate、qualityFlags。
+4. 输出字段映射和不可训练行原因。
+
+红线：
+- 不保留真实金额、用户级行为、订单级明细或平台原始 DMP 字段值。
+- 真实 SKU / channel 标识是否可展示需由 X 总控确认；默认脱敏。
+
+验收：
+- 宽表可被 M 域读取用于 cutoff backtest。
+- tagId 白名单检查通过。
+- 多 timeWindow 覆盖口径和缺口写入完成汇报。
+
+总控归档：
+- 接受当前 mock aggregate 多 timeWindow cutoff smoke 输入，产物位于 data/p1/multi-timewindow-demo/。
+- 覆盖 36 行、3 SKU、4 channel、3 个 timeWindow，可供 M-P1-A3 开发验证 cutoff 管线。
+- 本次总控审核不复跑测试；验证命令由 D 域回流记录，后续人工复验。
+- 当前样本低于 P1 smoke 建议 5 SKU，且不是真实样例回测数据，不得声明正式模型质量。`
+  },
+  {
+    dom: "M",
+    status: "done",
+    created: "2026-07-02 18:22",
+    title: "M-P1-A3：cutoff 时间切分回测实现",
+    brief: `目标：把 P0 demo-only backtest 升级为正式 cutoff 时间切分回测，输出可解释指标和不可用边界。
+
+范围：
+1. 读取 D-P1-A2 多 timeWindow 宽表输入。
+2. 按 cutoff 将训练窗口和验证窗口隔离。
+3. 输出 Top 标签命中、segmentTop1Hit、driverPrecision、matchNDCG@3 等指标。
+4. 保留低样本、低覆盖、缺失标签等 qualityFlags。
+
+红线：
+- 不读取原始订单、会员、客户或 DMP 成员明细。
+- 不把真实样本值写入报告，只输出聚合指标和脱敏 ID。
+
+验收：
+- cutoff backtest 命令可复现。
+- 指标、样本量、不可用边界写入报告。
+- 若样本不足，不包装成泛化能力已验证。
+
+总控归档：
+- 已新增 runCutoffBacktest()，支持 npm run backtest:cutoff，默认读取 data/p1/multi-timewindow-demo/wide_table.jsonl。
+- cutoffTimeWindow=2026-05-01/2026-05-31 时，训练窗口为 2026-03 与 2026-04，验证窗口为 2026-05；channel profile 由训练窗口聚合，未读取验证窗口构造匹配排序。
+- cutoff smoke 指标复验通过：topKTagHit@5=0.8，segmentTop1Hit=0.667，driverPrecision=0.556，matchNDCG@3=0.754。
+- P0 demo backtest 指标保持：topKTagHit@5=0.667，driverPrecision=0.617，matchNDCG@3=1。
+- 当前输入仍是 D-P1-A2 mock aggregate smoke 数据，只证明 cutoff 链路可运行，不代表真实样本泛化能力。`
+  },
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-02 18:23",
+    title: "X-P1-A4：真实样例红线复核与准入报告",
+    brief: `目标：对 P1-A 真实样例接入链路做总控复核，判断是否允许进入后续模型和工作台增强。
+
+范围：
+1. 复核 D-P1-A1 / D-P1-A2 / M-P1-A3 的验证证据。
+2. 检查 docs、API 响应、CSV、audit、报告中是否出现 S0/S1 明细。
+3. 更新 P1 准入报告，列出数据质量、样本量、未映射字段和回测可信度。
+4. 给 P1-B/C/D/E 后续任务标注依赖和风险。
+
+红线：
+- 发现真实明细泄漏时立即停止后续派发并回滚准入口径。
+- 不因业务压力降低数据安全标准。
+
+验收：
+- 输出真实样例准入结论：通过 / 暂缓 / 禁止进入下游。
+- 风险和缺口有明确 owner 与后续任务。
+
+总控归档：
+- 已新增 docs/p1-a4-real-sample-admission-report.md。
+- 真实样例下游准入结论：暂缓。
+- D-P1-A1 仅为 no-input preflight；D-P1-A2 为 mock aggregate cutoff smoke；M-P1-A3 可证明 cutoff 链路可运行，但不能证明真实泛化能力。
+- 未发现 P1-A 产物包含 S0/S1 明细；手机号/邮箱/身份证形态扫描无命中。
+- P1-B/C/D/E 可继续用 mock/demo 数据推进工程化和契约工作，但真实样例进入模型、工作台或报告前必须先完成 D-P1-A5 并回流 X 总控复核。`
+  },
+  {
+    dom: "A",
+    status: "done",
+    created: "2026-07-02 18:24",
+    title: "A-P1-B1：match_result 历史表与 latest view",
+    brief: `目标：把 P0 latest overwrite 策略升级为可保留历史、同时稳定读取 latest 的存储模型。
+
+范围：
+1. 设计 match_result 历史记录与 latest 查询投影。
+2. 保持 GET /matches/heatmap 返回 skuId + channelId 最新 cell。
+3. 历史查询不得破坏 P0 前端现有读取路径。
+4. migration / schema 变更需先由 X 总控确认。
+
+红线：
+- 不引入用户级、订单级、DMP 原始 payload。
+- DB schema 属接缝层，改动前必须回流 X 总控。
+
+验收：
+- 重复 POST /matches 后可查询历史，同时 heatmap latest 不重复。
+- typecheck 和 API smoke 通过。
+
+总控归档：
+- 批准 match_result append-only、match_result_latest view、idx_match_latest_lookup 索引和 GET /matches?history=true 语义。
+- 复验 npm run typecheck、npm run migrate、npm run seed、npm run smoke 通过；heatmap latest 保持 unique channel cell。
+- 默认 GET /matches 读取 latest 投影，history=true 返回历史记录。`
+  },
+  {
+    dom: "A",
+    status: "done",
+    created: "2026-07-02 18:25",
+    title: "A-P1-B2：Idempotency-Key 与 24h 幂等缓存",
+    brief: `目标：实现创建型接口的显式 Idempotency-Key 支持，避免重复提交造成预测和匹配结果膨胀。
+
+范围：
+1. 覆盖 POST /predictions、POST /matches、POST /batches。
+2. 幂等键按 workspace 隔离，保留 24 小时。
+3. 重复请求返回同一 resourceId 和等价响应。
+4. 处理 payload 不一致的 conflict 场景。
+
+红线：
+- 幂等缓存不得保存原始敏感 payload。
+- schema 变更需由 X 总控确认。
+
+验收：
+- 同 key 同 payload 返回同一结果。
+- 同 key 不同 payload 返回 conflict。
+- typecheck 和 API smoke 通过。
+
+总控归档：
+- 批准 idempotency_key 表，PK 为 workspace_id + method + path + key；缓存为 24h TTL 临时数据。
+- 修复并复验 endpoint 隔离：同 key 跨 /predictions 与 /matches 不 cross-replay。
+- JSON /batches 幂等路径通过；multipart /batches 幂等暂不纳入本卡，后续需单独设计文件摘要与 form fields hash。
+- 命中缓存响应头为 Idempotency-Replay: true；不同 payload 返回 409；bad key 返回 400。`
+  },
+  {
+    dom: "A",
+    status: "done",
+    created: "2026-07-02 18:26",
+    title: "A-P1-B3：异步 task worker 与 timeout fallback",
+    brief: `目标：把预测、匹配、批次导入从同步主路径扩展为可观测的异步任务流。
+
+范围：
+1. 落地 task 状态机 queued / running / succeeded / failed / cancelled / rejected。
+2. 支持 sync 与 async mode，长任务自动转 async 或 timeout fallback。
+3. 写入审计事件和错误原因。
+4. 前端可通过 /tasks/{taskId} poll 状态。
+
+红线：
+- task input 和 audit meta 不得记录 S0/S1 原始值。
+- 不引入外部队列依赖，除非总控确认。
+
+验收：
+- prediction / match 至少一个链路支持 async smoke。
+- 失败任务有明确 error code 和 audit 摘要。
+- typecheck 和 API smoke 通过。
+
+总控归档：
+- 批准 predictions 链路 queued/running/succeeded/failed 状态机、mode=async 和 sync timeout fallback。
+- 测试延迟 hook 已从公开 body 字段移到 X-PLS-Test-Delay-Ms header，且 NODE_ENV=production 禁用；不写入公开 API 契约。
+- match 链路仍保持同步，后续如 V 域需要 match async 再单独派发。`
+  },
+  {
+    dom: "A",
+    status: "done",
+    created: "2026-07-02 18:27",
+    title: "A-P1-B4：API smoke 脚本化",
+    brief: `目标：把 P0 手工 API smoke 固化为可重复执行脚本，作为后续总体验收基础。
+
+范围：
+1. 覆盖 health、products、predictions、matches、heatmap、audit、safety violation。
+2. 支持本地 ws_demo 和静态 token。
+3. 输出机器可读 summary 和失败详情。
+4. 不依赖真实业务数据。
+
+红线：
+- smoke fixture 只能使用 mock 或脱敏聚合数据。
+- 输出日志不得包含敏感原始值。
+
+验收：
+- 一条命令可复跑 API 主路径。
+- 失败时返回非零退出码。
+- smoke 结果可被 X 总控复核。
+
+总控归档：
+- 新增 npm run smoke，覆盖 18 步 API smoke，包括 endpoint idempotency isolation 和 batches JSON idempotency。
+- 总控复验 npm run smoke 18/18 PASS，--json 输出可解析 summary，--token bogus exit 1。
+- smoke 仍要求 server 已运行，CI 自动拉起 server 不在本卡范围内。`
+  },
+  {
+    dom: "V",
+    status: "todo",
+    created: "2026-07-02 18:28",
+    title: "V-P1-C1：渠道推荐详情页增强",
+    brief: `目标：把 heatmap 抽屉升级为可复盘的渠道推荐详情页，支持运营理解匹配原因和风险。
+
+范围：
+1. 展示 matchScore、confidence、recommendation、positiveDrivers、negativeDrivers、risks。
+2. 补充 channel profile 摘要、样本量、timeWindow、qualityFlags。
+3. 保持 CSV 导出字段边界不扩大。
+4. 适配 desktop 和 mobile 宽度。
+
+红线：
+- 不展示原始上传文件、DMP 原始字段值、用户级明细或审计原始 payload。
+- 不修改 A/M/D 契约，除非 X 总控已冻结。
+
+验收：
+- 真实后端模式可从 heatmap 进入详情页。
+- loading / empty / error 状态完整。
+- lint / build 通过。`
+  },
+  {
+    dom: "V",
+    status: "todo",
+    created: "2026-07-02 18:29",
+    title: "V-P1-C2：批量 SKU 对比视图",
+    brief: `目标：提供批量 SKU 在多个渠道上的匹配对比，支持运营批量分货和投流优先级判断。
+
+范围：
+1. 支持多 SKU heatmap 排序、筛选和 recommendation 分组。
+2. 展示 Top drivers 摘要和风险数量。
+3. 复用现有 /matches/heatmap 数据，不新增后端契约。
+4. 保持紧凑工作台布局。
+
+红线：
+- 不导出 S0/S1 或 DMP 原始字段。
+- 不把前端筛选结果包装成模型结论。
+
+验收：
+- 多 SKU × 多 channel 可稳定渲染。
+- 长文本不溢出、不遮挡。
+- lint / build 通过。`
+  },
+  {
+    dom: "V",
+    status: "todo",
+    created: "2026-07-02 18:30",
+    title: "V-P1-C3：P1 demo report 导出",
+    brief: `目标：生成 P1 可演示的运营报告导出，包含匹配建议、风险和解释摘要。
+
+范围：
+1. 导出仅包含 S4 派生结果字段。
+2. 包含 SKU、channel、matchScore、recommendation、drivers 摘要、risks 摘要、generatedAt。
+3. 不包含原始 DMP 字段值、原始上传内容、audit payload。
+4. 输出 CSV 或轻量 HTML report，格式由 V 域提出并经 X 确认。
+
+红线：
+- 导出边界必须与 docs/decision-output.md 保持一致。
+- 真实业务标识默认脱敏，展示白名单需 X 总控确认。
+
+验收：
+- 导出文件可打开且字段边界可静态核对。
+- lint / build 通过。`
+  },
+  {
+    dom: "V",
+    status: "todo",
+    created: "2026-07-02 18:31",
+    title: "V-P1-C4：真实后端端到端 Playwright smoke",
+    brief: `目标：把前端真实后端模式主流程固化为浏览器端到端 smoke。
+
+范围：
+1. 覆盖 Dashboard -> Prediction -> Matches -> Heatmap -> Drawer -> CSV。
+2. 捕获 console error / duplicate key warning。
+3. 输出截图或 trace 供 X 总控复核。
+4. 使用本地 demo 或脱敏聚合数据。
+
+红线：
+- 测试数据不得包含真实用户、订单、会员、DMP 明细。
+- 不引入新测试依赖，除非总控确认。
+
+验收：
+- 一条命令可运行 smoke。
+- console 无关键错误。
+- 失败时有可定位的截图或日志。`
+  },
+  {
+    dom: "M",
+    status: "todo",
+    created: "2026-07-02 18:32",
+    title: "M-P1-D1：正式 cutoff backtest 指标面板",
+    brief: `目标：把 cutoff backtest 输出整理为可阅读的指标面板或报告，支撑模型质量判断。
+
+范围：
+1. 展示样本量、时间窗口、训练/验证切分、核心指标和质量 flags。
+2. 按类目、channelType、sampleSize bucket 分层。
+3. 明确 demo-only、低样本和真实泛化不可声明的边界。
+
+红线：
+- 报告只包含聚合指标和脱敏 ID。
+- 不展示原始交易或 DMP 成员数据。
+
+验收：
+- backtest report 可复现。
+- 指标口径写清楚，X 总控可据此判断是否进入模型增强。`
+  },
+  {
+    dom: "M",
+    status: "todo",
+    created: "2026-07-02 18:33",
+    title: "M-P1-D2：Segment template 权重校准",
+    brief: `目标：基于 P1 样本和回测结果校准 segment template 权重，提高 Top segment 可解释性。
+
+范围：
+1. 保持 segmentId 语义向下兼容。
+2. 对 templateWeight 做可追溯调整。
+3. 输出权重变更前后指标对比。
+4. 记录低置信度和无法校准的 segment。
+
+红线：
+- 不新增黑盒人群名，所有 segment 必须能还原到 tagId。
+- 画像标签体系扩展需回流 X 总控。
+
+验收：
+- 权重调整有指标或业务解释支撑。
+- contract test 和 backtest 通过。`
+  },
+  {
+    dom: "M",
+    status: "todo",
+    created: "2026-07-02 18:34",
+    title: "M-P1-D3：unmapped / structural token 治理",
+    brief: `目标：治理 P0-C 留存的 unmappedInputTokens 和结构 token，降低无效告警。
+
+范围：
+1. 区分商品结构 token、可映射画像 token、未知业务 token。
+2. 对确需回流的 token 提交 D/X 评审清单。
+3. 对不应进入 taxonomy 的 token 写入忽略规则。
+
+红线：
+- 不私自扩展画像标签体系。
+- 不用商品结构词伪装成人群标签。
+
+验收：
+- unmapped token 报告分类清晰。
+- validate-tags 和 contract-test 通过。`
+  },
+  {
+    dom: "M",
+    status: "todo",
+    created: "2026-07-02 18:35",
+    title: "M-P1-D4：prediction feedback 样本回流设计",
+    brief: `目标：设计预测结果与真实聚合画像回流机制，为后续纠偏和模型评估打基础。
+
+范围：
+1. 定义 feedback 输入：predictionId、skuId、timeWindow、真实聚合 tags、quality metadata。
+2. 定义不可接收的数据类型和红线拦截。
+3. 输出 feedback 如何影响训练集、评估集和模型版本。
+4. 与 A 域 /predictions/{predictionId}/feedback 预留契约对齐。
+
+红线：
+- feedback 不接收用户级、订单级、会员级或 DMP 成员明细。
+- schema / API 变更需 X 总控确认。
+
+验收：
+- 输出设计文档或接口草案。
+- D/A/V 能据此判断后续实现范围。`
+  },
+  {
+    dom: "X",
+    status: "todo",
+    created: "2026-07-02 18:36",
+    title: "X-P1-E0：抖音号货匹配迁移契约冻结",
+    brief: `目标：冻结抖音号货匹配迁入 PLS 的领域对象、接口语义和红线边界，避免直接搬静态 dashboard。
+
+参考：
+- /Users/huangbo/Downloads/douyin_report_dashboard
+
+范围：
+1. 定义账号作为 channel 的建模口径：douyin account / shop / live account / short video account。
+2. 冻结 AccountProfile、ProductAccountFitDiagnostic、AdjustmentAdvice 等共享对象草案。
+3. 明确现有 dashboard 字段到 PLS tagId / ProfileTagScore / MatchResult drivers 的映射边界。
+4. 标注号货匹配度算法由用户后续提供，M 域先按 adapter interface 开工。
+
+红线：
+- 不把真实账号原始明细、DMP 原始导出、用户级行为写入 docs、API、CSV、audit 或 LLM 上下文。
+- 真实款号、账号名、销售额是否可展示需单独拍板；默认脱敏和指数化。
+
+验收：
+- D/M/A/V 能按同一契约拆分实现，不各自解释“号货匹配度”。
+- 算法缺口、字段缺口和展示红线明确记录。`
+  },
+  {
+    dom: "D",
+    status: "todo",
+    created: "2026-07-02 18:37",
+    title: "D-P1-E1：抖音账号与商品画像字段映射模板",
+    brief: `目标：把现有抖音 dashboard 的字段体系映射为 PLS 可消费的聚合画像、商品宽表和诊断输入。
+
+范围：
+1. 梳理商品字段、账号画像字段、款账号对比字段、优化清单字段。
+2. 输出 sourceField/sourceValue -> mappedTagId 的 mapping_rules。
+3. 生成 unmapped_fields、quality_report 和 redline_scan_report 模板。
+4. 只处理聚合数据，不接触用户级或 DMP 成员明细。
+
+红线：
+- data.js 中实际业务数据不得直接进入仓库或 prompt。
+- 真实销售额默认转换为指数或分层，不保留原始金额。
+
+验收：
+- 映射模板覆盖年龄、性别、消费能力、人生阶段、城市等级、兴趣行为、触点偏好等主要维度。
+- 未映射字段有 reason。
+- redline scan 无 S0/S1 命中。`
+  },
+  {
+    dom: "M",
+    status: "todo",
+    created: "2026-07-02 18:38",
+    title: "M-P1-E2：号货匹配度算法 adapter",
+    brief: `目标：为用户后续提供的号货匹配度算法预留稳定 adapter，并输出可解释 drivers、negativeDrivers 和调整建议。
+
+范围：
+1. 定义输入：ProductProfileTags、AccountProfileTags、账号基准 TOP1、商品 TOP1、质量元数据。
+2. 定义输出：fitScore、fitConfidence、matchedDimensions、mismatchedDimensions、positiveDrivers、negativeDrivers、adjustmentAdvice。
+3. 在算法公式未提供前实现 rule baseline 或 mock adapter，仅用于 contract test。
+4. 算法公式提供后替换 adapter implementation，不改变外部 interface。
+
+红线：
+- 不输出无法追溯到 tagId 的黑盒结论。
+- 不把真实业务样本明细写入测试 fixture。
+
+验收：
+- contract test 覆盖匹配、部分错配、高优调整、低置信度场景。
+- 用户提供算法后有清晰替换点。`
+  },
+  {
+    dom: "A",
+    status: "todo",
+    created: "2026-07-02 18:39",
+    title: "A-P1-E3：账号货匹配结果存储与读取接口",
+    brief: `目标：承接 M-P1-E2 输出，让 V 域能读取账号画像基准、款账号对比和优化清单。
+
+范围：
+1. 优先复用 channel_profile、prediction、match_result；必要新增诊断报告接口需 X 总控冻结。
+2. 支持按 account/channel、sku、timeWindow 查询诊断结果。
+3. 返回 fitScore、fitConfidence、mismatchedDimensions、adjustmentAdvice、qualityFlags。
+4. 保持 audit 只记录摘要，不记录原始 payload。
+
+红线：
+- DB schema、API 路径和共享类型改动必须回流 X 总控。
+- 不暴露原始 DMP 字段值、用户级明细或真实敏感账号标识。
+
+验收：
+- API smoke 可读取账号货匹配诊断结果。
+- safety_violation / taxonomy_violation 仍有效。
+- typecheck 通过。`
+  },
+  {
+    dom: "V",
+    status: "todo",
+    created: "2026-07-02 18:40",
+    title: "V-P1-E4：账号画像基准与款账号对比视图",
+    brief: `目标：将抖音 dashboard 的核心运营体验迁入 PLS React 工作台，而不是原样搬静态 DOM 代码。
+
+范围：
+1. 新增账号画像基准视图。
+2. 新增款 vs 账号 TOP1 对比视图。
+3. 新增优化调整清单视图。
+4. 复用 PLS token、工作台布局、loading/empty/error 状态和 CSV 边界。
+
+红线：
+- 不直接嵌入 /Users/huangbo/Downloads/douyin_report_dashboard/data.js。
+- 不展示或导出原始用户、订单、会员、DMP 明细。
+- 真实账号名 / 款号展示策略需 X 总控确认，默认脱敏。
+
+验收：
+- 账号画像 -> 款账号对比 -> 优化清单主流程可走通。
+- 长字段不溢出、不遮挡。
+- lint / build 通过。`
+  },
+  {
+    dom: "X",
+    status: "todo",
+    created: "2026-07-02 18:41",
+    title: "X-P1-E5：抖音真实业务数据红线复核与迁移验收",
+    brief: `目标：对抖音号货匹配迁移做总控验收，确认业务可用性、数据安全和契约一致性。
+
+范围：
+1. 复核 D-P1-E1 / M-P1-E2 / A-P1-E3 / V-P1-E4 的输出。
+2. 检查实际业务样例是否已脱敏、聚合、指数化和红线扫描。
+3. 验证账号画像基准、款账号对比、优化清单与号货匹配度解释一致。
+4. 记录算法公式来源、版本、适用边界和待校准项。
+
+红线：
+- 未通过红线扫描不得进入演示数据或导出。
+- 不把现有静态 dashboard 的真实 data.js 作为仓库内 fixture。
+
+验收：
+- 给出迁移通过 / 暂缓 / 禁止进入生产化的结论。
+- 明确 P1-E 后续进入产品主线或继续实验的判断依据。`
+  },
+  {
+    dom: "D",
+    status: "todo",
+    created: "2026-07-02 19:05",
+    title: "D-P1-A5：真实样例本地脱敏聚合试跑",
+    brief: `目标：在用户提供真实 raw staging 输入后，完成一次真实样例本地脱敏、聚合、tag mapping、质量报告和红线扫描试跑。
+
+前置：
+- data/local/raw_staging/<batchId>/ 已存在真实样例输入。
+- 输入文件仅允许本地工具读取，不进入 docs、API 响应、CSV、audit 或 LLM 上下文。
+
+范围：
+1. 基于 data/templates/real-sample-ingestion/ 执行本地处理。
+2. 输出 sanitized / aggregate 派生结果、mapping rules、unmapped fields、quality report 和 redline scan report。
+3. 只向下游共享聚合标签、比例、分布、置信度、字段说明和质量摘要。
+4. 产出可供后续多 timeWindow 宽表和 cutoff 回测使用的真实聚合样例说明。
+
+红线：
+- 禁止提交 raw staging、真实用户级明细、订单级明细、会员明细、DMP 原始成员或 ID 包。
+- 完成汇报只允许包含聚合统计、字段名、计数、质量指标和脱敏 ID。
+- 命中 S0/S1 明细泄漏时立即停止并回流 X 总控。
+
+验收：
+- 本地模板校验通过。
+- redline scan 无 S0/S1 泄漏。
+- quality report 说明样本量、覆盖率、缺失率、未映射字段和不可共享项。
+- 总控确认后再允许 D-P1-A2 基于真实聚合样例重做正式输入。`
   }
 ];
 
@@ -757,9 +1307,75 @@ const HOTFIX = [];
 
 const CHANGELOG = [
   {
-    ver: "0.12",
+    ver: "0.18",
     date: "2026-07-02",
     current: true,
+    title: "A-P1-B1/B2/B3/B4 后端工程化归档",
+    items: [
+      "A-P1-B1 至 A-P1-B4 经总控复核标记 done，批准 latest view、Idempotency-Key、prediction async worker 和 API smoke 脚本化",
+      "修复后的 idempotency_key 按 workspace + method + path + key 隔离，避免跨 endpoint replay；JSON /batches 幂等路径通过",
+      "总控复验 typecheck、migrate、seed、18 步 smoke、JSON summary、bogus token 失败路径和关键 curl 回归均通过"
+    ]
+  },
+  {
+    ver: "0.17",
+    date: "2026-07-02",
+    current: false,
+    title: "X-P1-A4 真实样例准入报告归档",
+    items: [
+      "X-P1-A4 经总控执行并标记 done，新增 docs/p1-a4-real-sample-admission-report.md",
+      "准入结论为真实样例下游准入暂缓：当前仅有 no-input preflight 与 mock aggregate cutoff smoke",
+      "P1-B/C/D/E 可继续使用 mock/demo 数据推进，但真实样例进入模型、工作台或报告前必须完成 D-P1-A5 并复核"
+    ]
+  },
+  {
+    ver: "0.16",
+    date: "2026-07-02",
+    current: false,
+    title: "M-P1-A3 cutoff 时间切分回测归档",
+    items: [
+      "M-P1-A3 经总控复核标记 done，新增 cutoff_time_split backtest 主路径和 npm run backtest:cutoff",
+      "总控复验 typecheck、contract-test、validate-tags、P0 demo backtest、cutoff backtest 均通过",
+      "cutoff smoke 继续限定为 D-P1-A2 mock aggregate 开发验证输入，不代表真实样本泛化能力"
+    ]
+  },
+  {
+    ver: "0.15",
+    date: "2026-07-02",
+    current: false,
+    title: "D-P1-A1 preflight 归档与真实样例试跑拆卡",
+    items: [
+      "D-P1-A1 改为 done，归档口径限定为 no-input preflight，不代表真实样例试跑完成",
+      "新增 D-P1-A5：真实样例本地脱敏聚合试跑，等待 data/local/raw_staging/<batchId>/ 输入到位后执行",
+      "D-P1-A2 仍保持 done，继续作为 M-P1-A3 的 mock cutoff 管线 smoke 输入"
+    ]
+  },
+  {
+    ver: "0.14",
+    date: "2026-07-02",
+    current: false,
+    title: "D-P1-A2 mock cutoff smoke 输入归档",
+    items: [
+      "D-P1-A2 经总控审核标记 done，接受 data/p1/multi-timewindow-demo/ 作为 M-P1-A3 cutoff 管线 smoke 输入",
+      "D-P1-A1 因缺少 data/local/raw_staging/<batchId>/ 真实样例输入，仅记录 no-input preflight，保持 todo",
+      "本轮总控不复跑测试；D-P1-A2 仅代表 mock aggregate 开发验证数据，不代表真实样例回测质量"
+    ]
+  },
+  {
+    ver: "0.13",
+    date: "2026-07-02",
+    current: false,
+    title: "P1 任务池解冻与抖音号货匹配迁移拆卡",
+    items: [
+      "X-P1-FREEZE 经总控确认解冻归档，P1-A/B/C/D 拆为正式 todo 任务卡",
+      "新增 P1-E 抖音号货匹配迁移卡组，覆盖契约、数据映射、算法 adapter、接口、前端视图和总控验收",
+      "所有 P1 任务继续遵守真实数据本地脱敏、聚合、红线扫描和接缝层由 X 总控持有的约束"
+    ]
+  },
+  {
+    ver: "0.12",
+    date: "2026-07-02",
+    current: false,
     title: "新增 P1 推进计划待解冻卡",
     items: [
       "新增 X-P1-FREEZE：P1 推进计划待解冻，暂存 P0-C 后续阶段计划",
