@@ -1,0 +1,6 @@
+mappingRuleId,sourceField,sourceValuePattern,mappedTagId,confidence,ruleType,owner,version,note
+rule_age_band_v1,age_band,25-34,demo.age_25_34,0.95,direct,D,1,direct age band mapping
+rule_gender_v1,gender_index,female_high,demo.female,0.9,direct,D,1,direct gender tendency mapping
+rule_style_commute_v1,style_preference,commute_basic,style.minimal,0.72,semantic,D,1,commute basic maps to minimal style
+rule_style_commute_v1,style_preference,commute_basic,occasion.work,0.68,semantic,D,1,commute basic maps to work occasion
+rule_touchpoint_short_video_v1,content_touchpoint,short_video,channel.short_video,0.92,direct,D,1,direct content touchpoint mapping

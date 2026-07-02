@@ -1,0 +1,9 @@
+{
+  "batchId": "batch_real_YYYYMMDD_001",
+  "scannedAt": "2026-07-02T00:00:00Z",
+  "inputScope": "aggregate_output",
+  "blockedFieldHits": [],
+  "blockedPatternHits": [],
+  "rawValueSamplesIncluded": false,
+  "status": "pass"
+}

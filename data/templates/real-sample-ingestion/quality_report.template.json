@@ -1,0 +1,34 @@
+{
+  "batchId": "batch_real_YYYYMMDD_001",
+  "source": "sanitized_platform_aggregate",
+  "sourceType": "sanitized_aggregate",
+  "generatedAt": "2026-07-02T00:00:00Z",
+  "timeWindows": [
+    "2026-05-01/2026-06-30"
+  ],
+  "rowCount": 3,
+  "skuCount": 1,
+  "channelCount": 1,
+  "profileStageCoverage": {
+    "viewer": 0,
+    "cart": 0,
+    "buyer": 2,
+    "channel_audience": 1
+  },
+  "mappingCoverageRate": 0.6,
+  "unmappedFieldCount": 2,
+  "lowConfidenceMappingCount": 0,
+  "minSampleSize": 1200,
+  "avgSampleSize": 2466.67,
+  "blockedFieldHitCount": 0,
+  "blockedPatternHitCount": 0,
+  "qualityFlags": [
+    "template_only"
+  ],
+  "shareable": true,
+  "redlineScanReport": "redline_scan_report.json",
+  "notes": [
+    "This is a template with placeholder IDs and aggregate counts only.",
+    "Set shareable to false when any redline scan hit is present."
+  ]
+}

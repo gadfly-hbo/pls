@@ -1,0 +1,23 @@
+{
+  "batchId": "batch_demo_20260702",
+  "rowCount": 12,
+  "skuCount": 3,
+  "channelCount": 4,
+  "trainableRowRate": 1,
+  "avgSampleSize": 844,
+  "profileCoverageRate": 0.85,
+  "missingFieldRate": 0.03,
+  "unmappedFieldCount": 0,
+  "lowConfidenceMappingCount": 1,
+  "qualityFlags": [
+    "demo_only",
+    "mock_aggregate"
+  ],
+  "generatedAt": "2026-07-02T00:00:00Z",
+  "source": "mock_quality_check",
+  "sourceType": "mock",
+  "notes": [
+    "All rows use mock aggregate values.",
+    "No user-level, order-level, member-level, device-level, account-level, or raw DMP member data is included."
+  ]
+}

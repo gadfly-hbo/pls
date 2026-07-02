@@ -1,0 +1,662 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+export const MODEL_VERSION = "m-p0-baseline-0.1";
+
+const ROOT_DIR = resolve(import.meta.dirname, "../../..");
+const DEMO_DIR = resolve(ROOT_DIR, "data/demo");
+const TAXONOMY_PATH = resolve(ROOT_DIR, "docs/profile-taxonomy-v0.md");
+
+export interface ProfileTagScore {
+  tagId: string;
+  score: number;
+  confidence: number;
+  source: string;
+  sampleSize: number | null;
+  timeWindow: string | null;
+}
+
+export interface ProductDNA {
+  skuId: string;
+  categoryLv1: string;
+  categoryLv2: string;
+  season: string;
+  titleTokens: string[];
+  styleKeywords: string[];
+  colorFamily: string;
+  fitType?: string;
+  fabricType?: string;
+  patternType?: string;
+  sleeveType?: string;
+  lengthType?: string;
+  priceBand: string;
+  launchType?: string;
+  imageFeatureSummary?: Record<string, unknown>;
+  mappedProductTags: ProfileTagScore[];
+}
+
+export interface DemoSku {
+  skuId: string;
+  categoryLv1: string;
+  categoryLv2: string;
+  season: string;
+  attributes: Omit<ProductDNA, "skuId" | "categoryLv1" | "categoryLv2" | "season" | "mappedProductTags">;
+  mappedProductTags: ProfileTagScore[];
+}
+
+export interface WideTableRow extends ProductDNA {
+  channelId: string;
+  channelType: string;
+  timeWindow: string;
+  buyerProfileTags: ProfileTagScore[];
+  sampleSize: number;
+  profileCoverageRate: number;
+  missingFieldRate: number;
+  lowConfidenceTagCount: number;
+  isTrainable: boolean;
+  sellThroughRate?: number;
+  returnRate?: number;
+}
+
+export interface ChannelProfile {
+  channelId: string;
+  channelType: string;
+  sampleSize: number;
+  tags: ProfileTagScore[];
+  qualityFlags: string[];
+}
+
+export interface SegmentDraft {
+  segmentId: string;
+  name: string;
+  rank: number;
+  confidence: number;
+  tags: Array<{ tagId: string; score: number }>;
+  drivers: string[];
+}
+
+export interface ProductProfileDraft {
+  skuId: string;
+  modelVersion: string;
+  modelPath: "knn" | "rule";
+  input: {
+    dnaHash: string;
+    categoryLv1: string;
+    categoryLv2: string;
+    season: string;
+    priceBand: string;
+    styleKeywords: string[];
+  };
+  predictedProfileTags: ProfileTagScore[];
+  topSegments: SegmentDraft[];
+  qualityFlags: string[];
+  unmappedInputTokens: string[];
+}
+
+export interface DriverDraft {
+  tagId: string;
+  productScore: number;
+  channelScore: number;
+}
+
+export interface ChannelMatchDraft {
+  channelId: string;
+  channelType: string;
+  matchScore: number;
+  matchConfidence: number;
+  rank: number;
+  overlap: number;
+  bestSegmentId: string;
+  bestSegmentMatch: number;
+  positiveDrivers: DriverDraft[];
+  negativeDrivers: DriverDraft[];
+  qualityFlags: string[];
+}
+
+export interface BacktestReport {
+  reportId: string;
+  modelVersion: string;
+  evaluationMode: "demo_only_leave_one_sku_out";
+  trainSize: number;
+  testSize: number;
+  predictionMetrics: {
+    "topKTagHit@5": number;
+    driverPrecision: number;
+  };
+  matchMetrics: {
+    "matchNDCG@3": number;
+  };
+  notes: string[];
+}
+
+interface SegmentTemplate {
+  segmentId: string;
+  name: string;
+  templateTags: Record<string, number>;
+}
+
+const DIMENSION_WEIGHTS: Record<string, number> = {
+  demo: 0.2,
+  style: 0.25,
+  price: 0.2,
+  occasion: 0.15,
+  intent: 0.1,
+  channel: 0.1,
+};
+
+const SEGMENT_TEMPLATES: SegmentTemplate[] = [
+  {
+    segmentId: "seg_work_minimal_25_34",
+    name: "25-34 岁简约通勤女性",
+    templateTags: { "demo.age_25_34": 0.9, "demo.female": 0.9, "style.minimal": 1, "occasion.work": 0.9, "price.mid": 0.7 },
+  },
+  {
+    segmentId: "seg_trendy_young_18_24",
+    name: "18-24 岁潮流个性青年",
+    templateTags: { "demo.age_18_24": 0.9, "style.trendy": 1, "intent.try_new": 0.8, "channel.short_video": 0.6 },
+  },
+  {
+    segmentId: "seg_elegant_35_44_premium",
+    name: "35-44 岁优雅轻熟高客单",
+    templateTags: { "demo.age_35_44": 0.9, "style.elegant": 1, "price.premium": 0.9, "intent.gift": 0.4 },
+  },
+  {
+    segmentId: "seg_sporty_daily",
+    name: "运动休闲日常客群",
+    templateTags: { "style.sporty": 1, "occasion.daily": 0.8, "price.mid": 0.6 },
+  },
+  {
+    segmentId: "seg_value_promo_lower_tier",
+    name: "下沉价值促销客群",
+    templateTags: { "demo.city_lower_tier": 0.9, "price.value": 1, "price.promo_sensitive": 0.9, "intent.repeat_purchase": 0.6 },
+  },
+  {
+    segmentId: "seg_gift_seasonal",
+    name: "节令送礼客群",
+    templateTags: { "intent.gift": 1, "occasion.seasonal": 0.8, "price.premium": 0.6 },
+  },
+];
+
+const KEYWORD_TAGS: Record<string, string[]> = {
+  minimal: ["style.minimal"],
+  basic: ["style.basic"],
+  commute: ["occasion.work", "style.minimal"],
+  street: ["style.street"],
+  sport: ["style.sporty"],
+  sporty: ["style.sporty"],
+  elegant: ["style.elegant"],
+  sweet: ["style.sweet"],
+  trendy: ["style.trendy"],
+  luxury: ["style.luxury"],
+  party: ["occasion.party"],
+  travel: ["occasion.travel"],
+  home: ["occasion.home"],
+  gift: ["intent.gift"],
+  new_arrival: ["price.new_arrival_sensitive", "intent.try_new"],
+  new: ["price.new_arrival_sensitive", "intent.try_new"],
+};
+
+const PRICE_TAGS: Record<string, string> = {
+  value: "price.value",
+  mid: "price.mid",
+  premium: "price.premium",
+};
+
+export function loadAllowedTagIds(): Set<string> {
+  const content = readFileSync(TAXONOMY_PATH, "utf8");
+  const tagIds = new Set<string>();
+  for (const match of content.matchAll(/\| `([a-z]+\.[a-z0-9_]+)` \|/g)) {
+    const tagId = match[1];
+    if (tagId) {
+      tagIds.add(tagId);
+    }
+  }
+  return tagIds;
+}
+
+export function loadDemoSkus(): DemoSku[] {
+  return readJsonl<DemoSku>(resolve(DEMO_DIR, "skus.jsonl"));
+}
+
+export function loadWideTable(): WideTableRow[] {
+  return readJsonl<WideTableRow>(resolve(DEMO_DIR, "wide_table.jsonl"));
+}
+
+export function loadChannelProfiles(): ChannelProfile[] {
+  return readJsonl<ChannelProfile>(resolve(DEMO_DIR, "channel_profiles.jsonl"));
+}
+
+export function toProductDNA(sku: DemoSku): ProductDNA {
+  return {
+    skuId: sku.skuId,
+    categoryLv1: sku.categoryLv1,
+    categoryLv2: sku.categoryLv2,
+    season: sku.season,
+    ...sku.attributes,
+    mappedProductTags: sku.mappedProductTags,
+  };
+}
+
+export function predictProductProfile(input: ProductDNA, trainRows = loadWideTable()): ProductProfileDraft {
+  const allowedTagIds = loadAllowedTagIds();
+  const { ruleTags, unmappedInputTokens } = buildRuleTags(input, allowedTagIds);
+  const trainableRows = trainRows.filter((row) => row.isTrainable !== false);
+  const qualityFlags: string[] = [];
+
+  const useKnn = trainableRows.length >= 10;
+  if (!useKnn) {
+    qualityFlags.push("fallback_rule_only", "low_training_sample");
+  }
+
+  const predictedTags = useKnn
+    ? blendTagScores(knnPredict(input, trainableRows), ruleTags, 0.7, 0.3)
+    : ruleTags;
+
+  const validPredictedTags = predictedTags
+    .filter((tag) => allowedTagIds.has(tag.tagId))
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 12)
+    .map((tag) => ({ ...tag, score: round(tag.score), confidence: round(tag.confidence), source: MODEL_VERSION, sampleSize: null, timeWindow: null }));
+
+  if (validPredictedTags.length === 0) {
+    qualityFlags.push("no_valid_profile_tags");
+  }
+
+  return {
+    skuId: input.skuId,
+    modelVersion: MODEL_VERSION,
+    modelPath: useKnn ? "knn" : "rule",
+    input: {
+      dnaHash: dnaHash(input),
+      categoryLv1: input.categoryLv1,
+      categoryLv2: input.categoryLv2,
+      season: input.season,
+      priceBand: input.priceBand,
+      styleKeywords: input.styleKeywords,
+    },
+    predictedProfileTags: validPredictedTags,
+    topSegments: buildTopSegments(validPredictedTags),
+    qualityFlags,
+    unmappedInputTokens,
+  };
+}
+
+export function matchChannels(profile: ProductProfileDraft, channels = loadChannelProfiles()): ChannelMatchDraft[] {
+  const productVector = toScoreMap(profile.predictedProfileTags);
+  const confidenceByTag = new Map(profile.predictedProfileTags.map((tag) => [tag.tagId, tag.confidence]));
+  const ranked = channels.map((channel) => {
+    const channelVector = toScoreMap(channel.tags);
+    const overlap = weightedJaccard(productVector, channelVector);
+    const segmentMatches = profile.topSegments.map((segment) => ({
+      segmentId: segment.segmentId,
+      score: segmentMatch(segment, channelVector),
+    }));
+    const bestSegment = segmentMatches.sort((left, right) => right.score - left.score)[0] ?? { segmentId: "", score: 0 };
+    const positiveDrivers = buildPositiveDrivers(productVector, channelVector);
+    const negativeDrivers = buildNegativeDrivers(productVector, channelVector);
+    const alignmentBonus = channelAlignmentBonus(channel.channelType, productVector, channelVector);
+    const matchScore = clamp(0.6 * overlap + 0.4 * bestSegment.score + alignmentBonus, 0, 1);
+    const matchConfidence = mean(positiveDrivers.slice(0, 3).map((driver) => confidenceByTag.get(driver.tagId) ?? 0.5)) * Math.min(1, channel.sampleSize / 500);
+    const qualityFlags = [...channel.qualityFlags];
+    if (positiveDrivers.length === 0) qualityFlags.push("no_common_tags");
+    if (channel.sampleSize < 500) qualityFlags.push("low_channel_sample");
+
+    return {
+      channelId: channel.channelId,
+      channelType: channel.channelType,
+      matchScore: round(matchScore),
+      matchConfidence: round(matchConfidence),
+      rank: 0,
+      overlap: round(overlap),
+      bestSegmentId: bestSegment.segmentId,
+      bestSegmentMatch: round(bestSegment.score),
+      positiveDrivers,
+      negativeDrivers,
+      qualityFlags,
+    };
+  });
+
+  return ranked
+    .sort((left, right) => right.matchScore - left.matchScore)
+    .map((match, index) => ({ ...match, rank: index + 1 }));
+}
+
+export function validateDemoTagIds(): { ok: boolean; invalidTagIds: string[] } {
+  const allowedTagIds = loadAllowedTagIds();
+  const found = new Set<string>();
+  for (const sku of loadDemoSkus()) collectTags(sku.mappedProductTags, found);
+  for (const row of loadWideTable()) {
+    collectTags(row.mappedProductTags, found);
+    collectTags(row.buyerProfileTags, found);
+  }
+  for (const channel of loadChannelProfiles()) collectTags(channel.tags, found);
+
+  const invalidTagIds = [...found].filter((tagId) => !allowedTagIds.has(tagId)).sort();
+  return { ok: invalidTagIds.length === 0, invalidTagIds };
+}
+
+export function runBacktest(): BacktestReport {
+  const skus = loadDemoSkus();
+  const rows = loadWideTable();
+  const channels = loadChannelProfiles();
+  const topKHits: number[] = [];
+  const driverPrecisions: number[] = [];
+  const ndcgs: number[] = [];
+
+  for (const sku of skus) {
+    const testRows = rows.filter((row) => row.skuId === sku.skuId);
+    const trainRows = rows.filter((row) => row.skuId !== sku.skuId);
+    const profile = predictProductProfile(toProductDNA(sku), trainRows);
+    const truth = aggregateTruthTags(testRows);
+    const predictedTop5 = profile.predictedProfileTags.slice(0, 5).map((tag) => tag.tagId);
+    const truthTop5 = truth.slice(0, 5).map((tag) => tag.tagId);
+    topKHits.push(intersectionSize(predictedTop5, truthTop5) / 5);
+
+    const drivers = new Set(profile.topSegments.flatMap((segment) => segment.drivers));
+    const driverHitCount = [...drivers].filter((tagId) => truthTop5.includes(tagId)).length;
+    driverPrecisions.push(drivers.size === 0 ? 0 : driverHitCount / drivers.size);
+
+    const matches = matchChannels(profile, channels);
+    const relevanceByChannel = new Map(testRows.map((row) => [row.channelId, isPositiveMatch(row) ? 1 : 0]));
+    ndcgs.push(ndcgAt3(matches.map((match) => relevanceByChannel.get(match.channelId) ?? 0)));
+  }
+
+  return {
+    reportId: `backtest_${new Date().toISOString().slice(0, 10).replaceAll("-", "")}_demo`,
+    modelVersion: MODEL_VERSION,
+    evaluationMode: "demo_only_leave_one_sku_out",
+    trainSize: rows.length - Math.max(...skus.map((sku) => rows.filter((row) => row.skuId === sku.skuId).length)),
+    testSize: rows.length,
+    predictionMetrics: {
+      "topKTagHit@5": round(mean(topKHits)),
+      driverPrecision: round(mean(driverPrecisions)),
+    },
+    matchMetrics: {
+      "matchNDCG@3": round(mean(ndcgs)),
+    },
+    notes: [
+      "Demo data has one timeWindow; production time split is not meaningful yet.",
+      "LightGBM is deferred; P0 baseline uses rule + kNN only.",
+    ],
+  };
+}
+
+function readJsonl<T>(path: string): T[] {
+  return readFileSync(path, "utf8")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line) as T);
+}
+
+function buildRuleTags(input: ProductDNA, allowedTagIds: Set<string>): { ruleTags: ProfileTagScore[]; unmappedInputTokens: string[] } {
+  const tags = new Map<string, ProfileTagScore>();
+  const unmappedInputTokens: string[] = [];
+  for (const tag of input.mappedProductTags) {
+    if (allowedTagIds.has(tag.tagId)) upsertTag(tags, tag.tagId, tag.score, tag.confidence);
+  }
+
+  for (const token of [...input.styleKeywords, ...input.titleTokens]) {
+    const mappedTags = KEYWORD_TAGS[token];
+    if (!mappedTags) {
+      unmappedInputTokens.push(token);
+      continue;
+    }
+    for (const tagId of mappedTags) upsertTag(tags, tagId, 0.6, 0.6);
+  }
+
+  const priceTag = PRICE_TAGS[input.priceBand];
+  if (priceTag) upsertTag(tags, priceTag, 0.72, 0.9);
+  if (input.launchType === "new_arrival") {
+    upsertTag(tags, "intent.try_new", 0.62, 0.7);
+    upsertTag(tags, "price.new_arrival_sensitive", 0.62, 0.7);
+  }
+  if (input.season === "fall_winter" || input.season === "spring_summer") {
+    upsertTag(tags, "occasion.seasonal", 0.45, 0.55);
+  }
+
+  return { ruleTags: [...tags.values()], unmappedInputTokens: [...new Set(unmappedInputTokens)] };
+}
+
+function knnPredict(input: ProductDNA, trainRows: WideTableRow[]): ProfileTagScore[] {
+  const inputVector = toScoreMap(input.mappedProductTags);
+  const neighbors = trainRows
+    .map((row) => ({ row, similarity: rowSimilarity(input, inputVector, row) }))
+    .filter((item) => item.similarity > 0)
+    .sort((left, right) => right.similarity - left.similarity)
+    .slice(0, 20);
+
+  const totals = new Map<string, { weightedScore: number; weightedConfidence: number; totalWeight: number }>();
+  for (const neighbor of neighbors) {
+    const weight = neighbor.similarity * Math.max(0.1, neighbor.row.profileCoverageRate) * Math.min(1, neighbor.row.sampleSize / 1000);
+    for (const tag of neighbor.row.buyerProfileTags) {
+      const current = totals.get(tag.tagId) ?? { weightedScore: 0, weightedConfidence: 0, totalWeight: 0 };
+      current.weightedScore += tag.score * weight;
+      current.weightedConfidence += tag.confidence * weight;
+      current.totalWeight += weight;
+      totals.set(tag.tagId, current);
+    }
+  }
+
+  return [...totals.entries()].map(([tagId, value]) => ({
+    tagId,
+    score: value.totalWeight === 0 ? 0 : value.weightedScore / value.totalWeight,
+    confidence: clamp(value.totalWeight === 0 ? 0.5 : value.weightedConfidence / value.totalWeight, 0, 0.9),
+    source: MODEL_VERSION,
+    sampleSize: null,
+    timeWindow: null,
+  }));
+}
+
+function rowSimilarity(input: ProductDNA, inputVector: Map<string, number>, row: WideTableRow): number {
+  const tagSimilarity = cosine(inputVector, toScoreMap(row.mappedProductTags));
+  const categoryBoost = input.categoryLv2 === row.categoryLv2 ? 0.15 : input.categoryLv1 === row.categoryLv1 ? 0.08 : 0;
+  const priceBoost = input.priceBand === row.priceBand ? 0.08 : 0;
+  const seasonBoost = input.season === row.season ? 0.05 : 0;
+  return clamp(tagSimilarity + categoryBoost + priceBoost + seasonBoost, 0, 1);
+}
+
+function blendTagScores(primary: ProfileTagScore[], fallback: ProfileTagScore[], primaryWeight: number, fallbackWeight: number): ProfileTagScore[] {
+  const tagIds = new Set([...primary.map((tag) => tag.tagId), ...fallback.map((tag) => tag.tagId)]);
+  const primaryMap = new Map(primary.map((tag) => [tag.tagId, tag]));
+  const fallbackMap = new Map(fallback.map((tag) => [tag.tagId, tag]));
+  return [...tagIds].map((tagId) => {
+    const primaryTag = primaryMap.get(tagId);
+    const fallbackTag = fallbackMap.get(tagId);
+    const score = (primaryTag?.score ?? 0) * primaryWeight + (fallbackTag?.score ?? 0) * fallbackWeight;
+    const confidence = Math.max(primaryTag?.confidence ?? 0, fallbackTag?.confidence ?? 0.5) * 0.95;
+    return { tagId, score, confidence, source: MODEL_VERSION, sampleSize: null, timeWindow: null };
+  });
+}
+
+function buildTopSegments(tags: ProfileTagScore[]): SegmentDraft[] {
+  const scoreMap = toScoreMap(tags);
+  const confidenceMap = new Map(tags.map((tag) => [tag.tagId, tag.confidence]));
+  return SEGMENT_TEMPLATES.map((template) => {
+    const contributions = Object.entries(template.templateTags).map(([tagId, weight]) => ({
+      tagId,
+      score: (scoreMap.get(tagId) ?? 0) * weight,
+      tagScore: scoreMap.get(tagId) ?? 0,
+    }));
+    const denominator = Object.values(template.templateTags).reduce((sum, weight) => sum + weight, 0);
+    const segmentScore = denominator === 0 ? 0 : contributions.reduce((sum, item) => sum + item.score, 0) / denominator;
+    const drivers = contributions
+      .filter((item) => item.score > 0)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 3)
+      .map((item) => item.tagId);
+    return {
+      segmentId: template.segmentId,
+      name: template.name,
+      rank: 0,
+      confidence: round(clamp(mean(drivers.map((tagId) => confidenceMap.get(tagId) ?? 0.5)), 0, 0.95)),
+      tags: Object.keys(template.templateTags).map((tagId) => ({ tagId, score: round(scoreMap.get(tagId) ?? 0) })),
+      drivers,
+      segmentScore,
+    };
+  })
+    .sort((left, right) => right.segmentScore - left.segmentScore)
+    .slice(0, 3)
+    .map((segment, index) => ({
+      segmentId: segment.segmentId,
+      name: segment.name,
+      rank: index + 1,
+      confidence: segment.confidence,
+      tags: segment.tags,
+      drivers: segment.drivers,
+    }));
+}
+
+function weightedJaccard(product: Map<string, number>, channel: Map<string, number>): number {
+  const tagIds = new Set([...product.keys(), ...channel.keys()]);
+  let numerator = 0;
+  let denominator = 0;
+  for (const tagId of tagIds) {
+    const weight = dimensionWeight(tagId);
+    numerator += Math.min(product.get(tagId) ?? 0, channel.get(tagId) ?? 0) * weight;
+    denominator += Math.max(product.get(tagId) ?? 0, channel.get(tagId) ?? 0) * weight;
+  }
+  return denominator === 0 ? 0 : numerator / denominator;
+}
+
+function segmentMatch(segment: SegmentDraft, channel: Map<string, number>): number {
+  let numerator = 0;
+  let denominator = 0;
+  for (const tag of segment.tags) {
+    const weight = dimensionWeight(tag.tagId);
+    numerator += tag.score * (channel.get(tag.tagId) ?? 0) * weight;
+    denominator += tag.score * weight;
+  }
+  return denominator === 0 ? 0 : numerator / denominator;
+}
+
+function buildPositiveDrivers(product: Map<string, number>, channel: Map<string, number>): DriverDraft[] {
+  return [...product.keys()]
+    .map((tagId) => ({
+      tagId,
+      productScore: product.get(tagId) ?? 0,
+      channelScore: channel.get(tagId) ?? 0,
+      contribution: Math.min(product.get(tagId) ?? 0, channel.get(tagId) ?? 0) * dimensionWeight(tagId),
+    }))
+    .filter((item) => item.contribution > 0)
+    .sort((left, right) => right.contribution - left.contribution)
+    .slice(0, 3)
+    .map(({ tagId, productScore, channelScore }) => ({ tagId, productScore: round(productScore), channelScore: round(channelScore) }));
+}
+
+function buildNegativeDrivers(product: Map<string, number>, channel: Map<string, number>): DriverDraft[] {
+  return [...product.keys()]
+    .map((tagId) => ({
+      tagId,
+      productScore: product.get(tagId) ?? 0,
+      channelScore: channel.get(tagId) ?? 0,
+      gap: Math.abs((product.get(tagId) ?? 0) - (channel.get(tagId) ?? 0)) * dimensionWeight(tagId),
+    }))
+    .filter((item) => item.channelScore < 0.2 && item.gap > 0)
+    .sort((left, right) => right.gap - left.gap)
+    .slice(0, 3)
+    .map(({ tagId, productScore, channelScore }) => ({ tagId, productScore: round(productScore), channelScore: round(channelScore) }));
+}
+
+function channelAlignmentBonus(channelType: string, product: Map<string, number>, channel: Map<string, number>): number {
+  const tagId = `channel.${channelType}`;
+  const productScore = product.get(tagId) ?? 0;
+  const channelScore = channel.get(tagId) ?? 0;
+  return productScore >= 0.4 && channelScore >= 0.4 ? 0.05 : 0;
+}
+
+function aggregateTruthTags(rows: WideTableRow[]): ProfileTagScore[] {
+  const totals = new Map<string, { score: number; confidence: number; sampleSize: number }>();
+  for (const row of rows) {
+    const rowWeight = row.sampleSize || 1;
+    for (const tag of row.buyerProfileTags) {
+      const current = totals.get(tag.tagId) ?? { score: 0, confidence: 0, sampleSize: 0 };
+      current.score += tag.score * rowWeight;
+      current.confidence += tag.confidence * rowWeight;
+      current.sampleSize += rowWeight;
+      totals.set(tag.tagId, current);
+    }
+  }
+  return [...totals.entries()]
+    .map(([tagId, value]) => ({
+      tagId,
+      score: value.score / value.sampleSize,
+      confidence: value.confidence / value.sampleSize,
+      source: "demo_backtest_truth",
+      sampleSize: value.sampleSize,
+      timeWindow: null,
+    }))
+    .sort((left, right) => right.score - left.score);
+}
+
+function isPositiveMatch(row: WideTableRow): boolean {
+  return (row.sellThroughRate ?? 0) >= 0.6 && (row.returnRate ?? 1) <= 0.12;
+}
+
+function ndcgAt3(relevances: number[]): number {
+  const top3 = relevances.slice(0, 3);
+  const dcg = top3.reduce((sum, relevance, index) => sum + (Math.pow(2, relevance) - 1) / Math.log2(index + 2), 0);
+  const ideal = [...relevances]
+    .sort((left, right) => right - left)
+    .slice(0, 3)
+    .reduce((sum, relevance, index) => sum + (Math.pow(2, relevance) - 1) / Math.log2(index + 2), 0);
+  return ideal === 0 ? 0 : dcg / ideal;
+}
+
+function toScoreMap(tags: Array<{ tagId: string; score: number }>): Map<string, number> {
+  return new Map(tags.map((tag) => [tag.tagId, tag.score]));
+}
+
+function cosine(left: Map<string, number>, right: Map<string, number>): number {
+  const tagIds = new Set([...left.keys(), ...right.keys()]);
+  let dot = 0;
+  let leftNorm = 0;
+  let rightNorm = 0;
+  for (const tagId of tagIds) {
+    const leftScore = left.get(tagId) ?? 0;
+    const rightScore = right.get(tagId) ?? 0;
+    dot += leftScore * rightScore;
+    leftNorm += leftScore * leftScore;
+    rightNorm += rightScore * rightScore;
+  }
+  return leftNorm === 0 || rightNorm === 0 ? 0 : dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm));
+}
+
+function upsertTag(tags: Map<string, ProfileTagScore>, tagId: string, score: number, confidence: number): void {
+  const current = tags.get(tagId);
+  if (!current || score > current.score) {
+    tags.set(tagId, { tagId, score: clamp(score, 0, 1), confidence: clamp(confidence, 0, 1), source: MODEL_VERSION, sampleSize: null, timeWindow: null });
+  }
+}
+
+function collectTags(tags: ProfileTagScore[], found: Set<string>): void {
+  for (const tag of tags) found.add(tag.tagId);
+}
+
+function dimensionWeight(tagId: string): number {
+  const dimension = tagId.split(".")[0] ?? "";
+  return DIMENSION_WEIGHTS[dimension] ?? 0;
+}
+
+function dnaHash(input: ProductDNA): string {
+  const stable = [input.categoryLv1, input.categoryLv2, input.season, input.fitType ?? "", input.fabricType ?? "", input.priceBand, input.styleKeywords.join(",")].join("|");
+  return createHash("sha1").update(stable).digest("hex").slice(0, 8);
+}
+
+function intersectionSize(left: string[], right: string[]): number {
+  const rightSet = new Set(right);
+  return left.filter((item) => rightSet.has(item)).length;
+}
+
+function mean(values: number[]): number {
+  return values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function round(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}

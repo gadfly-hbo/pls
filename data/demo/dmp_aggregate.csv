@@ -1,0 +1,30 @@
+entityType,entityId,profileStage,sourceField,sourceValue,mappedTagId,score,confidence,sampleSize,timeWindow,source,mappingRuleId,mappingNote
+sku,mock_sku_101,buyer,age_band,25-34,demo.age_25_34,0.80,0.86,1420,2026-05-01/2026-06-30,mock_dmp_aggregate,rule_age_band_v1,direct age band mapping
+sku,mock_sku_101,buyer,gender_index,female_high,demo.female,0.76,0.84,1420,2026-05-01/2026-06-30,mock_dmp_aggregate,rule_gender_v1,direct gender tendency mapping
+sku,mock_sku_101,buyer,style_preference,commute_minimal,style.minimal,0.78,0.80,1420,2026-05-01/2026-06-30,mock_dmp_aggregate,rule_style_v1,semantic style mapping
+sku,mock_sku_101,buyer,occasion_preference,work_commute,occasion.work,0.74,0.76,1420,2026-05-01/2026-06-30,mock_dmp_aggregate,rule_occasion_v1,semantic occasion mapping
+sku,mock_sku_101,buyer,price_band,mid_mainstream,price.mid,0.68,0.82,1420,2026-05-01/2026-06-30,mock_dmp_aggregate,rule_price_band_v1,direct price band mapping
+sku,mock_sku_102,buyer,age_band,18-24,demo.age_18_24,0.78,0.84,1380,2026-05-01/2026-06-30,mock_dmp_aggregate,rule_age_band_v1,direct age band mapping
+sku,mock_sku_102,buyer,gender_index,female_high,demo.female,0.76,0.82,1380,2026-05-01/2026-06-30,mock_dmp_aggregate,rule_gender_v1,direct gender tendency mapping
+sku,mock_sku_102,buyer,style_preference,sweet_young,style.sweet,0.74,0.78,1380,2026-05-01/2026-06-30,mock_dmp_aggregate,rule_style_v1,semantic style mapping
+sku,mock_sku_102,buyer,occasion_preference,travel_photo,occasion.travel,0.70,0.74,1380,2026-05-01/2026-06-30,mock_dmp_aggregate,rule_occasion_v1,semantic occasion mapping
+sku,mock_sku_102,buyer,purchase_intent,new_seeded,intent.try_new,0.72,0.76,1380,2026-05-01/2026-06-30,mock_dmp_aggregate,rule_intent_v1,semantic intent mapping
+sku,mock_sku_102,buyer,price_band,value_mainstream,price.value,0.62,0.74,1380,2026-05-01/2026-06-30,mock_dmp_aggregate,rule_price_band_v1,direct price band mapping
+sku,mock_sku_103,buyer,age_band,35-44,demo.age_35_44,0.72,0.80,1180,2026-05-01/2026-06-30,mock_dmp_aggregate,rule_age_band_v1,direct age band mapping
+sku,mock_sku_103,buyer,city_tier,high_tier,demo.city_high_tier,0.66,0.76,1180,2026-05-01/2026-06-30,mock_dmp_aggregate,rule_city_tier_v1,direct city tier mapping
+sku,mock_sku_103,buyer,style_preference,elegant_quality,style.elegant,0.76,0.80,1180,2026-05-01/2026-06-30,mock_dmp_aggregate,rule_style_v1,semantic style mapping
+sku,mock_sku_103,buyer,style_preference,premium_quality,style.luxury,0.66,0.72,1180,2026-05-01/2026-06-30,mock_dmp_aggregate,rule_style_v1,semantic style mapping
+sku,mock_sku_103,buyer,price_band,premium,price.premium,0.72,0.82,1180,2026-05-01/2026-06-30,mock_dmp_aggregate,rule_price_band_v1,direct price band mapping
+sku,mock_sku_103,buyer,purchase_intent,member_rebuy,intent.repeat_purchase,0.62,0.70,1180,2026-05-01/2026-06-30,mock_dmp_aggregate,rule_intent_v1,semantic intent mapping
+channel,mock_channel_shelf_001,channel_audience,touchpoint,shelf_store,channel.shelf_ecommerce,0.92,0.90,5200,2026-05-01/2026-06-30,mock_channel_aggregate,rule_channel_v1,direct channel mapping
+channel,mock_channel_shelf_001,channel_audience,style_preference,commute_basic,style.minimal,0.72,0.76,5200,2026-05-01/2026-06-30,mock_channel_aggregate,rule_style_v1,semantic style mapping
+channel,mock_channel_shelf_001,channel_audience,occasion_preference,work_commute,occasion.work,0.70,0.74,5200,2026-05-01/2026-06-30,mock_channel_aggregate,rule_occasion_v1,semantic occasion mapping
+channel,mock_channel_short_video_001,channel_audience,touchpoint,short_video,channel.short_video,0.94,0.90,6400,2026-05-01/2026-06-30,mock_channel_aggregate,rule_channel_v1,direct channel mapping
+channel,mock_channel_short_video_001,channel_audience,style_preference,sweet_trendy,style.sweet,0.68,0.70,6400,2026-05-01/2026-06-30,mock_channel_aggregate,rule_style_v1,semantic style mapping
+channel,mock_channel_short_video_001,channel_audience,purchase_intent,new_seeded,intent.try_new,0.76,0.74,6400,2026-05-01/2026-06-30,mock_channel_aggregate,rule_intent_v1,semantic intent mapping
+channel,mock_channel_live_001,channel_audience,touchpoint,live_room,channel.live_stream,0.93,0.90,4700,2026-05-01/2026-06-30,mock_channel_aggregate,rule_channel_v1,direct channel mapping
+channel,mock_channel_live_001,channel_audience,price_sensitivity,promo_high,price.promo_sensitive,0.78,0.84,4700,2026-05-01/2026-06-30,mock_channel_aggregate,rule_price_sensitivity_v1,semantic price mapping
+channel,mock_channel_live_001,channel_audience,price_band,value_mainstream,price.value,0.82,0.86,4700,2026-05-01/2026-06-30,mock_channel_aggregate,rule_price_band_v1,direct price band mapping
+channel,mock_channel_private_001,channel_audience,touchpoint,private_member,channel.private_domain,0.91,0.88,3100,2026-05-01/2026-06-30,mock_channel_aggregate,rule_channel_v1,direct channel mapping
+channel,mock_channel_private_001,channel_audience,style_preference,elegant_quality,style.elegant,0.70,0.76,3100,2026-05-01/2026-06-30,mock_channel_aggregate,rule_style_v1,semantic style mapping
+channel,mock_channel_private_001,channel_audience,purchase_intent,member_rebuy,intent.repeat_purchase,0.74,0.78,3100,2026-05-01/2026-06-30,mock_channel_aggregate,rule_intent_v1,semantic intent mapping

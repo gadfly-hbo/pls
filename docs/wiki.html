@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PLS 多 Agent 开发 Wiki</title>
+<style>
+  :root {
+    --bg: #0e0f11; --panel: #17181b; --panel2: #1d1f23; --border: #2a2d33;
+    --fg: #e6e8ea; --muted: #9aa0a6; --faint: #6b7178;
+    --x: #fbbf24; --d: #38bdf8; --m: #a78bfa; --a: #34d399; --v: #fb7185;
+    --accent: #38bdf8;
+  }
+  :root.light {
+    --bg: #f8fafc; --panel: #ffffff; --panel2: #f1f5f9; --border: #e2e8f0;
+    --fg: #0f172a; --muted: #64748b; --faint: #94a3b8;
+    --x: #d97706; --d: #0284c7; --m: #7c3aed; --a: #059669; --v: #e11d48;
+    --accent: #0284c7;
+  }
+  .light .chip { color: #ffffff; }
+  .light .st-todo { background: #f1f5f9; color: #64748b; }
+  .light .st-doing { background: #e0f2fe; color: #0284c7; }
+  .light .st-done { background: #dcfce7; color: #16a34a; }
+  .light pre.brief { color: #334155; }
+  .light .copy:hover, .light .hbtn:hover { background: #e2e8f0; }
+  .light .copy.done, .light .hbtn.ok, .light .cl-cur { background: #dcfce7; border-color: #86efac; color: #16a34a; }
+  .light .cl-item li, .light .note-item .nt { color: #334155; }
+  .light .note-item .ndel:hover { color: #dc2626; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: "PingFang SC","Noto Sans CJK SC","Helvetica Neue",Arial,sans-serif;
+    line-height: 1.6; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 24px 80px; }
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+  h1 { font-size: 24px; margin: 0; letter-spacing: .5px; }
+  .ver {
+    background: linear-gradient(135deg,#0ea5e9,#6366f1); color: #fff;
+    font-size: 13px; font-weight: 700; padding: 3px 12px; border-radius: 999px;
+  }
+  .tagline { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 28px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .tab {
+    background: none; border: none; color: var(--muted); font-size: 15px; cursor: pointer;
+    padding: 10px 16px; border-bottom: 2px solid transparent; font-family: inherit; white-space: nowrap;
+  }
+  .tab.active { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
+  .view { display: none; } .view.active { display: block; }
+  .legend { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+  .note { color: var(--faint); font-size: 13px; margin-top: 20px; }
+  code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+  #taskGrid, #doneGrid, #hotfixGrid, #promptList { display: flex; flex-direction: column; gap: 8px; }
+  .bar {
+    background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--border);
+    border-radius: 8px; overflow: hidden;
+  }
+  .bar.is-done { opacity: .55; }
+  .bar-head { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; }
+  .bar-head:hover { background: var(--panel2); }
+  .bar .chev { color: var(--faint); font-size: 10px; transition: transform .15s; flex-shrink: 0; width: 10px; }
+  .bar.open .chev { transform: rotate(90deg); }
+  .bar .b-title {
+    flex: 1; font-size: 14px; font-weight: 600; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .bar.open .b-title { white-space: normal; }
+  .bar .b-meta { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .bar .b-meta .agent { display: none; }
+  @media (min-width: 720px) { .bar .b-meta .agent { display: inline; } }
+  .chip { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 6px; color: #06121f; }
+  .agent { color: var(--faint); font-size: 12px; }
+  .cre { color: var(--faint); font-size: 11px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+  .st { font-size: 11px; padding: 1px 8px; border-radius: 5px; font-weight: 600; margin-left: 0; }
+  .st-todo { background: #26282c; color: #9aa0a6; }
+  .st-doing { background: #0c2a3d; color: #38bdf8; }
+  .st-done { background: #10331f; color: #4ade80; }
+  .bar .copy-sm {
+    background: var(--panel2); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; font-family: inherit;
+    flex-shrink: 0; transition: all .15s;
+  }
+  .bar .copy-sm:hover { background: #2a2d33; }
+  .bar .copy-sm.done { background: #10331f; border-color: #1f6b3b; color: #4ade80; }
+  .bar-body { display: none; padding: 2px 12px 12px; }
+  .bar.open .bar-body { display: block; }
+  pre.brief {
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px; font-size: 12px; color: #c5cad0; max-height: 420px; overflow: auto;
+    white-space: pre-wrap; word-break: break-word; margin: 0;
+    font-family: "SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  details.done-sec { margin-top: 28px; }
+  details.done-sec summary {
+    cursor: pointer; color: var(--muted); font-size: 14px; padding: 8px 0;
+    border-top: 1px dashed var(--border);
+  }
+
+  .copy, .hbtn {
+    background: var(--panel2); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; font-family: inherit;
+  }
+  .copy:hover, .hbtn:hover { background: #2a2d33; }
+  .copy.done, .hbtn.ok { background: #10331f; border-color: #1f6b3b; color: #4ade80; }
+  .hgroup { margin-left: auto; display: flex; gap: 8px; }
+
+  textarea#noteText {
+    width: 100%; min-height: 92px; background: var(--panel2);
+    border: 1px solid var(--border); border-radius: 8px; color: var(--fg); padding: 12px;
+    font-family: inherit; font-size: 14px; line-height: 1.55; resize: vertical;
+  }
+  textarea#noteText:focus { outline: none; border-color: var(--accent); }
+  .note-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
+  .note-actions .copy { min-width: 120px; }
+  .note-bar { display: flex; align-items: center; gap: 16px; margin: 20px 0 14px; flex-wrap: wrap; }
+  .note-bar label { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .note-item {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 10px; display: flex; gap: 12px; align-items: flex-start;
+  }
+  .note-item input[type=checkbox] { margin-top: 4px; cursor: pointer; }
+  .note-item .ncol { flex: 1; min-width: 0; }
+  .note-item .nt { white-space: pre-wrap; word-break: break-word; font-size: 14px; color: #cdd2d7; }
+  .note-item .nm { color: var(--faint); font-size: 12px; margin-top: 6px; }
+  .note-item .ndel {
+    background: none; border: none; color: var(--faint); cursor: pointer;
+    font-size: 13px; padding: 2px 6px; font-family: inherit;
+  }
+  .note-item .ndel:hover { color: #f87171; }
+
+  .cl-item {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px; margin-bottom: 16px;
+  }
+  .cl-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+  .cl-ver { font-size: 18px; font-weight: 700; }
+  .cl-cur { background: #10331f; color: #4ade80; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; }
+  .cl-date { color: var(--faint); font-size: 13px; }
+  .cl-title { color: var(--muted); font-size: 14px; }
+  .cl-item ul { margin: 8px 0 0; padding-left: 20px; }
+  .cl-item li { font-size: 14px; color: #cdd2d7; margin: 4px 0; }
+</style>
+<script>
+  if (localStorage.getItem("pls_theme") === "light") {
+    document.documentElement.classList.add("light");
+  }
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>PLS 多 Agent 开发 Wiki</h1>
+    <span class="ver" id="verBadge">v0.1</span>
+    <a class="hbtn" style="margin-left:auto;text-decoration:none" href="file:///Users/huangbo/Dev/Projects/pls/" target="_blank" title="打开 /Users/huangbo/Dev/Projects/pls">打开项目文件夹</a>
+    <button id="themeToggle" class="hbtn">切换主题</button>
+  </header>
+  <p class="tagline">消费者人群画像应用于零售 · 多 Agent 协同开发 Wiki（任务派发 + 快修 + 随手记 + 版本历史）</p>
+
+  <div class="tabs">
+    <button class="tab active" data-view="dispatch">任务派发</button>
+    <button class="tab" data-view="hotfix">快修任务</button>
+    <button class="tab" data-view="notes">随手记</button>
+    <button class="tab" data-view="prompts">常用 prompts</button>
+    <button class="tab" data-view="changelog">版本历史</button>
+  </div>
+
+  <section id="dispatch" class="view active">
+    <p class="legend">当前阶段 <b>P0 准备期</b>。机制：总控拆卡，域 agent 复制 brief 开工，完成后回流总控终审。<span style="color:var(--x)">■</span> 总控 <span style="color:var(--d)">■</span> 数据画像 <span style="color:var(--m)">■</span> 模型预测 <span style="color:var(--a)">■</span> 应用后端 <span style="color:var(--v)">■</span> 前端决策</p>
+    <div id="taskGrid"></div>
+    <details class="done-sec" id="doneWrap">
+      <summary>已完成</summary>
+      <div id="doneGrid" style="margin-top:14px"></div>
+    </details>
+  </section>
+
+  <section id="hotfix" class="view">
+    <p class="legend">快修任务由总控判定安全后发布。涉及原始数据、DMP、schema、接缝层的改动不走任意快修，必须进入任务派发。</p>
+    <div id="hotfixGrid"></div>
+  </section>
+
+  <section id="notes" class="view">
+    <p class="legend">随手记存浏览器本地 localStorage，刷新不丢、不入库。勾选多条可合并复制，后续发给总控做任务生成与派发。Ctrl/Command+Enter 快速保存。</p>
+    <div class="note-input">
+      <textarea id="noteText" placeholder="记录灵感、风险、任务想法..."></textarea>
+      <div class="note-actions"><button class="copy" id="noteSave">保存</button></div>
+    </div>
+    <div class="note-bar">
+      <label><input type="checkbox" id="noteAll" /> 全选</label>
+      <button class="copy" id="noteCopySel">复制选中</button>
+      <span id="noteCount" class="agent"></span>
+      <span class="hgroup">
+        <button class="hbtn" id="exportAll" title="导出为 JSON 备份">导出</button>
+        <button class="hbtn" id="importAll" title="从 JSON 备份恢复">导入</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden />
+      </span>
+    </div>
+    <div id="noteList"></div>
+  </section>
+
+  <section id="prompts" class="view">
+    <p class="legend">Session 开场/收尾通用 prompt。开场 prompt 已按 data / model / app / viz / infra 拆分，避免 agent 追问目标域。</p>
+    <div id="promptList"></div>
+    <script type="text/plain" id="src-resume-data"># PLS · Session 开场 SOP（data 域）
+
+你正在为 PLS 开始一个开发 session。目标域 = data。
+
+依次执行：
+
+1. 读 `AGENTS.md` 与 `Orchestration.md`。
+2. 读 `docs/notes-data.md` 的「## 0. 当前状态」。
+3. 读 `KICKOFF-P0.md` 与 `docs/wiki.html` 中分配给 data 的任务 brief。
+4. 先用 5-8 行汇报：本域当前状态、任务范围、第一步动作、阻塞或待确认。
+5. 用户确认后再执行。
+
+不要执行 git 操作。只改 data 域任务指定文件。</script>
+    <script type="text/plain" id="src-resume-model"># PLS · Session 开场 SOP（model 域）
+
+你正在为 PLS 开始一个开发 session。目标域 = model。
+
+依次执行：
+
+1. 读 `AGENTS.md` 与 `Orchestration.md`。
+2. 读 `docs/notes-model.md` 的「## 0. 当前状态」。
+3. 读 `KICKOFF-P0.md` 与 `docs/wiki.html` 中分配给 model 的任务 brief。
+4. 先用 5-8 行汇报：本域当前状态、任务范围、第一步动作、阻塞或待确认。
+5. 用户确认后再执行。
+
+不要执行 git 操作。只改 model 域任务指定文件。</script>
+    <script type="text/plain" id="src-resume-app"># PLS · Session 开场 SOP（app 域）
+
+你正在为 PLS 开始一个开发 session。目标域 = app。
+
+依次执行：
+
+1. 读 `AGENTS.md` 与 `Orchestration.md`。
+2. 读 `docs/notes-app.md` 的「## 0. 当前状态」。
+3. 读 `KICKOFF-P0.md` 与 `docs/wiki.html` 中分配给 app 的任务 brief。
+4. 先用 5-8 行汇报：本域当前状态、任务范围、第一步动作、阻塞或待确认。
+5. 用户确认后再执行。
+
+不要执行 git 操作。只改 app 域任务指定文件。</script>
+    <script type="text/plain" id="src-resume-viz"># PLS · Session 开场 SOP（viz 域）
+
+你正在为 PLS 开始一个开发 session。目标域 = viz。
+
+依次执行：
+
+1. 读 `AGENTS.md` 与 `Orchestration.md`。
+2. 读 `docs/notes-viz.md` 的「## 0. 当前状态」。
+3. 读 `KICKOFF-P0.md` 与 `docs/wiki.html` 中分配给 viz 的任务 brief。
+4. 先用 5-8 行汇报：本域当前状态、任务范围、第一步动作、阻塞或待确认。
+5. 用户确认后再执行。
+
+不要执行 git 操作。只改 viz 域任务指定文件。</script>
+    <script type="text/plain" id="src-resume-infra"># PLS · Session 开场 SOP（infra 域）
+
+你正在为 PLS 开始一个开发 session。目标域 = infra。
+
+依次执行：
+
+1. 读 `AGENTS.md` 与 `Orchestration.md`。
+2. 读 `docs/notes-infra.md` 的「## 0. 当前状态」。
+3. 读 `KICKOFF-P0.md` 与 `docs/wiki.html` 中分配给 infra / X 的任务 brief。
+4. 先用 5-8 行汇报：本域当前状态、任务范围、第一步动作、阻塞或待确认。
+5. 用户确认后再执行。
+
+不要执行 git 操作。接缝层和共享契约由总控持有。</script>
+    <script type="text/plain" id="src-wrapup"># PLS · Session 收尾 SOP
+
+你正在为 PLS 收尾本次开发 session。目标域按本次改动确定。
+
+依次执行：
+
+1. 运行相关校验；若当前阶段没有可运行校验，说明原因并做文件/语法检查。
+2. 覆盖 `docs/notes-<域>.md` 的「## 0. 当前状态」。
+3. 若产生新决策、踩坑或风险，沉淀到对应 notes 正文。
+4. 列出本次改动文件清单。
+5. 说明验证结果和剩余风险。
+
+不要执行 git 操作。</script>
+    <script type="text/plain" id="src-hotfix"># PLS · 快修通道 SOP
+
+你正在为 PLS 做一次快修：小 bug / 小修小补，不走完整任务拆解。
+
+依次执行：
+
+1. 判红线：若涉及原始订单/会员/客户明细、平台 DMP 原始导出、schema、接缝层，立即停下回流总控。
+2. 先读相关文件和任务上下文。
+3. 做最小改动，不顺手优化，不扩大范围。
+4. 运行相关校验。
+5. 回报改动文件、验证结果、剩余风险。
+
+不要执行 git 操作。</script>
+  </section>
+
+  <section id="changelog" class="view">
+    <div id="clList"></div>
+    <p class="note">P0 前的文档协作骨架从 v0.1 开始记录。阶段完成后，总控把 done 任务归档进版本历史。</p>
+  </section>
+</div>
+
+<script>
+const VERSION = "0.12";
+
+const DOMAINS = {
+  X: { name: "总控", agent: "主控 Agent", color: "var(--x)" },
+  D: { name: "数据画像", agent: "Data Agent", color: "var(--d)" },
+  M: { name: "模型预测", agent: "Model Agent", color: "var(--m)" },
+  A: { name: "应用后端", agent: "App Agent", color: "var(--a)" },
+  V: { name: "前端决策", agent: "Viz Agent", color: "var(--v)" },
+};
+
+const TASKS = [
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-01 22:40",
+    title: "X-P0-0：统一画像标签体系与数据红线",
+    brief: `目标：冻结 P0 使用的画像标签坐标系、DMP 标签映射原则和数据安全边界。
+
+范围：
+1. 输出 docs/profile-taxonomy-v0.md，定义 P0 标签体系。
+2. 输出 docs/data-safety-policy.md，明确原始数据、聚合数据、衍生产物的可用边界。
+3. 给 D/M/A/V 明确共享输入输出约束。
+
+验收：
+- D/M/A/V 能引用同一套标签，不各自造口径。
+- 明确哪些数据可进入 LLM，哪些只能由本地工具处理。
+- 不写产品代码。`
+  },
+  {
+    dom: "D",
+    status: "done",
+    created: "2026-07-01 22:41",
+    title: "D-P0-1：历史 SKU 宽表与 DMP 映射规范",
+    brief: `目标：定义训练数据的核心结构，让历史 SKU 可表示为 SKU_ID + 商品DNA + 真实画像标签分布 + 销售表现。
+
+范围：
+1. 输出 docs/data-spec.md。
+2. 定义历史 SKU 宽表字段。
+3. 定义 DMP 聚合画像导入格式。
+4. 定义商品基础属性字典和渠道画像字段。
+
+红线：
+- 不接触真实原始明细。
+- 示例数据必须脱敏或 mock。
+
+验收：
+- 字段可支持 M 域训练和回测。
+- 字段保留 source、timeWindow、sampleSize。`
+  },
+  {
+    dom: "M",
+    status: "done",
+    created: "2026-07-01 22:42",
+    title: "M-P0-2：商品画像预测与匹配算法方案",
+    brief: `目标：设计新品商品画像预测和商品 × 渠道匹配算法。
+
+范围：
+1. 输出 docs/model-plan.md。
+2. 定义商品 DNA 特征集合。
+3. 定义预测输出 JSON schema：Top 3 人群包、标签分布、置信度、关键驱动标签。
+4. 定义匹配度计算方法和回测指标。
+
+验收：
+- 方案能支持 demo 新品预测。
+- 方案能解释为什么某商品匹配或不匹配某渠道。
+- 明确 P0 baseline，不追求复杂模型。`
+  },
+  {
+    dom: "A",
+    status: "done",
+    created: "2026-07-01 22:43",
+    title: "A-P0-3：API 与 pipeline 契约",
+    brief: `目标：设计 P0 API、任务状态和结果存储。
+
+范围：
+1. 输出 docs/api-contract.md。
+2. 输出 docs/pipeline-design.md。
+3. 定义 SKU、ProductProfile、ChannelProfile、MatchResult 等核心对象。
+4. 定义预测任务和匹配任务状态机。
+
+验收：
+- V 可以基于契约设计页面。
+- M 的预测和匹配输出可以被 API 稳定封装。
+- 每个结果保留 source、confidence、generatedAt。`
+  },
+  {
+    dom: "V",
+    status: "done",
+    created: "2026-07-01 22:44",
+    title: "V-P0-4：新品画像与渠道匹配工作台方案",
+    brief: `目标：设计 P0 的两个核心工作台。
+
+范围：
+1. 输出 docs/ui-flow.md。
+2. 输出 docs/decision-output.md。
+3. 设计新品画像预测流程。
+4. 设计商品 × 渠道匹配热力图。
+5. 设计分货、投流、熔断建议展示。
+
+验收：
+- 用户能从录入新品走到查看渠道推荐。
+- 每个建议都有依据、置信度和风险提示。
+- 首屏是工作台，不做营销页。`
+  },
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-02 00:00",
+    title: "X-P0-B0：P0 集成评审与任务收口",
+    brief: `目标：把第一轮文档契约收口成可实现的 P0-B 任务边界，确认“新品输入 → 预测画像 → 匹配渠道 → 输出建议”闭环无接缝冲突。
+
+范围：
+1. 输出 docs/p0-integration-review.md。
+2. 检查 profile-taxonomy-v0 / data-spec / model-plan / api-contract / pipeline-design / ui-flow / decision-output 的字段、流程和红线一致性。
+3. 收口已知冲突：预测/匹配同步超时口径、demo 数据目录、SQLite schema 边界、M 与 A 内部服务接口边界。
+4. 给 D/M/A/V 的 P0-B 实现任务写明依赖顺序、验收口径和不可改接缝。
+
+红线：
+- 不写产品代码。
+- 不新增未经审批的共享字段、DB schema 或 API 路径。
+- 不接触真实品牌数据或 DMP 明细。
+
+验收：
+- D/M/A/V 能按同一闭环开工，不再各自解释接口。
+- 明确 P0-B 最小 demo 数据、服务骨架、前端骨架的完成定义。
+- 输出下一轮任务拆解和风险清单。`
+  },
+  {
+    dom: "D",
+    status: "done",
+    created: "2026-07-02 00:01",
+    title: "D-P0-B1：脱敏 mock/demo 数据包",
+    brief: `目标：提供 P0 MVP 可运行的服装 demo 数据，让 M/A/V 不依赖真实平台数据也能跑通闭环。
+
+范围：
+1. 新建 demo 数据目录，建议为 data/demo/ 或 fixtures/demo/，最终以 X-P0-B0 集成评审为准。
+2. 生成至少 3 个服装 SKU、4 个渠道画像、SKU × channel 宽表样例、DMP aggregate CSV/JSONL 样例。
+3. 所有画像字段必须使用 docs/profile-taxonomy-v0.md 的 tagId。
+4. 所有销售表现使用 gmvIndex、avgSellingPriceBand、trafficIndex 等脱敏字段，不出现真实金额和用户级明细。
+5. 输出 demo 数据 README，说明字段来源、样本口径、如何被 M/A/V 消费。
+
+红线：
+- 禁止真实手机号、姓名、地址、订单号、会员 ID、平台 open id、广告 ID、设备 ID。
+- 禁止原始 DMP 明细、人群包成员、ID 包。
+- 示例必须为 mock 或脱敏聚合数据。
+
+验收：
+- demo 数据能被 data-spec.md 校验规则解释。
+- tagId 白名单检查通过。
+- 覆盖至少 3 个 SKU × 4 个渠道，并包含可触发 priority_launch / test_launch / observe / avoid 的样例。`
+  },
+  {
+    dom: "A",
+    status: "done",
+    created: "2026-07-02 00:02",
+    title: "A-P0-B2：SQLite schema 与 API 服务骨架",
+    brief: `目标：落地 P0 API 和 pipeline 的最小服务骨架，让 demo 数据可入库、预测和匹配结果可通过 /api/v0 被 V 域读取。
+
+范围：
+1. 建立后端工程骨架和 SQLite schema / migration，表结构覆盖 workspace、sku、channel_profile、wide_table_row、batch、prediction、match_result、task、audit_event。
+2. 实现 /api/v0 基础中间件：workspace header、静态 token、requestId、统一响应、错误码。
+3. 实现最小接口：/products、/channels、/predictions、/matches、/matches/heatmap、/tasks、/taxonomy、/audit。
+4. 预测和匹配先接 mock M service 或本地 adapter，返回 model-plan.md 定义的 ProductProfile / MatchResult。
+5. 实现 safety_violation / taxonomy_violation 基础门禁和审计记录。
+
+红线：
+- 不接收 S0/S1 原始明细。
+- M 域不得直接写库，落库只通过 A 域。
+- 新依赖安装前必须先确认。
+
+验收：
+- 使用 demo 数据可完成 POST /products → POST /predictions → POST /matches → GET /matches/heatmap。
+- 所有结果保留 source、confidence、generatedAt；聚合数据保留 sampleSize、timeWindow。
+- 相关 smoke 命令和结果写入完成汇报。`
+  },
+  {
+    dom: "M",
+    status: "done",
+    created: "2026-07-02 00:03",
+    title: "M-P0-B3：预测与匹配 baseline 可运行脚手架",
+    brief: `目标：基于 demo 数据实现可运行的商品画像预测和商品 × 渠道匹配 baseline，为 A 域 API 骨架提供稳定 adapter。
+
+范围：
+1. 实现规则 + kNN 优先的 P0 baseline；LightGBM 可保留为后续增强，不阻塞 MVP。
+2. 输入读取 D-P0-B1 demo 宽表和商品 DNA，输出 model-plan.md §3.3 ProductProfile。
+3. 实现 model-plan.md §4 匹配算法，输出 MatchResult 或 channelMatches。
+4. 实现最小回测脚本，输出 topKTagHit@5、driverPrecision、matchNDCG@3 或 demo 规模下的替代说明。
+5. 与 A 域约定 PredictService / MatchService adapter 输入输出。
+
+红线：
+- 不使用原始客户、订单、DMP 明细。
+- 不输出无法追溯到 tagId 的黑盒人群名。
+- 不新增 Segment 模板或关键词词表，除非回流 X 总控。
+
+验收：
+- demo 新品能输出 Top 3 segment、predictedProfileTags、drivers、qualityFlags。
+- demo 商品 × 渠道能输出 matchScore、positiveDrivers、negativeDrivers、recommendation 所需字段。
+- tagId 白名单检查通过，并提供运行命令。`
+  },
+  {
+    dom: "V",
+    status: "done",
+    created: "2026-07-02 00:04",
+    title: "V-P0-B4：前端 MVP 工作台骨架",
+    brief: `目标：实现低保真前端 MVP，让用户能从录入新品走到查看渠道推荐和解释抽屉。
+
+范围：
+1. 建立前端工程骨架，首屏直接进入工作台，不做营销落地页。
+2. 实现新品录入表单，对接 POST /products 和 POST /predictions。
+3. 实现预测结果页：Top 3 segment、标签分布、drivers、qualityFlags。
+4. 实现渠道匹配热力图：先 POST /matches 生成结果，再 GET /matches/heatmap 展示。
+5. 实现 MatchResult 抽屉：matchScore、matchConfidence、recommendation、positiveDrivers、negativeDrivers、risks。
+6. 实现浏览器端 CSV 导出，仅导出 S3/S4 派生结果字段。
+
+红线：
+- 不展示或导出用户级明细、原始上传文件、DMP 原始字段值、审计原始 payload。
+- 不用“AI 黑盒建议”替代 drivers 和风险解释。
+- UI 保持工作台形态，不做营销页。
+
+验收：
+- 能通过本地 API 或 mock API 完整走通新品录入 → 预测画像 → 渠道匹配 → 查看建议。
+- 长文案和 risks 长尾不挤压布局，抽屉可滚动。
+- 提供截图或本地访问地址及 smoke 说明。`
+  },
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-02 00:05",
+    title: "X-P0-B5：端到端 smoke 与 P0 验收报告",
+    brief: `目标：对 P0 MVP 做端到端验收，确认 demo 数据、模型脚手架、API 服务和前端工作台形成最小可信闭环。
+
+范围：
+1. 输出 docs/p0-acceptance-report.md。
+2. 运行端到端 smoke：demo SKU 输入 → ProductProfile → MatchResult → heatmap → 前端建议展示。
+3. 检查数据红线：无 S0/S1 明细进入文档、API 响应、导出 CSV 或审计 payload。
+4. 汇总回测或 demo 规模指标：Top 标签命中、driver 覆盖、匹配排序解释、不可用边界。
+5. 归档 wiki changelog 和各域 notes，拆解 P1 或 P0-C 任务。
+
+红线：
+- 不以单域自测替代端到端验收。
+- 不掩盖未达标指标；必须记录原因和回退路径。
+
+验收：
+- P0 验收报告说明做了什么、验证了什么、风险缺口、是否进入下一阶段。
+- demo 闭环可复现，命令或访问路径清晰。
+- wiki 中本轮完成任务经总控终审后归档。`
+  },
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-02 14:45",
+    title: "X-P0-C0：P0-C 缺口收敛与发布口径",
+    brief: `目标：基于 P0 验收报告收口 P0-C 出口标准，避免直接带缺口进入 P1。
+
+范围：
+1. 冻结 P0-C 必修缺口：A/M adapter、heatmap 去重、红线扫描自动化、真实数据模板。
+2. 明确 P0-C 完成标准和 P1 准入条件。
+3. 维护 docs/p0-acceptance-report.md 的风险关闭状态。
+
+总控口径：
+- P0-C 是 P1 前的发布 gate，不新增商业扩展功能。
+- C1-C4 全部关闭并补齐验证证据前，不进入 P1。
+- docs/p0-acceptance-report.md 的 P0-C 发布 gate 与风险关闭台账为判断依据。
+
+验收：
+- P0-C 任务完成后可判断是否进入 P1。
+- 不隐藏 P0-B 验收中暴露的未达标项。
+- 本任务已完成；后续按 A-P0-C1 / V-P0-C2 / M-P0-C3 / D-P0-C4 逐项关闭 gate。`
+  },
+  {
+    dom: "A",
+    status: "done",
+    created: "2026-07-02 14:46",
+    title: "A-P0-C1：M baseline adapter 接入与结果幂等",
+    brief: `目标：将 A 域 hardcoded mock M service 替换为 M baseline adapter，并修复重复 smoke 导致的 heatmap 重复 cell。
+
+范围：
+1. 接入 apps/model/src/baseline.ts 的 predictProductProfile / matchChannels。
+2. API 返回 Top 3 segment，对齐 M-P0-B3 输出。
+3. POST /matches 支持幂等键或 latest-result 覆盖策略。
+4. GET /matches/heatmap 按 skuId + channelId 返回最新结果。
+
+验收：
+- 真实 A API 预测返回 Top 3 segment。
+- 重复运行 smoke 后 heatmap 无重复 channel cell。
+- 前端不再出现 duplicate key warning。
+
+总控归档：
+- A 后端主路径已接 M baseline adapter。
+- 重复 POST /matches 后，后端 heatmap 与 /matches?skuId= 均只返回 4 个 unique channel cell。
+- 前端 console 层最终确认留给 V-P0-C2。`
+  },
+  {
+    dom: "V",
+    status: "done",
+    created: "2026-07-02 14:47",
+    title: "V-P0-C2：真实后端 heatmap 稳定渲染",
+    brief: `目标：提升真实 A API 模式下的 heatmap 渲染稳定性，防御重复 cell、空态和错误态。
+
+范围：
+1. heatmap cell key 稳定化。
+2. 明确 loading / empty / error 状态。
+3. 抽屉按 skuId + channelId 取最新明细。
+4. CSV 继续只导出 S4 派生字段。
+
+验收：
+- 重复 smoke 后页面无 React duplicate key warning。
+- avoid / observe / test / priority 四类建议均可展示。
+
+总控归档：
+- heatmap cell 使用 skuId + channelId 联合 key，并在前端按 channelId 做去重防御。
+- loading / empty / error 状态已显式实现。
+- 抽屉按 skuId + channelId 获取最新 match 明细。
+- CSV 导出字段未扩大，仍只含 S4 派生字段。
+- apps/web lint 与 build 通过；浏览器端到端 console smoke 留给 P0-C 总体验收。`
+  },
+  {
+    dom: "M",
+    status: "done",
+    created: "2026-07-02 14:48",
+    title: "M-P0-C3：词表回流与时间切分准备",
+    brief: `目标：处理 P0-B 验收暴露的 unmappedInputTokens 与 demo-only 回测边界。
+
+范围：
+1. 判定 midi / dress 等 token 是否回流 D 域词表。
+2. 准备多 timeWindow 回测输入要求。
+3. 为 A adapter 提供 contract test 样例。
+
+验收：
+- unmappedInputTokens 有明确回流或忽略口径。
+- P1 时间切分回测所需数据字段清单明确。
+
+总控归档：
+- midi / dress 判定为已有 ProductDNA 结构字段，不回流画像词表。
+- P1 时间切分输入要求已明确到 grain、字段、cutoff 和最低样本量。
+- 已新增 A adapter contract test：apps/model/src/contract-test.ts 与 npm run contract-test。
+- M 域 typecheck、contract-test、validate-tags、predict、match、backtest 均通过。`
+  },
+  {
+    dom: "D",
+    status: "done",
+    created: "2026-07-02 14:49",
+    title: "D-P0-C4：真实样例脱敏映射模板",
+    brief: `目标：为真实平台样例进入 PLS 前建立本地脱敏、聚合、tag mapping 模板。
+
+范围：
+1. 定义 raw staging 不出本地的目录和处理边界。
+2. 输出聚合标签分布样例模板。
+3. 明确红线扫描和质量报告字段。
+
+验收：
+- 真实数据接入前有可执行模板。
+- 不把 S0/S1 原始明细写入 docs、API 响应或 LLM 上下文。
+
+总控归档：
+- 新增 data/templates/real-sample-ingestion/ 真实样例本地处理模板。
+- 明确 data/local/raw_staging/<batchId>/ 本地 raw 边界，并用 data/local/.gitignore 默认忽略 staging 文件。
+- 提供 aggregate profile、mapping rules、unmapped fields、quality report、redline scan report 模板和校验脚本。
+- validate-real-sample-template 两种运行方式均通过；静态敏感形态扫描无命中。`
+  },
+  {
+    dom: "V",
+    status: "done",
+    created: "2026-07-02 16:30",
+    title: "V-P0-D1：参考苍耳工作台刷新 PLS 前端 UI",
+    brief: `目标：参考苍耳 pi-Xanthil 工作台的前端设计语言，刷新 PLS 前端 UI，使新品预测与渠道匹配工作台更像专业数据分析工作台，而不是默认 Ant 风格 demo。
+
+参考：
+- /Users/huangbo/Dev/Projects/pi-xanthil/web/index.html
+- 苍耳设计锚点：首屏 theme 初始化、深色优先/中性色 token、多栏工作台、紧凑信息密度、状态 chip、面板化主工作区。
+
+范围：
+1. 建立 PLS 前端视觉 token：深/浅主题、neutral palette、surface、border、muted text、status colors。
+2. 调整 App shell：左侧/顶部导航、工作区标题、状态区、主内容宽度和响应式布局。
+3. 刷新 Dashboard：新品录入、预测结果、Top 3 segment、Profile Tags 的信息层级和卡片密度。
+4. 刷新 ChannelHeatmap：热力图表格、建议状态、详情抽屉、风险提示、CSV 操作按钮。
+5. 保持当前 API 调用、数据字段、CSV 导出字段和 S0/S1 红线不变。
+
+红线：
+- 不新增后端 API，不修改 A/M/D 契约。
+- 不引入新依赖，除非总控确认。
+- 不做营销落地页，首屏仍是工作台。
+- 不展示或导出原始用户、订单、会员、DMP 明细。
+- 不照搬苍耳品牌名、业务文案或无关功能模块。
+
+验收：
+- npm run lint 和 npm run build 通过。
+- Dashboard 与 heatmap 在 mock 模式和真实后端模式下仍可完成主流程。
+- 页面在桌面和移动宽度下无明显溢出、遮挡、文字重叠。
+- heatmap duplicate key 防御、loading / empty / error 状态、CSV S4 字段边界保持不变。
+- 提供前后截图或本地访问说明。
+
+总控归档：
+- 已完成 index.html 首屏 theme 初始化与 lang=zh-CN。
+- index.css 已迁移 neutral/dark 双色 token，并建立 surface、border、muted、status colors。
+- Dashboard / ChannelHeatmap / Drawer 已刷新为更紧凑的数据工作台样式。
+- API 调用、pageSize=100 latest 明细、heatmap 联合 key、CSV S4 字段边界保持不变。
+- apps/web lint 与 build 通过。`
+  },
+  {
+    dom: "X",
+    status: "todo",
+    created: "2026-07-02 17:10",
+    title: "X-P1-FREEZE：P1 推进计划待解冻",
+    brief: `目标：暂存 P0-C 之后的下一阶段推进计划，作为后续解冻 P1 前的任务池，不立即执行。
+
+状态：
+- 待解冻，暂缓执行。
+- 不视为已派发任务，不要求域 agent 立即开工。
+- 解冻前必须先由 X 总控确认 P0-C 总体验收结论和 P1 准入范围。
+
+解冻前置：
+1. 执行 X-P0-C5：P0-C 总体验收与 P1 准入判断。
+2. 复跑 A/M/V/D 关键验证证据。
+3. 验证前端真实后端模式：Dashboard → Prediction → Matches → Heatmap → Drawer → CSV。
+4. 复核红线：demo 数据、API 响应、CSV、audit、real sample template。
+5. 更新 docs/p0-acceptance-report.md，明确进入 P1 或暂缓进入 P1。
+
+候选阶段：
+1. P1-A 真实样例接入准备：
+   - D-P1-A1：真实样例本地脱敏聚合试跑。
+   - D-P1-A2：多 timeWindow 宽表样例生成。
+   - M-P1-A3：cutoff 时间切分回测实现。
+   - X-P1-A4：真实样例红线复核与准入报告。
+2. P1-B 后端工程化：
+   - A-P1-B1：match_result 历史表 + latest view。
+   - A-P1-B2：Idempotency-Key 与 24h 幂等缓存。
+   - A-P1-B3：异步 task worker / timeout fallback。
+   - A-P1-B4：API smoke 脚本化。
+3. P1-C 决策工作台增强：
+   - V-P1-C1：渠道推荐详情页增强。
+   - V-P1-C2：批量 SKU 对比视图。
+   - V-P1-C3：P1 demo report 导出。
+   - V-P1-C4：真实后端端到端 Playwright smoke。
+4. P1-D 模型质量提升：
+   - M-P1-D1：正式 cutoff backtest 指标面板。
+   - M-P1-D2：Segment template 权重校准。
+   - M-P1-D3：unmapped / structural token 治理。
+   - M-P1-D4：prediction feedback 样本回流设计。
+
+红线：
+- 未完成 X-P0-C5 前不得拆分派发 P1-A/B/C/D 任务。
+- 不得把真实 S0/S1 原始明细放入 docs、API 响应、CSV、audit 或 LLM 上下文。
+- 不得直接从 P0-C 跳到 P1 商业扩展，必须先有准入结论。
+
+解冻验收：
+- X 总控确认 P0-C 总体验收通过。
+- 将本卡拆分为独立 P1 任务卡，并更新 docs/notes-infra.md。
+- 本卡保持为计划归档，不承载具体实现交付。`
+  }
+];
+
+const HOTFIX = [];
+
+const CHANGELOG = [
+  {
+    ver: "0.12",
+    date: "2026-07-02",
+    current: true,
+    title: "新增 P1 推进计划待解冻卡",
+    items: [
+      "新增 X-P1-FREEZE：P1 推进计划待解冻，暂存 P0-C 后续阶段计划",
+      "明确未完成 X-P0-C5 总体验收前不得拆分派发 P1-A/B/C/D 任务",
+      "P1 候选方向包括真实样例接入、后端工程化、决策工作台增强和模型质量提升"
+    ]
+  },
+  {
+    ver: "0.11",
+    date: "2026-07-02",
+    current: false,
+    title: "V-P0-D1 前端 UI refresh 归档",
+    items: [
+      "V-P0-D1 经总控审核标记 done，PLS 前端完成苍耳风格工作台刷新",
+      "修复 html lang=zh-CN，并将 heatmap 状态色收口到 CSS variables / color-mix",
+      "前端 lint/build 通过，API 契约、CSV 字段和数据红线保持不变"
+    ]
+  },
+  {
+    ver: "0.10",
+    date: "2026-07-02",
+    current: false,
+    title: "新增 PLS 前端 UI refresh 任务卡",
+    items: [
+      "新增 V-P0-D1：参考苍耳 pi-Xanthil 工作台刷新 PLS 前端 UI",
+      "任务范围限定为前端视觉与布局刷新，不修改 A/M/D 契约和数据红线",
+      "P0-C gate 保持全部关闭，V-P0-D1 作为 P1 前 demo readiness / UI polish 任务"
+    ]
+  },
+  {
+    ver: "0.9",
+    date: "2026-07-02",
+    current: false,
+    title: "D-P0-C4 真实样例脱敏映射模板归档",
+    items: [
+      "D-P0-C4 经总控终审标记 done，新增 data/templates/real-sample-ingestion/ 模板和校验脚本",
+      "data/local/.gitignore 已默认隔离 raw、sanitized 和 aggregate staging",
+      "P0-C 必修 gate 已全部关闭，进入最终总体验收确认"
+    ]
+  },
+  {
+    ver: "0.8",
+    date: "2026-07-02",
+    current: false,
+    title: "M-P0-C3 词表回流与时间切分准备归档",
+    items: [
+      "M-P0-C3 经总控审核标记 done，midi / dress 不回流画像词表，继续作为 unmappedInputTokens 观察项",
+      "新增 docs/model-c3-prep.md，明确 P1 时间切分回测输入要求",
+      "新增 apps/model/src/contract-test.ts 与 npm run contract-test，A adapter contract 验证通过"
+    ]
+  },
+  {
+    ver: "0.7",
+    date: "2026-07-02",
+    current: false,
+    title: "V-P0-C2 前端 heatmap 稳定渲染归档",
+    items: [
+      "V-P0-C2 经总控审核标记 done，前端完成 heatmap 联合 key、重复 cell 防御和状态展示",
+      "CSV 导出字段继续限定为 skuId、channelId、matchScore、matchConfidence、recommendation",
+      "heatmap 去重与幂等 gate 关闭；浏览器端到端 console smoke 留给 P0-C 总体验收"
+    ]
+  },
+  {
+    ver: "0.6",
+    date: "2026-07-02",
+    current: false,
+    title: "A-P0-C1 adapter 与后端去重归档",
+    items: [
+      "A-P0-C1 经总控复核标记 done，A API 主路径改用 M baseline adapter",
+      "A/M adapter gate 已关闭，/predictions 可返回 Top 3 segment",
+      "heatmap 后端去重已关闭，前端 console 稳定性仍由 V-P0-C2 最终验证"
+    ]
+  },
+  {
+    ver: "0.5",
+    date: "2026-07-02",
+    current: false,
+    title: "P0-C 发布 gate 冻结",
+    items: [
+      "X-P0-C0 经总控完成，P0-C 必修 gate 冻结为 A/M adapter、heatmap 去重、红线扫描自动化和真实数据模板",
+      "docs/p0-acceptance-report.md 增加 P0-C 发布 gate、P1 准入条件和风险关闭台账",
+      "明确 C1-C4 全部关闭并补齐验证证据前，不进入 P1"
+    ]
+  },
+  {
+    ver: "0.4",
+    date: "2026-07-02",
+    current: false,
+    title: "P0-B 验收归档与 P0-C 加固任务",
+    items: [
+      "新增 docs/p0-acceptance-report.md，记录端到端 smoke、红线检查、指标和未达标项",
+      "X-P0-B5 经总控验收标记 done，P0-B 可进入 P0-C 加固",
+      "新增 P0-C 任务卡：A/M adapter、heatmap 去重、前端稳定渲染、词表回流和真实数据模板"
+    ]
+  },
+  {
+    ver: "0.3",
+    date: "2026-07-02",
+    current: false,
+    title: "P0-B 实现任务派发",
+    items: [
+      "新增 P0-B 集成评审、demo 数据、API 服务骨架、模型 baseline、前端 MVP、端到端验收任务卡",
+      "第一轮 X/D/M/A/V 文档任务保持 done，下一轮任务默认 todo",
+      "下一阶段目标从文档契约转为可运行 MVP 闭环"
+    ]
+  },
+  {
+    ver: "0.2",
+    date: "2026-07-01",
+    current: false,
+    title: "Wiki 样式与协作交互升级",
+    items: [
+      "迁移最新版 wiki 的深色/浅色主题与横向可折叠任务条样式",
+      "任务卡支持复制标题、复制全文、展开/折叠和 done 自动汇总",
+      "随手记升级为全选、复制选中、导出、导入、本地持久化",
+      "常用 prompts 按域拆分为 data/model/app/viz/infra"
+    ]
+  },
+  {
+    ver: "0.1",
+    date: "2026-07-01",
+    current: false,
+    title: "多 Agent 协作骨架建立",
+    items: [
+      "建立 AGENTS.md、Orchestration.md、KICKOFF-P0.md",
+      "建立 docs/wiki.html 任务派发板",
+      "建立 D/M/A/V/X 五域 notes 活文档",
+      "发布 P0 第一批任务卡"
+    ]
+  }
+];
+
+const STATUS = {
+  todo: { label: "待派发", cls: "st-todo" },
+  doing: { label: "进行中", cls: "st-doing" },
+  done: { label: "完成", cls: "st-done" },
+};
+
+document.getElementById("verBadge").textContent = "v" + VERSION;
+
+document.getElementById("themeToggle").addEventListener("click", () => {
+  document.documentElement.classList.toggle("light");
+  localStorage.setItem("pls_theme", document.documentElement.classList.contains("light") ? "light" : "dark");
+});
+
+document.querySelectorAll(".tab").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(btn.dataset.view).classList.add("active");
+  });
+});
+
+function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+  return new Promise((res) => {
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (_) {}
+    document.body.removeChild(ta); res();
+  });
+}
+
+function buildTaskCard(t, i) {
+  const d = DOMAINS[t.dom] || DOMAINS.X;
+  const st = STATUS[t.status] || STATUS.todo;
+  const card = document.createElement("div");
+  card.className = "bar" + (t.status === "done" ? " is-done" : "");
+  card.style.borderLeftColor = d.color;
+  card.innerHTML =
+    '<div class="bar-head">' +
+      '<span class="chev">▶</span>' +
+      '<span class="chip" style="background:' + d.color + '" title="' + d.name + ' · ' + d.agent + '">' + t.dom + '</span>' +
+      '<span class="b-title"></span>' +
+      '<span class="b-meta">' +
+        (t.created ? '<span class="cre" title="创建时间">' + t.created + '</span>' : '') +
+        '<span class="agent">' + d.agent + '</span>' +
+        '<span class="st ' + st.cls + '">' + st.label + '</span>' +
+        (t.delegate && DOMAINS[t.delegate] ? '<span class="st" style="background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe">委派 ' + DOMAINS[t.delegate].agent + '</span>' : '') +
+        '<button class="copy copy-sm" data-task-title-i="' + i + '">复制标题</button>' +
+        '<button class="copy copy-sm" data-i="' + i + '">复制全部</button>' +
+      '</span>' +
+    '</div>' +
+    '<div class="bar-body"><pre class="brief"></pre></div>';
+  card.querySelector(".b-title").textContent = t.title;
+  card.querySelector(".brief").textContent = t.brief;
+  return card;
+}
+
+const taskGrid = document.getElementById("taskGrid");
+const doneGrid = document.getElementById("doneGrid");
+const doneWrap = document.getElementById("doneWrap");
+let doneN = 0;
+TASKS.forEach((t, i) => {
+  const card = buildTaskCard(t, i);
+  if (t.status === "done") { doneGrid.appendChild(card); doneN++; }
+  else taskGrid.appendChild(card);
+});
+const doneSum = doneWrap.querySelector("summary");
+if (doneN > 0) {
+  doneSum.textContent = "已完成 " + doneN + " 项（待阶段结束时归档进版本历史）";
+} else {
+  doneSum.textContent = "已完成 0 项（完成并经总控终审后归档至此）";
+  doneGrid.innerHTML = '<p style="color:var(--faint);font-size:13px;margin:6px 2px 0">暂无已完成任务。P0 任务完成并经总控终审后会出现在这里。</p>';
+}
+
+document.body.addEventListener("click", (e) => {
+  const head = e.target.closest(".bar-head");
+  if (!head || e.target.closest(".copy")) return;
+  head.parentElement.classList.toggle("open");
+});
+
+document.body.addEventListener("click", (e) => {
+  const btn = e.target.closest(".copy");
+  if (!btn) return;
+  const isPrompt = !!btn.dataset.prompt;
+  const isHf = btn.dataset.hf != null;
+  const isTask = btn.dataset.i != null;
+  const isTaskTitle = btn.dataset.taskTitleI != null;
+  if (!isPrompt && !isHf && !isTask && !isTaskTitle) return;
+  const text = isPrompt
+    ? document.getElementById("src-" + btn.dataset.prompt).textContent.trim()
+    : isHf ? (HOTFIX[+btn.dataset.hf].title + "\n\n" + HOTFIX[+btn.dataset.hf].brief)
+    : isTaskTitle ? TASKS[+btn.dataset.taskTitleI].title
+    : (TASKS[+btn.dataset.i].title + "\n\n" + TASKS[+btn.dataset.i].brief);
+  const label = isPrompt ? "复制 prompt" : isTaskTitle ? "复制标题" : "复制全部";
+  copyText(text).then(() => {
+    btn.textContent = "已复制"; btn.classList.add("done");
+    setTimeout(() => { btn.textContent = label; btn.classList.remove("done"); }, 1600);
+  });
+});
+
+const PROMPTS = [
+  { id: "resume-data", title: "Session 开场 · data", desc: "data 域：读 notes-data / 任务 brief，先汇报再开工" },
+  { id: "resume-model", title: "Session 开场 · model", desc: "model 域：读 notes-model / 任务 brief，先汇报再开工" },
+  { id: "resume-app", title: "Session 开场 · app", desc: "app 域：读 notes-app / 任务 brief，先汇报再开工" },
+  { id: "resume-viz", title: "Session 开场 · viz", desc: "viz 域：读 notes-viz / 任务 brief，先汇报再开工" },
+  { id: "resume-infra", title: "Session 开场 · infra", desc: "infra / X 域：读 notes-infra / 接缝契约，先汇报再开工" },
+  { id: "wrapup", title: "Session 收尾", desc: "校验、覆盖 notes 当前状态、沉淀知识、列改动清单" },
+  { id: "hotfix", title: "快修通道", desc: "小修小补，先判数据红线和接缝层红线" },
+];
+
+const promptList = document.getElementById("promptList");
+PROMPTS.forEach((p) => {
+  const src = document.getElementById("src-" + p.id);
+  const card = document.createElement("div");
+  card.className = "bar";
+  card.style.borderLeftColor = "var(--accent)";
+  card.innerHTML =
+    '<div class="bar-head">' +
+      '<span class="chev">▶</span>' +
+      '<span class="chip" style="background:var(--accent)" title="常用 prompt">P</span>' +
+      '<span class="b-title"></span>' +
+      '<span class="b-meta"><button class="copy copy-sm" data-prompt="' + p.id + '">复制 prompt</button></span>' +
+    '</div>' +
+    '<div class="bar-body">' +
+      '<div style="color:var(--muted);font-size:13px;margin:4px 0 8px"></div>' +
+      '<pre class="brief"></pre>' +
+    '</div>';
+  card.querySelector(".b-title").textContent = p.title;
+  card.querySelector(".bar-body div").textContent = p.desc;
+  card.querySelector(".brief").textContent = src ? src.textContent.trim() : "";
+  promptList.appendChild(card);
+});
+
+function buildHotfixCard(h, i) {
+  const st = STATUS[h.status] || STATUS.todo;
+  const card = document.createElement("div");
+  card.className = "bar" + (h.status === "done" ? " is-done" : "");
+  card.style.borderLeftColor = "var(--x)";
+  card.innerHTML =
+    '<div class="bar-head">' +
+      '<span class="chev">▶</span>' +
+      '<span class="chip" style="background:var(--x)" title="快修任务">H</span>' +
+      '<span class="b-title"></span>' +
+      '<span class="b-meta">' +
+        (h.created ? '<span class="cre" title="创建时间">' + h.created + '</span>' : '') +
+        '<span class="agent">任意 agent</span>' +
+        '<span class="st ' + st.cls + '">' + st.label + '</span>' +
+        '<button class="copy copy-sm" data-hf="' + i + '">复制</button>' +
+      '</span>' +
+    '</div>' +
+    '<div class="bar-body"><pre class="brief"></pre></div>';
+  card.querySelector(".b-title").textContent = h.title;
+  card.querySelector(".brief").textContent = h.brief;
+  return card;
+}
+
+const hotfixGrid = document.getElementById("hotfixGrid");
+if (HOTFIX.length === 0) {
+  hotfixGrid.innerHTML = '<p style="color:var(--faint);font-size:13px;margin:6px 2px 0">暂无快修任务。收到小 bug 时由总控判定安全后发布于此。</p>';
+} else {
+  HOTFIX.forEach((h, i) => hotfixGrid.appendChild(buildHotfixCard(h, i)));
+}
+
+const cl = document.getElementById("clList");
+CHANGELOG.forEach((c) => {
+  const el = document.createElement("div");
+  el.className = "cl-item";
+  el.innerHTML =
+    '<div class="cl-head"><span class="cl-ver">v' + c.ver + '</span>' +
+      (c.current ? '<span class="cl-cur">当前</span>' : '') +
+      '<span class="cl-date">' + c.date + '</span><span class="cl-title">' + c.title + '</span></div>' +
+    '<ul>' + c.items.map((x) => '<li>' + x + '</li>').join("") + '</ul>';
+  cl.appendChild(el);
+});
+
+const NOTES_KEY = "pls_notes";
+const noteList = document.getElementById("noteList");
+const noteText = document.getElementById("noteText");
+function loadNotes() { try { return JSON.parse(localStorage.getItem(NOTES_KEY)) || []; } catch (_) { return []; } }
+function saveNotes(n) { localStorage.setItem(NOTES_KEY, JSON.stringify(n)); }
+function renderNotes() {
+  const notes = loadNotes();
+  document.getElementById("noteCount").textContent = notes.length + " 条";
+  document.getElementById("noteAll").checked = notes.length > 0 && notes.every((n) => n.checked);
+  if (!notes.length) {
+    noteList.innerHTML = '<p class="note">暂无随手记。</p>';
+    return;
+  }
+  noteList.innerHTML = "";
+  notes.forEach((n, idx) => {
+    const item = document.createElement("div");
+    item.className = "note-item";
+    item.innerHTML =
+      '<input type="checkbox" data-note-check="' + idx + '"' + (n.checked ? " checked" : "") + ' />' +
+      '<div class="ncol"><div class="nt"></div><div class="nm"></div></div>' +
+      '<button class="ndel" data-note-del="' + idx + '">删除</button>';
+    item.querySelector(".nt").textContent = n.text;
+    item.querySelector(".nm").textContent = n.created || "";
+    noteList.appendChild(item);
+  });
+}
+function addNote() {
+  const text = noteText.value.trim();
+  if (!text) return;
+  const notes = loadNotes();
+  notes.unshift({ text, created: new Date().toLocaleString(), checked: false });
+  saveNotes(notes);
+  noteText.value = "";
+  renderNotes();
+}
+document.getElementById("noteSave").addEventListener("click", addNote);
+noteText.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") addNote();
+});
+document.getElementById("noteAll").addEventListener("change", (e) => {
+  const notes = loadNotes().map((n) => ({ ...n, checked: e.target.checked }));
+  saveNotes(notes); renderNotes();
+});
+document.getElementById("noteCopySel").addEventListener("click", () => {
+  const notes = loadNotes();
+  const selected = notes.filter((n) => n.checked);
+  const payload = (selected.length ? selected : notes).map((n) => n.text).join("\n\n---\n\n");
+  copyText(payload);
+});
+noteList.addEventListener("change", (e) => {
+  const idx = e.target.dataset.noteCheck;
+  if (idx == null) return;
+  const notes = loadNotes();
+  notes[+idx].checked = e.target.checked;
+  saveNotes(notes); renderNotes();
+});
+noteList.addEventListener("click", (e) => {
+  const idx = e.target.dataset.noteDel;
+  if (idx == null) return;
+  const notes = loadNotes();
+  notes.splice(+idx, 1);
+  saveNotes(notes); renderNotes();
+});
+document.getElementById("exportAll").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(loadNotes(), null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "pls-wiki-notes.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+document.getElementById("importAll").addEventListener("click", () => document.getElementById("importFile").click());
+document.getElementById("importFile").addEventListener("change", async (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  try {
+    const incoming = JSON.parse(await file.text());
+    const current = loadNotes();
+    const seen = new Set(current.map((n) => n.text));
+    const merged = current.slice();
+    (Array.isArray(incoming) ? incoming : []).forEach((n) => {
+      const text = typeof n === "string" ? n : n && n.text;
+      if (text && !seen.has(text)) merged.push({ text, created: n.created || "imported", checked: false });
+    });
+    saveNotes(merged); renderNotes();
+  } catch (_) {
+    alert("导入失败：不是有效 JSON");
+  } finally {
+    e.target.value = "";
+  }
+});
+renderNotes();
+</script>
+</body>
+</html>

@@ -1,0 +1,3 @@
+# Local-only data staging. Do not commit raw or sanitized platform samples.
+*
+!.gitignore
