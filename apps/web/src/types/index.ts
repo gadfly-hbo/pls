@@ -264,3 +264,88 @@ export interface DecisionRecord {
   actions: ActionRecord[];
   feedback?: FeedbackRecord;
 }
+
+export interface DbMigrationStatus {
+  total: number;
+  applied: number;
+  pending: number;
+  failed: number;
+}
+
+export interface DbOverview {
+  workspaceId: string;
+  databaseStatus: string;
+  schemaVersion: string;
+  migrationStatus: DbMigrationStatus;
+  tableCount: number;
+  viewCount: number;
+  totalRows: number;
+  lastImportTime: string | null;
+  hasMockData: boolean;
+  hasSmokeData: boolean;
+  hasE2eData: boolean;
+  hasUserAuthorizedData: boolean;
+}
+
+export interface DbTableInfo {
+  name: string;
+  type: 'table' | 'view';
+  rowCount: number;
+  domain: string;
+  isSystem: boolean;
+  isClearable: boolean;
+  isDeletable: boolean;
+}
+
+export interface DbSchemaInfo {
+  sql: string;
+}
+
+export interface DbSampleInfo {
+  columns: string[];
+  rows: any[][];
+}
+
+export interface DbMigration {
+  version: string;
+  name: string;
+  appliedAt: string;
+  status: string;
+  checksum: string;
+}
+
+export interface DbDataVersion {
+  dataVersion: string;
+  source: string;
+  sourceType: string;
+  rowCount: number;
+  createdAt: string;
+}
+
+export interface DbImportJob {
+  jobId: string;
+  sourceType: string;
+  status: string;
+  rowCount: number;
+  successCount: number;
+  errorCount: number;
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export interface DbAuditEvent {
+  eventId: string;
+  operation: string;
+  target: string;
+  status: string;
+  error: string | null;
+  createdAt: string;
+  snapshot?: any;
+}
+
+export interface DbOperationDryRunResult {
+  affectedTables: string[];
+  affectedRows: number;
+  hasUserAuthorized: boolean;
+  hasAuditHistory: boolean;
+}

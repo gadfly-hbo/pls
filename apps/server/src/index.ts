@@ -17,6 +17,7 @@ import dataManagement from "./routes/data-management.js";
 import channelEntities from "./routes/channel-entities.js";
 import newProducts from "./routes/new-products.js";
 import flywheel from "./routes/flywheel.js";
+import adminDatabase from "./routes/admin-database.js";
 
 const app = new Hono();
 
@@ -42,6 +43,7 @@ api.route("/bi/douyin", biDouyin);
 api.route("/data-management", dataManagement);
 api.route("/new-products", newProducts);
 api.route("/operations", flywheel);
+api.route("/admin/database", adminDatabase);
 
 app.route("/api/v0", api);
 

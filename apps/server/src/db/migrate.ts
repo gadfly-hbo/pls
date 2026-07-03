@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { openDb } from "./connection.js";
+import { runMigrations } from "./migration-runner.js";
 import {
   SCHEMA_DDL,
   DOUYIN_BI_DDL,
@@ -18,6 +19,20 @@ mkdirSync(wsDir, { recursive: true });
 
 const db = openDb("ws_demo");
 
+// Phase 1: Run versioned migrations
+console.log("Running versioned migrations...");
+const migrationsDir = resolve(import.meta.dirname, "migrations");
+const result = runMigrations(db, migrationsDir);
+if (result.failed > 0) {
+  console.error(`Migration completed with ${result.failed} failure(s), aborting`);
+  db.close();
+  process.exit(1);
+}
+
+// Phase 2: Idempotent DDL re-execution (backward-compatible layer)
+// Ensures all tables/views exist even if migration files haven't caught up yet.
+console.log("Applying idempotent DDL...");
+
 // P1-B2 migration: rebuild idempotency_key so the PK includes method+path.
 const idemRow = db
   .prepare(
@@ -32,8 +47,6 @@ if (idemRow?.sql && !/PRIMARY KEY \(workspace_id, method, path, key\)/.test(idem
 db.exec(SCHEMA_DDL);
 
 // P1-E3: ensure match_result_latest view picks up new columns.
-// CREATE VIEW IF NOT EXISTS is a no-op when the view already exists,
-// so drop first to force recreation with the updated column list.
 db.exec("DROP VIEW IF EXISTS match_result_latest");
 db.exec(SCHEMA_DDL);
 
@@ -48,13 +61,11 @@ for (const sql of E3_COLS) {
   try {
     db.exec(sql);
   } catch {
-    // Column already exists — SQLite doesn't support IF NOT EXISTS on ADD COLUMN
+    // Column already exists
   }
 }
 
 // A-P1-F2: Douyin BI tables + latest views.
-// Views are dropped first so column additions to the underlying tables get
-// picked up on subsequent migrations (same pattern as match_result_latest).
 const DOUYIN_VIEWS = [
   "douyin_account_latest",
   "douyin_account_benchmark_tag_latest",
@@ -67,8 +78,6 @@ const DOUYIN_VIEWS = [
   "channel_entity_latest",
 ];
 for (const v of DOUYIN_VIEWS) db.exec(`DROP VIEW IF EXISTS ${v}`);
-// Re-exec SCHEMA_DDL to recreate douyin_account_latest (defined there),
-// then apply the split DOUYIN_BI_DDL parts which define the remaining views.
 db.exec(SCHEMA_DDL);
 db.exec(DOUYIN_BI_DDL);
 db.exec(DOUYIN_BI_DDL_PART2);

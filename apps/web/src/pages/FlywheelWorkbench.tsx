@@ -3,6 +3,38 @@ import { api } from '../services/api';
 import type { DecisionRecord, ActionRecord } from '../types';
 import { translateChannel } from '../utils/translate';
 
+/** Map decision status to StatusBadge CSS class */
+function getStatusBadgeClass(status: string): string {
+  switch (status) {
+    case 'pending_execution': return 'status-badge--neutral';
+    case 'in_progress': return 'status-badge--warning';
+    case 'pending_review': return 'status-badge--warning';
+    case 'verified': return 'status-badge--success';
+    case 'needs_adjustment': return 'status-badge--danger';
+    default: return 'status-badge--neutral';
+  }
+}
+
+function getStatusLabel(status: string): string {
+  switch (status) {
+    case 'pending_execution': return '待执行';
+    case 'in_progress': return '执行中';
+    case 'pending_review': return '待复盘';
+    case 'verified': return '已验证';
+    case 'needs_adjustment': return '需调整';
+    default: return '未知';
+  }
+}
+
+function getActionTypeLabel(type: string): string {
+  switch (type) {
+    case 'launch': return '铺货/投流';
+    case 'adjust_budget': return '调整预算';
+    case 'optimize_content': return '优化内容';
+    default: return type;
+  }
+}
+
 export default function FlywheelWorkbench({ initialDecisionId }: { initialDecisionId?: string }) {
   const [decisions, setDecisions] = useState<DecisionRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,119 +117,147 @@ export default function FlywheelWorkbench({ initialDecisionId }: { initialDecisi
     }
   };
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'pending_execution': return { label: '待执行', color: 'var(--muted-foreground)' };
-      case 'in_progress': return { label: '执行中', color: 'var(--primary)' };
-      case 'pending_review': return { label: '待复盘', color: 'var(--warning)' };
-      case 'verified': return { label: '已验证', color: 'var(--success)' };
-      case 'needs_adjustment': return { label: '需调整', color: 'var(--destructive)' };
-      default: return { label: '未知', color: 'var(--foreground)' };
-    }
-  };
-
   if (loading && decisions.length === 0) {
-    return <div style={{ padding: 60, textAlign: 'center', color: 'var(--muted-foreground)' }}>加载飞轮数据中...</div>;
+    return (
+      <div className="empty-state" style={{ minHeight: 300 }}>
+        <div className="empty-state__title">加载飞轮数据中...</div>
+      </div>
+    );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 120px)' }}>
-      <div className="card" style={{ padding: '16px 24px', marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 20 }}>经营飞轮与策略闭环</h2>
-        <div style={{ color: 'var(--muted-foreground)', marginTop: 8, fontSize: 14 }}>从匹配建议到行动执行，追踪反馈并闭环优化</div>
+    <div className="flywheel-workbench">
+
+      {/* Top Bar */}
+      <div className="page-header">
+        <div className="page-header__info">
+          <h2 className="page-header__title">经营飞轮与策略闭环</h2>
+          <div style={{ color: 'var(--muted-foreground)', fontSize: 13 }}>
+            从匹配建议到行动执行，追踪反馈并闭环优化
+          </div>
+        </div>
       </div>
 
-      <div className="dashboard-grid" style={{ flex: 1, minHeight: 0, gap: 20 }}>
-        {/* Left Column: Decision List */}
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 16, margin: 0, minHeight: 0 }}>
-          <h3 style={{ margin: 0, fontSize: 16 }}>决策追踪列表</h3>
-          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 4 }}>
+      <div className="flywheel-workbench__body">
+
+        {/* Left: Decision List */}
+        <div className="workbench-sidebar" style={{ height: 'auto', maxHeight: 'calc(100vh - 200px)' }}>
+          <h3 className="workbench-sidebar__title">决策追踪列表</h3>
+          <div className="workbench-sidebar__list">
             {decisions.length === 0 ? (
-              <div style={{ textAlign: 'center', color: 'var(--muted-foreground)', padding: 20 }}>暂无决策记录</div>
+              <div className="empty-state">
+                <div className="empty-state__icon">📋</div>
+                <div className="empty-state__title">暂无决策记录</div>
+              </div>
             ) : (
-              decisions.map(d => (
-                <div 
-                  key={d.decisionId}
-                  className="flywheel-decision-item"
-                  onClick={() => setSelectedDecisionId(d.decisionId)}
-                  style={{
-                    padding: 12,
-                    borderRadius: 8,
-                    border: '1px solid',
-                    borderColor: selectedDecisionId === d.decisionId ? 'var(--primary)' : 'var(--border)',
-                    background: selectedDecisionId === d.decisionId ? 'var(--accent)' : 'var(--background)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <div className="flex-between" style={{ marginBottom: 8 }}>
-                    <span style={{ fontWeight: 500, fontSize: 14 }}>{d.skuId}</span>
-                    <span style={{ 
-                      fontSize: 12, 
-                      padding: '2px 8px', 
-                      borderRadius: 12,
-                      background: 'var(--background)',
-                      color: getStatusLabel(d.status).color,
-                      border: `1px solid ${getStatusLabel(d.status).color}`
-                    }}>
-                      {getStatusLabel(d.status).label}
-                    </span>
+              <div className="workbench-sidebar__group-items">
+                {decisions.map(d => (
+                  <div
+                    key={d.decisionId}
+                    className={`entity-list-item flywheel-decision-item${selectedDecisionId === d.decisionId ? ' entity-list-item--selected' : ''}`}
+                    onClick={() => setSelectedDecisionId(d.decisionId)}
+                  >
+                    <div className="flex-between" style={{ marginBottom: 4 }}>
+                      <span className="entity-list-item__name">{d.skuId}</span>
+                      <span className={`status-badge ${getStatusBadgeClass(d.status)}`}>
+                        {getStatusLabel(d.status)}
+                      </span>
+                    </div>
+                    <div className="entity-list-item__id">实体: {translateChannel(d.entityId)}</div>
+                    <div className="entity-list-item__footer">
+                      <span>{new Date(d.updatedAt).toLocaleDateString()}</span>
+                      <span>{d.owner}</span>
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>实体: {translateChannel(d.entityId)}</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>创建于: {new Date(d.createdAt).toLocaleDateString()}</div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
         </div>
 
-        {/* Right Column: Flywheel Detail */}
-        <div className="card" style={{ margin: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
+        {/* Right: Decision Detail */}
+        <div className="flywheel-workbench__detail">
           {!selectedDecision ? (
-            <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--muted-foreground)' }}>
-              请在左侧选择一条决策记录
+            <div className="empty-state" style={{ minHeight: 300 }}>
+              <div className="empty-state__icon">👈</div>
+              <div className="empty-state__title">请在左侧选择一条决策记录</div>
             </div>
           ) : (
             <>
-              {/* Header */}
-              <div style={{ paddingBottom: 16, borderBottom: '1px solid var(--border)' }}>
-                <div className="flex-between" style={{ marginBottom: 12, gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                  <h3 style={{ margin: 0, fontSize: 18, flex: '1 1 220px', minWidth: 0 }}>决策执行与追踪看板</h3>
+              {/* Decision Summary */}
+              <div className="panel">
+                <div className="flex-between" style={{ flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+                  <h3 className="panel__title" style={{ margin: 0 }}>决策执行与追踪看板</h3>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button className="btn" onClick={() => updateStatus('in_progress')} disabled={selectedDecision.status !== 'pending_execution'}>标记执行中</button>
-                    <button className="btn" onClick={() => updateStatus('pending_review')} disabled={selectedDecision.status !== 'in_progress'}>提交流盘</button>
-                    <button className="btn" onClick={() => updateStatus('needs_adjustment')} disabled={selectedDecision.status === 'needs_adjustment'}>需调整</button>
+                    <button
+                      className="btn"
+                      onClick={() => updateStatus('in_progress')}
+                      disabled={selectedDecision.status !== 'pending_execution'}
+                    >标记执行中</button>
+                    <button
+                      className="btn"
+                      onClick={() => updateStatus('pending_review')}
+                      disabled={selectedDecision.status !== 'in_progress'}
+                    >提交流盘</button>
+                    <button
+                      className="btn"
+                      onClick={() => updateStatus('needs_adjustment')}
+                      disabled={selectedDecision.status === 'needs_adjustment'}
+                    >需调整</button>
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, fontSize: 14, color: 'var(--muted-foreground)' }}>
-                  <div>关联商品 (SKU)：<strong style={{color:'var(--foreground)'}}>{selectedDecision.skuId}</strong></div>
-                  <div>目标实体：<strong style={{color:'var(--foreground)'}}>{translateChannel(selectedDecision.entityId)}</strong></div>
-                  <div>负责人：{selectedDecision.owner}</div>
-                  <div>更新时间：{new Date(selectedDecision.updatedAt).toLocaleString()}</div>
+
+                <div className="metric-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+                  <div className="flywheel-meta-item">
+                    <div className="flywheel-meta-item__label">关联商品 (SKU)</div>
+                    <div className="flywheel-meta-item__value">{selectedDecision.skuId}</div>
+                  </div>
+                  <div className="flywheel-meta-item">
+                    <div className="flywheel-meta-item__label">目标实体</div>
+                    <div className="flywheel-meta-item__value">{translateChannel(selectedDecision.entityId)}</div>
+                  </div>
+                  <div className="flywheel-meta-item">
+                    <div className="flywheel-meta-item__label">负责人</div>
+                    <div className="flywheel-meta-item__value">{selectedDecision.owner}</div>
+                  </div>
+                  <div className="flywheel-meta-item">
+                    <div className="flywheel-meta-item__label">当前状态</div>
+                    <span className={`status-badge ${getStatusBadgeClass(selectedDecision.status)}`}>
+                      {getStatusLabel(selectedDecision.status)}
+                    </span>
+                  </div>
+                  <div className="flywheel-meta-item">
+                    <div className="flywheel-meta-item__label">更新时间</div>
+                    <div className="flywheel-meta-item__value">{new Date(selectedDecision.updatedAt).toLocaleString()}</div>
+                  </div>
                 </div>
               </div>
 
-              {/* Actions */}
-              <div>
-                <h4 style={{ margin: '0 0 16px 0', fontSize: 16 }}>行动记录</h4>
+              {/* Action Records */}
+              <div className="panel">
+                <h4 className="panel__title">行动记录</h4>
                 {selectedDecision.actions.length === 0 ? (
-                  <div style={{ color: 'var(--muted-foreground)', fontSize: 14, marginBottom: 16 }}>暂无行动记录，添加您的实际行动。红线：本系统不执行自动化动作。</div>
+                  <div className="empty-state" style={{ marginBottom: 16 }}>
+                    <div className="empty-state__icon">📝</div>
+                    <div className="empty-state__title">暂无行动记录</div>
+                    <div>添加您的实际行动。红线：本系统不执行自动化动作。</div>
+                  </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                     {selectedDecision.actions.map(act => (
-                      <div key={act.actionId} style={{ background: 'var(--secondary)', padding: 12, borderRadius: 8 }}>
+                      <div key={act.actionId} className="flywheel-action-card">
                         <div className="flex-between" style={{ marginBottom: 4 }}>
-                          <span style={{ fontWeight: 500 }}>{act.type === 'launch' ? '铺货/投流' : act.type === 'adjust_budget' ? '调整预算' : '优化内容'}</span>
-                          <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>状态: {act.status}</span>
+                          <span style={{ fontWeight: 500, fontSize: 13 }}>{getActionTypeLabel(act.type)}</span>
+                          <span className="status-badge status-badge--neutral">{act.status}</span>
                         </div>
-                        <div style={{ fontSize: 14, color: 'var(--muted-foreground)' }}>{act.description}</div>
+                        <div style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>{act.description}</div>
                       </div>
                     ))}
                   </div>
                 )}
                 
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <select className="form-control" style={{ flex: '0 1 160px' }} value={newActionType} onChange={e => setNewActionType(e.target.value)}>
+                  <select className="form-control" style={{ flex: '0 1 150px', fontSize: 13 }} value={newActionType} onChange={e => setNewActionType(e.target.value)}>
                     <option value="launch">铺货/投流</option>
                     <option value="adjust_budget">调整预算</option>
                     <option value="optimize_content">优化内容</option>
@@ -205,7 +265,7 @@ export default function FlywheelWorkbench({ initialDecisionId }: { initialDecisi
                   <input 
                     type="text" 
                     className="form-control" 
-                    style={{ flex: '1 1 220px', minWidth: 0 }} 
+                    style={{ flex: '1 1 220px', minWidth: 0, fontSize: 13 }} 
                     placeholder="描述具体的行动策略，例如：在核心时段追加预算" 
                     value={newActionDesc}
                     onChange={e => setNewActionDesc(e.target.value)}
@@ -215,43 +275,54 @@ export default function FlywheelWorkbench({ initialDecisionId }: { initialDecisi
               </div>
 
               {/* Feedback & Review */}
-              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 24 }}>
-                <h4 style={{ margin: '0 0 16px 0', fontSize: 16 }}>业务反馈与复盘</h4>
+              <div className="panel">
+                <h4 className="panel__title">业务反馈与复盘</h4>
                 {selectedDecision.feedback ? (
-                  <div style={{ background: 'var(--success-bg)', padding: 16, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--success) 30%, transparent)' }}>
+                  <div className="flywheel-feedback-summary">
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
                       <div>
-                        <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginBottom: 4 }}>效果判定</div>
-                        <strong style={{ color: selectedDecision.feedback.effectJudgment === 'positive' ? 'var(--success)' : selectedDecision.feedback.effectJudgment === 'negative' ? 'var(--destructive)' : 'var(--foreground)' }}>
-                          {selectedDecision.feedback.effectJudgment === 'positive' ? '符合预期 / 效果好' : selectedDecision.feedback.effectJudgment === 'negative' ? '不及预期 / 需优化' : '效果一般'}
-                        </strong>
+                        <div className="flywheel-meta-item__label">效果判定</div>
+                        <span className={`status-badge ${
+                          selectedDecision.feedback.effectJudgment === 'positive' ? 'status-badge--success' :
+                          selectedDecision.feedback.effectJudgment === 'negative' ? 'status-badge--danger' :
+                          'status-badge--neutral'
+                        }`} style={{ fontSize: 13 }}>
+                          {selectedDecision.feedback.effectJudgment === 'positive' ? '符合预期 / 效果好' :
+                           selectedDecision.feedback.effectJudgment === 'negative' ? '不及预期 / 需优化' :
+                           '效果一般'}
+                        </span>
                       </div>
                       <div>
-                        <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginBottom: 4 }}>复盘时间</div>
-                        <div style={{ fontSize: 14 }}>{new Date(selectedDecision.feedback.submittedAt).toLocaleString()}</div>
+                        <div className="flywheel-meta-item__label">复盘时间</div>
+                        <div style={{ fontSize: 13 }}>{new Date(selectedDecision.feedback.submittedAt).toLocaleString()}</div>
                       </div>
                     </div>
-                    <div style={{ fontSize: 14, marginBottom: 12 }}>
-                      <strong style={{ display: 'block', marginBottom: 4 }}>数据摘要：</strong>
-                      <div style={{ color: 'var(--muted-foreground)' }}>{selectedDecision.feedback.summary}</div>
+                    <div className="flywheel-feedback-field">
+                      <strong>数据摘要：</strong>
+                      <span>{selectedDecision.feedback.summary}</span>
                     </div>
-                    <div style={{ fontSize: 14, marginBottom: 12 }}>
-                      <strong style={{ display: 'block', marginBottom: 4 }}>人群偏差说明：</strong>
-                      <div style={{ color: 'var(--muted-foreground)' }}>{selectedDecision.feedback.audienceDeviation || '无显著偏差'}</div>
+                    <div className="flywheel-feedback-field">
+                      <strong>人群偏差说明：</strong>
+                      <span>{selectedDecision.feedback.audienceDeviation || '无显著偏差'}</span>
                     </div>
                     {selectedDecision.feedback.adjustments.length > 0 && (
-                      <div style={{ fontSize: 14 }}>
-                        <strong style={{ display: 'block', marginBottom: 4 }}>后续调整事项：</strong>
-                        <ul style={{ margin: 0, paddingLeft: 20, color: 'var(--muted-foreground)' }}>
+                      <div className="flywheel-feedback-field">
+                        <strong>后续调整事项：</strong>
+                        <ul className="risk-list" style={{ marginTop: 4 }}>
                           {selectedDecision.feedback.adjustments.map((adj, i) => <li key={i}>{adj}</li>)}
                         </ul>
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, background: 'var(--background)', padding: 16, borderRadius: 8, border: '1px solid var(--border)' }}>
+                  <div className="flywheel-feedback-form">
                     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                      <select className="form-control" style={{ flex: '0 1 180px' }} value={feedbackEffect} onChange={e => setFeedbackEffect(e.target.value as any)}>
+                      <select
+                        className="form-control"
+                        style={{ flex: '0 1 180px', fontSize: 13 }}
+                        value={feedbackEffect}
+                        onChange={e => setFeedbackEffect(e.target.value as 'positive' | 'neutral' | 'negative' | 'unknown')}
+                      >
                         <option value="unknown">选择效果判断...</option>
                         <option value="positive">符合预期 / 效果好</option>
                         <option value="neutral">效果一般</option>
@@ -260,15 +331,17 @@ export default function FlywheelWorkbench({ initialDecisionId }: { initialDecisi
                     </div>
                     <textarea 
                       className="form-control" 
-                      placeholder="复盘数据摘要（如：CTR、转化率、ROI 等指标变动）" 
+                      placeholder="复盘数据摘要" 
                       rows={2}
+                      style={{ fontSize: 13 }}
                       value={feedbackSummary}
                       onChange={e => setFeedbackSummary(e.target.value)}
                     />
                     <textarea 
                       className="form-control" 
-                      placeholder="人群特征是否有明显偏移？（如：实际触达人群偏年轻化）" 
+                      placeholder="人群特征是否有明显偏移？" 
                       rows={2}
+                      style={{ fontSize: 13 }}
                       value={feedbackDeviation}
                       onChange={e => setFeedbackDeviation(e.target.value)}
                     />
@@ -276,10 +349,11 @@ export default function FlywheelWorkbench({ initialDecisionId }: { initialDecisi
                       type="text" 
                       className="form-control" 
                       placeholder="待调整事项（如：更换素材主图，或者削减预算）" 
+                      style={{ fontSize: 13 }}
                       value={feedbackAdjustment}
                       onChange={e => setFeedbackAdjustment(e.target.value)}
                     />
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                       <button className="btn btn-primary" onClick={submitFeedback}>提交复盘记录</button>
                     </div>
                   </div>

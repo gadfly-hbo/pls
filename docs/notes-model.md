@@ -2,10 +2,12 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-03（M-P2-8 红线修复后收尾）
+最近更新：2026-07-03（Session 收尾复验，无实现改动）
 
 进度：
 
+- 本次 session 仅执行 model 域开场 SOP 与收尾复验，未改动 model 实现、contract、schema、API 或任务卡。
+- 收尾复验：`npm run typecheck` 通过；`npm run contract-test` 首次受沙箱限制无法创建 `tsx` IPC pipe，提权复跑通过，输出 `ok: true` 且 `failures: []`。
 - 已完成 M-P1-A3 cutoff 时间切分回测实现：`npm run backtest:cutoff` / `npm run backtest:panel` 默认读取 `data/p1/multi-timewindow-demo/wide_table.jsonl`，训练早于 cutoff 的窗口并验证 cutoff 窗口。
 - cutoff smoke 指标：`topKTagHit@5 = 0.8`，`segmentTop1Hit = 0.667`，`driverPrecision = 0.556`，`matchNDCG@3 = 0.754`；报告见 `docs/model-p1-a3-cutoff-backtest.md` 与 `docs/model-p1-d1-backtest-panel.md`。
 - 已完成 M-P1-D1 指标面板：输出样本量、时间窗口、训练/验证切分、核心指标、`qualityFlags`，并按 `categoryLv2`、`channelType`、`sampleSizeBucket` 分层。

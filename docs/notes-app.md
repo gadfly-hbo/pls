@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-03（Session 收尾：A-P1-F2 / A-P2-1 / A-P2-3 / A-P2-9 / A-P2-10 全部完稿）
+最近更新：2026-07-03（Session 收尾：A-P3-DB-6 三轮返工完成，app 域 P3-DB 全套交付待总控复核）
 
 进度：
 
@@ -10,23 +10,28 @@
 - A-P1-B1/B2/B3/B4 / A-P1-E3 / A-P1-F2 已完稿并通过总控复核。
 - A-P2-1 已通过总控复核（data_source 注册表 + adapter 模式 + /data-management/*）。
 - A-P2-3 已通过总控复核（channel_entity 投影表 + /channels/entities）。
-- **A-P2-9 本轮完稿**：新品预测 API + 匹配衔接。`/api/v0/new-products/predictions` 提交预测（sync）、列表/详情、POST /:id/match 桥接到匹配链路。对接 M-P2-8 `predictNewProductProfile()` baseline。
-- **A-P2-10 本轮完稿**：经营飞轮最小闭环 API。`/api/v0/operations/decisions` 决策→行动→反馈→复盘全流程。P2 Phase 1 只做记录与复盘，不做自动执行。
+- A-P2-9 已完稿并通过总控复核（新品预测 API + 匹配衔接）。
+- A-P2-10 已完稿并通过总控复核（经营飞轮最小闭环 API）。
+- **A-P3-DB-2 / 3 / 4 已完稿 + 返工**（admin token 前置于 idempotency replay）。
+- **A-P3-DB-6 本轮完稿 + 三轮返工**：受控危险操作 API 与 workspace rebuild 流程。
 - 应用侧数据准入按项目级放行口径；taxonomy gate 未变。
 
-关键决策（本轮）：
+关键决策（A-P3-DB-6 三轮返工）：
 
-- **A-P2-9**：新品预测结果存 `new_product_prediction` 表（与 P0/P1 `prediction` 表隔离）；匹配桥接通过 `toProductChannelFitProfile()` + `matchFromPredictionAndChannels()`；match 链路当前只查 `channel_profile`（P0 mock），V-P2-4 接入后需改为 `channel_entity`。
-- **A-P2-10**：decision_record 关联 match_result（通过 match_id）；action_type / feedback_type 枚举在 contract 中定义但不做 DB 层 CHECK 约束（P2 初期灵活扩展）；review_status 反写 decision.status（verified / needs_adjustment）。
-- **A-P2-3**：ChannelEntity 是 P2 渠道人群 first-class 锚；channel_entity 为投影表非运行时合并；channelEntityId 格式 `<source>:<entityType>:<channelId>`。
-- **A-P2-1**：adapter 模式投影 douyin_* / channel_profile / 未来 source；不复制 import 元数据，batch + audit_event 仍是导入真源。
+- **Round 1 — 4 个核心修复**：
+  1. delete-version 按 `data_version` 遍历 8 张 `douyin_*` 表 + batch 表 LIKE 模式匹配，不再按 batch_id。
+  2. drop 操作先 `isTable/isView` 判断再发 `DROP TABLE`/`DROP VIEW`（避免 SQLite 报错）。
+  3. rebuild dry-run 把 PROTECTED_TABLES 行数也纳入影响范围，warnings 显式提示"will also destroy N rows in protected system tables"。
+  4. executeTruncate 的 `sqlite_sequence` DELETE 加 try-catch（autoincrement 表才有此表）。
+- **Round 2 — view 类型检测**：executeDrop 先 `isTable()` 再 `isView()` 再 fallback IF EXISTS。
+- **Round 3 — 路由层语义修正**：DELETE /versions/:dataVersion 改用 `affectedRows === 0` 判 not-found，不再用 `warnings.length > 0`。warnings 仅描述数据特征（user_authorized / protected），不影响存在性判断。
+- **fresh workspace 容错**：dangerous-ops 的 batch 表查询/删除加 `isTable(db, "batch")` 守卫 + try-catch。
 
 下一步：
 
-- 等 X 总控复核 A-P2-9、A-P2-10 并 mark done。
-- V-P2-4 / V-P2-6 / V-P2-11 可消费 `/channels/entities`、`/new-products/predictions`、`/operations/decisions` API。
-- M-P2-8 baseline 正式模型替换后，A-P2-9 的 `new_product_prediction` 表无需改 schema（只换 `modelVersion` / `source`）。
-- 经营飞轮后续：事件驱动 action 执行、自动 feedback 采集、策略推荐生成（需 X 拍板）。
+- 等 X 总控复核 A-P3-DB-2/3/4/6 并 mark done。
+- X-P3-DB-8（清库重建总体验收）可开工，依赖全部 P3-DB 任务。
+- V-P3-DB-5（前端只读工作台）和 V-P3-DB-7（危险操作前端）依赖 A 域完成，可由 V 域开工。
 
 阻塞：
 
@@ -38,17 +43,22 @@
 - 经营飞轮 action/feedback 只存不触发；webhook / 事件驱动待后续 P2 任务。
 - `channel_entity` 投影表更新需手动重跑 `sync:channel-entities`；自动触发待 X 拍板。
 - `/channels`（P0 mock）和 `/channels/entities`（P2 投影）并存；迁移策略需 X 冻结。
+- smoke 测试产生的临时 workspace（`ws_drop_test_*` / `ws_review_delete_version_*` / `ws_smoke_*`）目录未被清理，待手工或后续脚本清理。
 
 验证：
 
 - `apps/server npm run typecheck` 通过（0 错误）。
-- `apps/server npm run migrate` 通过；全部新表（douyin_*、data_source、channel_entity、new_product_prediction、decision_record、action_record、feedback_record、strategy_review）创建。
-- `apps/server npm run smoke` 通过：24/24（P0/P1 主链路）。
+- `apps/server npm run migrate` 通过；V001_create_admin_tables 已应用。
+- `apps/server npm run schema:check` 通过（Valid: true, 1 migration applied）。
+- `apps/server npm run smoke` 通过：24/24。
 - `apps/server npm run smoke:douyin-bi` 通过：15/15。
 - `apps/server npm run smoke:data-management` 通过：22/22。
 - `apps/server npm run smoke:channel-entities` 通过：15/15。
-- `apps/server npm run smoke:p2-api` 通过：20/20（A-P2-9 + A-P2-10 全流程）。
-- **总计 96 项冒烟测试全部通过，无回归。**
+- `apps/server npm run smoke:p2-api` 通过：20/20。
+- `apps/server npm run smoke:admin-database` 通过：35/35。
+- `apps/server npm run smoke:admin-import` 通过：31/31。
+- `apps/server npm run smoke:admin-dangerous` 通过：37/37（含三轮返工后的真实 drop view / 真实 delete-version 完整闭环 / protected tables warning）。
+- **总计 199 项冒烟测试全部通过，无回归。**
 
 ---
 
@@ -61,6 +71,7 @@
 - 抖音 BI 数据（D-P1-F1）作为独立数据资产存 `douyin_*` 表，不合并进主 `channel_profile / sku`；前端只能通过 `/api/v0/bi/douyin/*` 读取。
 - 数据管理底座（A-P2-1）是 source-agnostic 的；新数据源通过注册 adapter 接入，不改 `/data-management/*` 路由层。
 - 渠道人群实体（A-P2-3）以 `channel_entity` 投影表为 read-optimized 层；V-P2-4 应优先消费 `/channels/entities` 而非 `/channels`（P0 mock）。
+- Schema 变更通过 `apps/server/src/db/migrations/` 版本化迁移追踪（A-P3-DB-2）；新表 DDL 同时写入 migration 文件和 schema.ts 常量。`npm run schema:check` 可检测代码定义与库实际结构的一致性。
 
 ## A-P0-3 沉淀
 
@@ -87,3 +98,9 @@
 - **SQLite INSERT 列数 vs VALUES `?` 占位符计数**：手动计数极易出错（尤其含 `datetime('now')` 硬编码时）。变通方案：用脚本验证 `?` 数量 = 列数 - 硬编码列数；或用对象化 INSERT 辅助函数避免手动对齐。sync-channel-entities.mjs 和 channel_entity DDL 反复踩此坑。
 - **Hono 路由注册顺序决定匹配优先级**：`api.route("/channels/entities", ...)` 必须在 `api.route("/channels", ...)` 之前注册，否则 `/:channelId` 会错误匹配 `entities` 路径。教训：通用路由（含 `:param`）始终放在具体路由之后注册。
 - **data_source INSERT OR IGNORE 不更新已有行**：种子脚本用 `INSERT OR IGNORE` 注册 source 时，已存在的 stub 行不会被更新为 active。改为 `INSERT OR REPLACE` 后正确覆盖。注意：REPLACE 会重置 created_at；如需保留原时间戳，应改用 `UPDATE ... SET`。
+- **路由层错误用 warnings 判 not-found**：A-P3-DB-6 第二轮返工暴露。`impactDeleteVersion` 对真实业务版本返回 `warnings: ["contains user_authorized douyin_* data"]`，路由曾用 `warnings.length > 0` 直接 404，导致 dry-run 找到 692 行但正式删除返回 404。教训：impact 报告中 warnings 是数据特征描述，存在性必须用 `affectedRows === 0` 或独立的 `notFound` 标记判断。
+- **DROP TABLE 对 view 报 SQLite 错误**：`DROP TABLE IF EXISTS <view_name>` 会让 SQLite 返回"use DROP VIEW"错误。修复：先 `isTable()` 判断类型再发对应 DDL。
+- **fresh workspace 缺表导致 500**：新 workspace 首次访问时，业务表（douyin_* / batch / idempotency_key）都还不存在。`SELECT COUNT(*) FROM batch` 会让 `db.prepare().get()` 抛 ERR_SQLITE_ERROR。修复：所有新 workspace 上下文都用 `isTable()` 守卫 + try-catch；workspace middleware 自动 mkdir + 调一次 sample 触发文件创建。
+- **rebuild dry-run 漏算 PROTECTED 表行数**：`impactRebuild` 累加行数时跳过 PROTECTED_TABLES，但 executeRebuild 会删除整个 db 文件（含保护表），影响范围失真。修复：累加所有表，在 warnings 显式列出"will also destroy N rows in protected system tables: ..."。
+- **migration 文件系统表 bootstrap**：迁移 runner 在 `schema_migration` 表不存在时需要 bootstrap 创建该表，再读已应用版本列表。V001 是特例 — 创建 schema_migration + db_admin_audit + data_import_job 三张表本身。
+- **write 工具超大文档 < 2000 字符/段限制**：本 session 多次触发。变通：先 Write < 200 行骨架，再 Edit 多次追加段落。

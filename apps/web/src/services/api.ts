@@ -1,4 +1,4 @@
-import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord } from '../types';
+import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord, DbOverview, DbTableInfo, DbSchemaInfo, DbSampleInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbOperationDryRunResult } from '../types';
 
 // Feature flag for local mock vs real backend
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
@@ -728,5 +728,296 @@ export const api = {
     if (idx === -1) throw new Error('Decision not found');
     db.decisions[idx] = { ...db.decisions[idx], ...updates, updatedAt: new Date().toISOString() };
     return { code: 'ok', data: db.decisions[idx] };
+  },
+
+  getDbOverview: async () => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<any>('/admin/database/overview');
+      const d = res.data;
+      return {
+        code: 'ok',
+        data: {
+          workspaceId: String(d.workspaceId || d.workspace || 'ws_demo'),
+          databaseStatus: String(d.databaseStatus || 'online'),
+          schemaVersion: String(d.schemaVersion || ''),
+          migrationStatus: typeof d.migrationStatus === 'object' && d.migrationStatus ? d.migrationStatus : { total: 0, applied: 0, pending: 0, failed: 0 },
+          tableCount: Number(d.tableCount || 0),
+          viewCount: Number(d.viewCount || 0),
+          totalRows: Number(d.totalRows || 0),
+          lastImportTime: d.lastImportTime ? String(d.lastImportTime) : null,
+          hasMockData: Boolean(d.hasMockData),
+          hasSmokeData: Boolean(d.hasSmokeData),
+          hasE2eData: Boolean(d.hasE2eData),
+          hasUserAuthorizedData: Boolean(d.hasUserAuthorizedData),
+        } as DbOverview
+      };
+    }
+    return {
+      code: 'ok',
+      data: {
+        workspaceId: 'ws_demo',
+        databaseStatus: 'online',
+        schemaVersion: '20260703_01_init',
+        migrationStatus: { total: 5, applied: 5, pending: 0, failed: 0 },
+        tableCount: 12,
+        viewCount: 2,
+        totalRows: 1420,
+        lastImportTime: new Date().toISOString(),
+        hasMockData: true,
+        hasSmokeData: true,
+        hasE2eData: false,
+        hasUserAuthorizedData: false,
+      } as DbOverview
+    };
+  },
+
+  getDbTables: async () => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<{ tables: any[] }>('/admin/database/tables');
+      return {
+        code: 'ok',
+        data: {
+          items: (res.data.tables || []).map(t => ({
+            name: String(t.name),
+            type: t.type === 'view' ? 'view' : 'table',
+            rowCount: Number(t.rowCount ?? t.row_count ?? 0),
+            domain: String(t.domain || ''),
+            isSystem: Boolean(t.isSystem ?? t.is_system),
+            isClearable: Boolean(t.truncatable ?? t.isClearable ?? t.is_clearable),
+            isDeletable: Boolean(t.droppable ?? t.isDeletable ?? t.is_deletable)
+          })) as DbTableInfo[]
+        }
+      };
+    }
+    return {
+      code: 'ok',
+      data: {
+        items: [
+          { name: 'sku', type: 'table', rowCount: 150, domain: 'D', isSystem: false, isClearable: true, isDeletable: true },
+          { name: 'channel_profile', type: 'table', rowCount: 80, domain: 'D', isSystem: false, isClearable: true, isDeletable: true },
+          { name: 'match_result', type: 'table', rowCount: 320, domain: 'A', isSystem: false, isClearable: true, isDeletable: true },
+          { name: 'schema_migration', type: 'table', rowCount: 5, domain: 'X', isSystem: true, isClearable: false, isDeletable: false },
+          { name: 'db_admin_audit', type: 'table', rowCount: 45, domain: 'X', isSystem: true, isClearable: false, isDeletable: false },
+        ] as DbTableInfo[]
+      }
+    };
+  },
+
+  getDbSchema: async (tableName: string) => {
+    if (!USE_MOCK) return fetchApi<DbSchemaInfo>(`/admin/database/tables/${tableName}/schema`);
+    return { code: 'ok', data: { sql: `CREATE TABLE ${tableName} (\n  id TEXT PRIMARY KEY,\n  created_at TEXT\n);` } as DbSchemaInfo };
+  },
+
+  getDbSample: async (tableName: string) => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<any>(`/admin/database/tables/${tableName}/sample?limit=50`);
+      const rawRows = res.data.rows || [];
+      let columns: string[] = [];
+      let rows: any[][] = [];
+      if (rawRows.length > 0) {
+        columns = Object.keys(rawRows[0]);
+        rows = rawRows.map((r: any) => columns.map(c => r[c]));
+      }
+      return {
+        code: 'ok',
+        data: {
+          columns,
+          rows
+        } as DbSampleInfo
+      };
+    }
+    return {
+      code: 'ok',
+      data: {
+        columns: ['id', 'created_at', 'status'],
+        rows: [
+          ['1', '2026-07-01T10:00:00Z', 'active'],
+          ['2', '2026-07-02T11:30:00Z', 'inactive']
+        ]
+      } as DbSampleInfo
+    };
+  },
+
+  getDbMigrations: async () => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<{ migrations: any[] }>('/admin/database/migrations');
+      return {
+        code: 'ok',
+        data: {
+          items: (res.data.migrations || []).map(m => ({
+            version: String(m.version),
+            name: String(m.name),
+            appliedAt: String(m.appliedAt ?? m.applied_at),
+            status: String(m.status),
+            checksum: String(m.checksum)
+          })) as DbMigration[]
+        }
+      };
+    }
+    return {
+      code: 'ok',
+      data: {
+        items: [
+          { version: '20260703_01_init', name: 'init_schema', appliedAt: '2026-07-03T10:00:00Z', status: 'applied', checksum: 'abcd123' },
+          { version: '20260703_02_seed', name: 'seed_demo_data', appliedAt: '2026-07-03T10:05:00Z', status: 'applied', checksum: 'efgh456' }
+        ] as DbMigration[]
+      }
+    };
+  },
+
+  getDbVersions: async () => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<{ versions: any[] }>('/admin/database/versions');
+      return {
+        code: 'ok',
+        data: {
+          items: (res.data.versions || []).map(v => ({
+            dataVersion: String(v.dataVersion ?? v.data_version),
+            source: String(v.source),
+            sourceType: String(v.sourceType ?? v.source_type),
+            rowCount: Number(v.rowCount ?? v.row_count ?? 0),
+            createdAt: String(v.createdAt ?? v.created_at)
+          })) as DbDataVersion[]
+        }
+      };
+    }
+    return {
+      code: 'ok',
+      data: {
+        items: [
+          { dataVersion: 'v1.0.0', source: 'demo_data.csv', sourceType: 'system_init', rowCount: 1500, createdAt: '2026-07-03T10:10:00Z' }
+        ] as DbDataVersion[]
+      }
+    };
+  },
+
+  getDbImportJobs: async () => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<{ jobs: any[] }>('/admin/database/import-jobs');
+      return {
+        code: 'ok',
+        data: {
+          items: (res.data.jobs || []).map(j => ({
+            jobId: String(j.jobId ?? j.job_id),
+            sourceType: String(j.sourceType ?? j.source_type),
+            status: String(j.status),
+            rowCount: Number(j.rowCount ?? j.row_count ?? 0),
+            successCount: Number(j.successCount ?? j.success_count ?? 0),
+            errorCount: Number(j.errorCount ?? j.error_count ?? 0),
+            startedAt: String(j.startedAt ?? j.started_at),
+            completedAt: j.completedAt || j.completed_at ? String(j.completedAt ?? j.completed_at) : null
+          })) as DbImportJob[]
+        }
+      };
+    }
+    return {
+      code: 'ok',
+      data: {
+        items: [
+          { jobId: 'job_123', sourceType: 'demo_csv', status: 'completed', rowCount: 1500, successCount: 1500, errorCount: 0, startedAt: '2026-07-03T10:05:00Z', completedAt: '2026-07-03T10:06:00Z' }
+        ] as DbImportJob[]
+      }
+    };
+  },
+
+  getDbAuditEvents: async () => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<{ events: any[] }>('/admin/database/audit-events');
+      return {
+        code: 'ok',
+        data: {
+          items: (res.data.events || []).map(e => ({
+            eventId: String(e.eventId ?? e.audit_id),
+            operation: String(e.operation),
+            target: String(e.target ?? e.target_name),
+            status: String(e.status),
+            error: e.error ? String(e.error) : null,
+            createdAt: String(e.createdAt ?? e.created_at),
+            snapshot: e.snapshot
+          })) as DbAuditEvent[]
+        }
+      };
+    }
+    return {
+      code: 'ok',
+      data: {
+        items: [
+          { eventId: 'evt_1', operation: 'init_workspace', target: 'ws_demo', status: 'success', error: null, createdAt: '2026-07-03T10:00:00Z', snapshot: { schemaVersion: '20260703_01_init' } }
+        ] as DbAuditEvent[]
+      }
+    };
+  },
+
+  dryRunDbOperation: async (operation: string, target: string) => {
+    if (!USE_MOCK) {
+      const { path, method } = getDbOpRoute(operation, target);
+      const res = await fetchApi<any>(path, {
+        method,
+        headers: {
+          'X-PLS-Admin-Token': 'pls-admin-token',
+          'Idempotency-Key': `dry_run_${operation}_${target}_${Date.now()}`
+        },
+        body: JSON.stringify({ dryRun: true })
+      });
+      const impact = res.data?.impact || {};
+      const warnings: string[] = impact.warnings || [];
+      const hasAuditHistory = warnings.some(w => w.includes('protected system tables') || w.includes('audit/task') || w.includes('audit'));
+      
+      return {
+        code: 'ok',
+        data: {
+          affectedTables: impact.affectedTables || [target],
+          affectedRows: impact.affectedRows || 0,
+          hasUserAuthorized: !!impact.isUserAuthorized,
+          hasAuditHistory: hasAuditHistory
+        } as DbOperationDryRunResult
+      };
+    }
+    return {
+      code: 'ok',
+      data: {
+        affectedTables: target === 'ws_demo' ? ['sku', 'match_result'] : [target],
+        affectedRows: target === 'ws_demo' ? 1420 : 150,
+        hasUserAuthorized: true,
+        hasAuditHistory: true
+      } as DbOperationDryRunResult
+    };
+  },
+
+  executeDbOperation: async (operation: string, target: string, confirmText: string) => {
+    if (!USE_MOCK) {
+      const { path, method } = getDbOpRoute(operation, target);
+      return fetchApi<any>(path, {
+        method,
+        headers: { 
+          'X-PLS-Admin-Token': 'pls-admin-token',
+          'Idempotency-Key': `${operation}_${target}_${Date.now()}` 
+        },
+        body: JSON.stringify({ confirmText })
+      });
+    }
+    
+    let expected = `${operation} ${target}`;
+    if (operation === 'CLEAR_TABLE') expected = `TRUNCATE ${target}`;
+    if (operation === 'DROP_TABLE') expected = `DROP ${target}`;
+    if (operation === 'DELETE_VERSION') expected = `DELETE VERSION ${target}`;
+    if (operation === 'RESET') expected = `RESET ${target}`;
+    if (operation === 'APPLY_MIGRATIONS') expected = `APPLY MIGRATIONS`;
+
+    if (confirmText !== expected) {
+      return Promise.reject(new Error('Confirmation text does not match.'));
+    }
+    return { code: 'ok', data: { success: true } };
   }
 };
+
+function getDbOpRoute(operation: string, target: string): { path: string; method: string } {
+  switch (operation) {
+    case 'CLEAR_TABLE': return { path: `/admin/database/tables/${target}/truncate`, method: 'POST' };
+    case 'DROP_TABLE': return { path: `/admin/database/tables/${target}`, method: 'DELETE' };
+    case 'DELETE_VERSION': return { path: `/admin/database/versions/${target}`, method: 'DELETE' };
+    case 'RESET': return { path: `/admin/database/rebuild`, method: 'POST' };
+    case 'APPLY_MIGRATIONS': return { path: `/admin/database/migrations/apply`, method: 'POST' };
+    default: throw new Error(`Unknown operation: ${operation}`);
+  }
+}

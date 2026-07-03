@@ -85,3 +85,33 @@ test('End-to-End Real Backend Smoke Test', async ({ page }) => {
   // Verify that there are no console/runtime errors captured
   expect(errors).toHaveLength(0);
 });
+
+test('Data Management Workbench - Real Backend Smoke Test', async ({ page }) => {
+  test.skip(process.env.VITE_USE_MOCK !== 'false', 'Skipping real backend test because VITE_USE_MOCK is not false');
+
+  const errors: string[] = [];
+  page.on('pageerror', err => errors.push(err.message));
+  page.on('console', msg => {
+    if (msg.type() === 'error' && !msg.text().includes('favicon.ico')) {
+      errors.push(msg.text());
+    }
+  });
+
+  await page.goto('/');
+  await expect(page.getByText('PLS 工作台')).toBeVisible();
+
+  await page.getByText('数据管理', { exact: true }).click();
+  await expect(page.getByText('数据库总览')).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('ws_demo', { exact: false })).toBeVisible();
+
+  await page.getByText('库表', { exact: true }).click();
+  await expect(page.getByText('库表明细')).toBeVisible();
+
+  // Test Table Details
+  await page.getByText('详情', { exact: true }).first().click();
+  await expect(page.getByText('表详情:')).toBeVisible();
+
+  // Ensure there are no runtime or page errors from malformed responses
+  await page.waitForTimeout(500);
+  expect(errors).toHaveLength(0);
+});

@@ -13,10 +13,15 @@
     "smoke:data-management": "node scripts/smoke-data-management.mjs",
     "smoke:channel-entities": "node scripts/smoke-channel-entities.mjs",
     "smoke:p2-api": "node scripts/smoke-p2-api.mjs",
+    "smoke:admin-database": "node scripts/smoke-admin-database.mjs",
+    "smoke:admin-import": "node scripts/smoke-admin-import.mjs",
+    "smoke:admin-dangerous": "node scripts/smoke-admin-dangerous.mjs",
     "import:douyin-bi": "node scripts/import-douyin-bi.mjs",
     "seed:data-sources": "node scripts/seed-data-sources.mjs",
     "sync:channel-entities": "node scripts/sync-channel-entities.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "migrate:versioned": "tsx src/db/migration-runner.ts",
+    "schema:check": "tsx src/db/schema-check.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.14.0",

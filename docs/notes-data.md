@@ -2,65 +2,48 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-03（D-P2-7 新品主数据预测输入模板验收通过）
+最近更新：2026-07-03（X-P3-DB-8 SQLite 重构总体验收与 ws_demo 受控清库完成）
 
 进度：
 
-- D-P0-1 已完成，产出为 `docs/data-spec.md`。
-- 已定义历史 SKU 训练宽表，粒度为 `skuId + channelId + timeWindow`。
-- 已定义 DMP 聚合画像导入格式、商品基础属性字典、渠道画像字段、数据质量检查规则。
-- 已明确 P0 主监督标签使用 `buyerProfileTags`，浏览和加购画像作为可选辅助标签。
-- 最新项目口径：用户给到 PLS 系统并要求导入或产品化的数据全部放行，可进入仓库、prompt、fixture、API、CSV、audit、前端展示和后续 agent 协作。
-- 本次已同步 `data/templates/real-sample-ingestion/redline_scan_config.json`：隐私 blocked fields / patterns 清空，scan report 仅作为历史兼容和质量摘要。
-- 本次已同步 data 校验脚本：保留结构、必填字段、tagId、质量字段校验；不再因手机号、邮箱、身份证、长数字 ID、订单/会员/DMP 字段名等形态失败。
-- D-P0-B1 已完成并通过 X 总控审核，产出 `data/demo/` mock 数据包。
-- X-P0-B5 已完成端到端验收；历史 redline scan 结论保留为归档信息，不再作为当前数据准入门槛。
-- D-P0-C4 已完成并通过总控终审，产出 `data/templates/real-sample-ingestion/` 真实样例本地处理模板，以及 `data/local/.gitignore` 本地 staging 隔离规则。
-- D-P1-A1 已做本地 preflight：当前工作区没有 `data/local/raw_staging/<batchId>/` 真实样例输入，因此未生成真实 sanitized / aggregate 输出；本地记录写入 `data/local/aggregate_output/batch_p1_a1_no_input_20260702/`，`shareable = false`。
-- D-P1-A1 已经 X 总控审核标记 done；归档口径仅限 no-input preflight，不代表真实样例本地脱敏聚合试跑完成。
-- D-P1-A2 已产出 mock aggregate 多 `timeWindow` cutoff smoke 输入：`data/p1/multi-timewindow-demo/`，包含 3 个连续窗口、36 行 `skuId + channelId + timeWindow` 宽表、字段映射、质量报告和 redline scan 摘要。
-- D-P1-A2 已经 X 总控审核标记 done；当前产物仅作为 M-P1-A3 cutoff 管线 smoke 输入。
-- D-P1-A5 在 wiki 已改为“真实样例本地资产化试跑”：用户确认导入的数据默认全量放行，验收重点改为结构化、mapping、quality report 和建模可用性。
-- X-P1-A4 历史准入结论保留为旧口径归档；当前项目级准入口径已被用户更新为全量放行。
-- D-P1-E1 已产出抖音账号与商品画像字段映射模板：`data/templates/douyin-account-product-mapping/`，包含字段类别、placeholder bucket、mapping rule、unmapped reason 和 quality report 模板。
-- D-P1-F1 抖音 BI 数据资产化本地实现已完成，等待 X 总控终审后再改 wiki 状态为 done。产出目录 `data/p1/douyin-bi/`，覆盖 8 个 PLS 数据对象共 692 行（`accounts=13`、`account_benchmark_tags=26`、`account_reports=12`、`products=73`、`product_account_fits=73`、`comparison_dimensions=365`、`adjustment_advice=105`、`summary_metrics=25`）。每行携带 `sourceBatchId=batch_douyin_bi_20260703`、`dataVersion=v1_20260703`、`generatedAt`、`upsertKey`；`upsertKey.hash` 为行级 SHA1 前 16 位，同对象内唯一。
-- D-P1-F1 附带 `field_dictionary.csv`、`unmapped_fields.csv`、`quality_report.json`、`source_manifest.json`、`sqlite_import_manifest.json`、README；生成脚本 `data/scripts/generate-p1-douyin-bi.mjs`，校验脚本 `data/scripts/validate-p1-douyin-bi.mjs`。
-- D-P2-2 已通过总控复核，产出 `docs/p2-2-product-channel-schema.md` 与 `docs/p2-2-product-channel-schema-acceptance.md`，冻结 `ProductMaster`、`ChannelEntity`、`FieldMapping`、`DataQualityReport` 草案和 `ProductProfile` / `PredictedProductProfile` / `ChannelProfile` 输入边界。
-- D-P2-7 已通过 X 总控复核，产出 `data/templates/new-product-prediction-input/` 与 `docs/p2-7-new-product-input-template-acceptance.md`；`docs/wiki.html` 已升级到 v0.29，并将 D-P2-7 标记为 done。
+- P3-DB 任务链已完成并通过总控复核：`X-P3-DB-0`、`D-P3-DB-1`、`A-P3-DB-2/3/4/6`、`V-P3-DB-5/7`、`X-P3-DB-8` 均为 done。
+- `ws_demo` 已按用户确认执行受控 rebuild，重放口径为选 A：不重放 `data/demo`，不重放 `data/p1/douyin-bi`，保留空的新 schema 库。
+- 清库前 dry-run 影响范围：5707 行，其中包含 2503 行 protected system table 历史和 `douyin_*` user_authorized 数据。
+- rebuild 通过 Admin API `POST /api/v0/admin/database/rebuild` 执行，confirmText 为 `RESET ws_demo`；未手工删除主库，未绕过 `db_admin_audit`。
+- rebuild 快照路径：`data/workspaces/ws_demo/db.sqlite.snapshot.1783093107898`，大小 11M，SHA-256 为 `e644be67c3c4d310406664f42216de36b9abaf885c1eb689c0f7eb73864a71c3`。
+- rebuild 后主库 `data/workspaces/ws_demo/db.sqlite` 为 28 tables / 10 views，business rows = 0；`schema_migration=1`、`workspace=1`、`db_admin_audit=1`、`data_import_job=0`。
+- `db_admin_audit` 已记录 `rebuild / workspace / ws_demo / success`，after snapshot 包含快照路径。
+- 验收文档已输出：`docs/p3-db-rebuild-acceptance.md`。
+- `AGENTS.md` 已新增并调整“API 联调与契约纪律”：先查契约、复杂联调强制沙盘推演、Adapter 隔离、Mock 与真实形态同构。
 
 下一步：
 
-- 如接入用户确认导入的数据，可直接按 PLS 数据对象落地；脱敏、聚合、抽样只在用户明确要求或模型/图表建模需要时执行。
-- M-P1-A3 可使用 `data/p1/multi-timewindow-demo/wide_table.jsonl` 做 cutoff smoke；不得把它声明为真实样例回测数据。
-- P1-F 后续 A/M/V 必须消费 PLS 数据对象，不再让前端直接依赖原 dashboard `data.js` 全局变量。
-- D-P1-A5 / D-P1-A2 后续如继续执行，验收重点改为结构、字段映射、质量报告和建模可用性，不再做隐私红线拦截。
-- D-P1-F1 数据包本地实现和校验已通过；等 X 总控终审后由总控把 wiki 中 D-P1-F1 状态改为 done。A-P1-F2 可直接消费 `sqlite_import_manifest.json` 定义的目标表、businessKey、upsertKey。
-- M-P2-8 可据此冻结新品人群预测 baseline contract，A-P2-9 可据此设计新品预测 API 输入校验和版本追踪。
+- 后续如需演示或业务 smoke，需要先通过数据管理模块或 Admin API 重新导入数据；当前 `ws_demo` 是空业务库。
+- 如需恢复旧状态，必须基于快照文件制定明确恢复流程，不应直接覆盖当前主库。
+- 若重放数据，优先从 `data/demo/` 或 `data/p1/douyin-bi/` 的仓库真源执行；本地临时 `v2_20260704_xp1f6` 不在仓库完整真源内，只保留在快照中。
+- `smoke:admin-dangerous` 需要后续改造，避免继续假设主库存在 `v1_20260703` 数据；真实 delete-version 覆盖应继续使用临时 workspace。
 
 阻塞：
 
-- D-P1-A5 阻塞于真实样例输入缺失；当前 D-P1-A1 只能代表 no-input preflight 归档。
-- `data/p1/multi-timewindow-demo/` 为 mock aggregate cutoff smoke 数据，仅用于 M-P1-A3 开发验证。
-- P1-F 的抖音 BI 数据已获用户确认放行；`data/p1/douyin-bi/` 数据包已生成并保留真实账号名、款号、销售额、legacy 号货匹配度、业务明细字段和值。A-P1-F2 需按 `sqlite_import_manifest.json` 冻结 SQLite schema；总控终审前 D-P1-F1 在 wiki 中仍保持 todo。
-- D-P2-2 仅冻结结构，不编造真实新品字段、枚举默认值、业务 ID 或未批准画像 tagId；`priceBand`、`seasonBand`、`platformType` 当前只作为 D 域草案枚举，不作为全局冻结枚举。
-- D-P2-7 模板使用 `null`、空数组和空对象作为用户待提供字段占位；不得把模板占位当作真实业务值、默认枚举、默认 ID 或训练 fixture。
+- 当前没有数据域实现阻塞。
+- 业务数据为空会导致依赖历史 SKU、渠道、抖音 BI、demo 数据的旧业务 smoke 或页面流程失败；这是本次选 A 不重放的预期结果，不代表 schema rebuild 失败。
 
 开放问题：
 
-- 不同平台 DMP 聚合字段样例尚未提供，当前映射规则只定义通用结构。
-- 历史 SKU 商品字段样例尚未提供，当前商品 DNA 字典以服装 demo 场景为准。
-- 训练集过滤阈值当前为 P0 建议值，后续需要 M 域用回测结果校准。
-- D-P1-A2 目前只有 3 个 mock SKU，低于 `docs/model-c3-prep.md` 的 P1 smoke 建议 5 个 SKU；可用于 cutoff 管线 smoke，不足以声明正式模型质量。
-- D-P1-E1 中设备信息、八大消费群体、平台自由文本兴趣字段进入 `unmapped_fields.template.csv`；是否扩展 taxonomy 需 X 总控评审。
+- 是否重放 `data/demo/` 或 `data/p1/douyin-bi/` 由后续任务另行确认；本次明确不重放。
+- 旧运行时历史仅在快照中，是否需要迁移或导出为长期审计档案尚未决定。
+- API smoke 中依赖主库历史数据的断言需要拆分为空库 smoke 与带 fixture smoke。
 
 验证：
 
-- `node data/templates/real-sample-ingestion/scripts/validate-real-sample-template.mjs data/templates/real-sample-ingestion` 通过。
-- `node data/templates/douyin-account-product-mapping/scripts/validate-douyin-mapping-template.mjs` 通过。
-- `node data/scripts/validate-p1-multi-timewindow-demo.mjs data/p1/multi-timewindow-demo` 通过。
-- `node data/scripts/validate-p1-douyin-bi.mjs data/p1/douyin-bi` 通过（0 error / 0 warning）。
-- D-P2-2 总控验收通过：`docs/p2-2-product-channel-schema.md` 包含 ProductMaster / ChannelEntity / FieldMapping / DataQualityReport，显式 `tagId` 引用均存在于 `docs/profile-taxonomy-v0.md`，文档标题层级已修正为不超过三级。
-- `node data/templates/new-product-prediction-input/scripts/validate-new-product-prediction-template.mjs` 通过（0 error / 0 warning）。
+- `apps/server npm run typecheck` 通过。
+- `apps/server npm run schema:check` 通过：Valid true，0 missing / 0 extra，1 applied / 0 pending / 0 failed。
+- `apps/server npm run smoke:admin-database` 通过。
+- `apps/web npm run lint` 通过。
+- `apps/web npm run build` 通过。
+- `apps/web npm run smoke` 通过。
+- `apps/web VITE_USE_MOCK=false npx playwright test e2e/data-management.spec.ts --project=chromium` 通过。
+- `apps/server npm run smoke:admin-dangerous` 有 3 个旧断言失败：脚本假设 `ws_demo` 存在 `v1_20260703` 数据；本次空库验收目标下该断言不适用，脚本中的临时 workspace 危险操作闭环仍通过。
 
 ---
 
@@ -151,3 +134,14 @@
 - 质量规则覆盖四类：缺失（`missing_required_identity`、`missing_required_category`、`source_lineage_incomplete` 等）、冲突（`conflicting_product_identity`、`conflicting_price_fields` 等）、不可映射（`unmapped_required_field`、`taxonomy_unmapped_high`、`unapproved_tag_id`）、低置信度（`low_mapping_confidence`、`low_similar_product_confidence`、`low_asset_feature_confidence`）。
 - 模板明确 M/A 输入边界：M-P2-8 只能使用上新前可得的 `ProductMaster` 字段、`mappedProductTags`、相似商品和图文摘要；不得要求 post-launch buyer profile、销售标签或渠道反馈，除非显式 backtest。
 - 校验命令：`node data/templates/new-product-prediction-input/scripts/validate-new-product-prediction-template.mjs`。
+
+## D-P3-DB-1 沉淀
+
+- 产出文档固定为 `docs/p3-db-current-inventory.md`。
+- 当前 `ws_demo` 收尾复核状态：28 tables / 10 views / 80 indexes，base table rows = 5669，latest/view rows = 793。
+- 当前库不是干净生产库，混合 mock demo、smoke/e2e、P1/P2/P3 临时验收、`user_authorized` 抖音 BI 和运行时历史。
+- `douyin_*` base tables 合计 1384 行：`v1_20260703=692` 为仓库数据包真源，可从 `data/p1/douyin-bi/` 重放；`v2_20260704_xp1f6=692` 是 X-P1-F6 本地临时验收版本，仓库不含完整真源，清库前需快照或重新构造。
+- `data/demo/` 可重放核心 demo 数据：3 个 mock SKU、4 个 channel profile、12 行 wide table 和 DMP aggregate 样例；当前 `sku` 表 27 行中只有 3 行属于 demo 真源，其余为 smoke/import 残留。
+- `audit_event`、`task`、`idempotency_key`、`decision_record`、`action_record`、`feedback_record`、`strategy_review`、`schema_migration`、`db_admin_audit`、`data_import_job` 属运行时 / 系统历史；清库后不可从数据包自动恢复。
+- 本轮只读盘点期间出现并行库变动，新增 P3 system tables：`schema_migration`、`db_admin_audit`、`data_import_job`。D 域未执行写库命令；后续清库验收以收尾复核后的文档状态为准。
+- 校验方式：只读 `sqlite_master` 和行数统计；未执行 `DROP`、`DELETE`、`UPDATE`、`INSERT`、`VACUUM`、migration 或任何写入命令。

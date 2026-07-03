@@ -64,11 +64,18 @@ export default function Dashboard({ currentSku, setCurrentSku, prediction, setPr
     goToHeatmap();
   };
 
+  /** Average confidence across top segments */
+  const avgConfidence = prediction && prediction.topSegments.length > 0
+    ? prediction.topSegments.reduce((sum, s) => sum + s.confidence, 0) / prediction.topSegments.length
+    : 0;
+
   return (
-    <div className="dashboard-grid">
-      <div className="card" style={{ padding: 32 }}>
-        <h3 style={{ fontSize: 20, marginBottom: 8 }}>录入新品</h3>
-        <p style={{ color: 'var(--muted-foreground)', fontSize: 14, marginBottom: 24 }}>提供基础信息，预测商品潜客画像及渠道匹配。</p>
+    <div className="predict-workbench">
+
+      {/* Left: Compact Input Form */}
+      <div className="predict-form">
+        <h3 className="predict-form__title">录入新品</h3>
+        <p className="predict-form__desc">提供基础信息，预测商品潜客画像及渠道匹配。</p>
         <form onSubmit={handleSubmit}>
           <div className="form-item">
             <label>商品 ID</label>
@@ -111,52 +118,98 @@ export default function Dashboard({ currentSku, setCurrentSku, prediction, setPr
         </form>
       </div>
 
-      <div>
+      {/* Right: Prediction Results */}
+      <div className="predict-result">
         {!prediction ? (
-          <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400, color: 'var(--muted-foreground)', background: 'var(--background)' }}>
-            请先在左侧录入新品信息，系统将生成画像预测结果。
+          <div className="empty-state" style={{ minHeight: 400 }}>
+            <div className="empty-state__icon">🔮</div>
+            <div className="empty-state__title">请先在左侧录入新品信息</div>
+            <div>系统将生成画像预测结果</div>
           </div>
         ) : (
-          <div>
-            <div className="flex-between" style={{ marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid var(--border)' }}>
-              <div>
-                <h2 style={{ fontSize: 24, margin: '0 0 8px 0' }}>预测画像结果 {currentSku && `(${currentSku.title})`}</h2>
-                <div style={{ color: 'var(--muted-foreground)' }}>模型版本: {prediction.modelVersion} | 运行生成时间: {new Date(prediction.generatedAt).toLocaleString()}</div>
+          <>
+            {/* Prediction Summary Header */}
+            <div className="predict-result__header">
+              <div className="predict-result__header-info">
+                <h2 className="predict-result__header-title">
+                  预测画像结果 {currentSku && `(${currentSku.title})`}
+                </h2>
+                <div className="predict-result__header-meta">
+                  <span className="status-badge status-badge--neutral">
+                    模型: {prediction.modelVersion}
+                  </span>
+                  <span className="status-badge status-badge--neutral">
+                    {new Date(prediction.generatedAt).toLocaleString()}
+                  </span>
+                  {prediction.topSegments.length > 0 && (
+                    <span className="status-badge status-badge--success">
+                      Top: {prediction.topSegments[0].name}
+                    </span>
+                  )}
+                  <span className={`status-badge ${avgConfidence >= 0.7 ? 'status-badge--success' : 'status-badge--warning'}`}>
+                    平均置信度: {(avgConfidence * 100).toFixed(0)}%
+                  </span>
+                </div>
               </div>
-              <button className="btn btn-primary" onClick={handleGoToHeatmap}>进行核心人货匹配</button>
+              <button className="btn btn-primary" onClick={handleGoToHeatmap}>
+                进行核心人货匹配
+              </button>
             </div>
 
+            {/* Quality Flags Warning */}
             {prediction.qualityFlags.length > 0 && (
-              <div className="alert alert-warning">
+              <div className="alert-banner alert-banner--warning">
                 ⚠️ 注意：该商品画像置信度受限（{prediction.qualityFlags.join(', ')}）
               </div>
             )}
 
-            <div className="card" style={{ padding: 32 }}>
-              <h3 style={{ fontSize: 18, marginBottom: 16 }}>前三名目标人群包</h3>
-              <div className="segments-grid">
+            {/* Prediction Summary Metrics */}
+            <div className="metric-grid">
+              <div className="metric-card metric-card--compact">
+                <div className="metric-title">Top 人群包数量</div>
+                <div className="metric-value">{prediction.topSegments.length}</div>
+                <div className="metric-sub">
+                  <span>核心标签数</span>
+                  <span>{prediction.predictedProfileTags.length}</span>
+                </div>
+              </div>
+              <div className="metric-card metric-card--compact">
+                <div className="metric-title">平均置信度</div>
+                <div className="metric-value">{(avgConfidence * 100).toFixed(0)}%</div>
+                <div className="metric-sub">
+                  <span>Top 1 置信度</span>
+                  <span>{prediction.topSegments.length > 0 ? `${(prediction.topSegments[0].confidence * 100).toFixed(0)}%` : '-'}</span>
+                </div>
+              </div>
+              <div className="metric-card metric-card--compact">
+                <div className="metric-title">质量标记</div>
+                <div className="metric-value" style={{ fontSize: 16 }}>
+                  {prediction.qualityFlags.length === 0 ? '无异常' : prediction.qualityFlags.join(', ')}
+                </div>
+                <div className="metric-sub">
+                  <span>模型路径</span>
+                  <span>{prediction.source}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Top 3 Segments */}
+            <div className="panel">
+              <h3 className="panel__title">前三名目标人群包</h3>
+              <div className="segment-grid">
                 {prediction.topSegments.map(seg => (
-                  <div key={seg.segmentId} style={{ 
-                    flex: 1, 
-                    border: '1px solid var(--border)', 
-                    background: 'var(--background)', 
-                    padding: 20, 
-                    borderRadius: 12,
-                    boxShadow: 'var(--shadow-sm)',
-                    transition: 'transform 0.2s',
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ fontWeight: '700', fontSize: 16 }}>第 {seg.rank} 名</div>
-                      <div style={{ color: 'var(--muted-foreground)', fontSize: 12, background: 'var(--secondary)', padding: '2px 8px', borderRadius: 12 }}>
+                  <div key={seg.segmentId} className="segment-card">
+                    <div className="segment-card__header">
+                      <span className="segment-card__rank">第 {seg.rank} 名</span>
+                      <span className={`status-badge ${seg.confidence >= 0.7 ? 'status-badge--success' : 'status-badge--warning'}`}>
                         置信度: {(seg.confidence * 100).toFixed(0)}%
-                      </div>
+                      </span>
                     </div>
-                    <div style={{ fontSize: 15, fontWeight: 500, margin: '12px 0' }}>{seg.name}</div>
-                    
+                    <div className="segment-card__name">{seg.name}</div>
                     <div>
-                      <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>核心驱动</div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap' }}>
-                        {seg.drivers.map(d => <span key={d} className="tag">{translateTag(d)}</span>)}
+                      <div className="segment-card__drivers-label">核心驱动</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {seg.drivers.map(d => <span key={d} className="tag" style={{ margin: 0 }}>{translateTag(d)}</span>)}
                       </div>
                     </div>
                   </div>
@@ -164,18 +217,23 @@ export default function Dashboard({ currentSku, setCurrentSku, prediction, setPr
               </div>
             </div>
 
-            <div className="card">
-              <h3>核心标签分布</h3>
-              <ul style={{ paddingLeft: 20, margin: 0, color: 'var(--muted-foreground)' }}>
+            {/* Tag Distribution (Score Bars) */}
+            <div className="panel">
+              <h3 className="panel__title">核心标签分布</h3>
+              <div className="score-bar-list">
                 {prediction.predictedProfileTags.map(tag => (
-                  <li key={tag.tagId} style={{ marginBottom: 12 }}>
-                    <strong style={{ color: 'var(--foreground)' }}>{translateTag(tag.tagId)}</strong> 
-                    <span style={{ marginLeft: 8 }}>分数 {(tag.score * 100).toFixed(1)} (置信度: {(tag.confidence * 100).toFixed(1)}%)</span>
-                  </li>
+                  <div key={tag.tagId} className="score-bar">
+                    <span className="score-bar__label">{translateTag(tag.tagId)}</span>
+                    <div className="score-bar__track">
+                      <div className="score-bar__fill" style={{ width: `${Math.min(tag.score * 100, 100)}%` }} />
+                    </div>
+                    <span className="score-bar__value">{(tag.score * 100).toFixed(1)}</span>
+                    <span className="score-bar__confidence">±{(tag.confidence * 100).toFixed(0)}%</span>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>

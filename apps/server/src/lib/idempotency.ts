@@ -81,15 +81,20 @@ export function idempotencyMiddleware(): MiddlewareHandler {
 
     const db = openDb(wsId);
     // Prune expired rows (cheap; index on expires_at).
-    db.prepare("DELETE FROM idempotency_key WHERE expires_at <= datetime('now')").run();
+    try {
+      db.prepare("DELETE FROM idempotency_key WHERE expires_at <= datetime('now')").run();
+    } catch { /* idempotency_key table may not exist yet on a fresh workspace */ }
 
-    const cached = db
-      .prepare(
-        `SELECT request_hash, response_body, status_code, expires_at
-         FROM idempotency_key
-         WHERE workspace_id = ? AND method = ? AND path = ? AND key = ?`
-      )
-      .get(wsId, c.req.method, path, key) as CacheRow | undefined;
+    let cached: CacheRow | undefined;
+    try {
+      cached = db
+        .prepare(
+          `SELECT request_hash, response_body, status_code, expires_at
+           FROM idempotency_key
+           WHERE workspace_id = ? AND method = ? AND path = ? AND key = ?`
+        )
+        .get(wsId, c.req.method, path, key) as CacheRow | undefined;
+    } catch { /* table missing — first request to a fresh workspace */ }
     db.close();
 
     if (cached) {
@@ -198,6 +203,10 @@ export async function readJson<T = unknown>(c: Context): Promise<T> {
   const raw = (c.req as unknown as { _idemRawBody?: string })._idemRawBody;
   if (typeof raw === "string" && raw.length > 0) {
     return JSON.parse(raw) as T;
+  }
+  // If the middleware consumed the body but left it empty, return empty object.
+  if (typeof raw === "string") {
+    return {} as T;
   }
   return (await c.req.json()) as T;
 }

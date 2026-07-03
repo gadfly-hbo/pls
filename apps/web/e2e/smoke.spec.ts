@@ -16,12 +16,41 @@ test('End-to-End Smoke Test for PLS', async ({ page }) => {
     }
   });
 
-  // 1. Dashboard
+  // 1. Landing page is now Account Workbench (first module)
   await page.goto('/');
   await expect(page.getByText('PLS 工作台')).toBeVisible();
+  // Default view: 实体与账号画像
+  await expect(page.getByText('实体列表', { exact: true })).toBeVisible({ timeout: 10000 });
 
-  // 2. Prediction -> Matches
-  // In Dashboard, fill a unique SKU ID and Title to avoid duplicate key API error and form validation failure
+  // Verify native React dashboard F4 (analysis tab is default)
+  await expect(page.getByText('有效数据样本量')).toBeVisible();
+
+  // Go to F5 tab
+  const comparisonTab = page.getByText('号货匹配决策');
+  await comparisonTab.click();
+
+  const analyzeBtn = page.getByText('分析匹配度');
+  await analyzeBtn.click();
+
+  await expect(page.getByText('号货匹配综合得分')).toBeVisible();
+  await expect(page.getByText('匹配维度对比')).toBeVisible();
+  await expect(page.getByText('策略调整与优化建议')).toBeVisible();
+
+  // Test CSV export from Account Comparison
+  const [acDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByText('导出报告').click()
+  ]);
+  const acPath = await acDownload.path();
+  expect(acPath).toBeTruthy();
+
+  // Validate CSV structure
+  const acCsvContent = fs.readFileSync(acPath, 'utf-8');
+  expect(acCsvContent).toContain('skuId,accountId,fitScore,fitConfidence,qualityFlags,generatedAt,advice');
+
+  // 2. Navigate to 新品预测工作台 for Prediction -> Matches
+  await page.getByText('新品预测工作台', { exact: true }).click();
+  // In Dashboard, fill a unique SKU ID and Title
   const uniqueSku = `e2e_sku_${Date.now()}`;
   await page.locator('input[name="skuId"]').fill(uniqueSku);
   await page.locator('input[name="title"]').fill(`E2E 测试款 ${uniqueSku}`);
@@ -85,38 +114,6 @@ test('End-to-End Smoke Test for PLS', async ({ page }) => {
   expect(header).toContain('相似标签');
   expect(header).toContain('冲突标签');
   expect(header).toContain('风险提示');
-
-  // 7. Go to Account Workbench
-  const accountComparisonNav = page.getByText('实体与账号画像', { exact: true });
-  await accountComparisonNav.click();
-  await expect(page.getByText('实体列表', { exact: true })).toBeVisible({ timeout: 10000 });
-
-  // Verify native React dashboard F4
-  await expect(page.getByText('有效数据样本量')).toBeVisible();
-
-  // Go to F5 tab
-  const comparisonTab = page.getByText('号货匹配决策');
-  await comparisonTab.click();
-
-  const analyzeBtn = page.getByText('分析匹配度');
-  await analyzeBtn.click();
-
-  await expect(page.getByText('号货匹配综合得分')).toBeVisible();
-  await expect(page.getByText('匹配维度对比')).toBeVisible();
-  await expect(page.getByText('策略调整与优化建议')).toBeVisible();
-
-  // Test CSV export from Account Comparison
-  const [acDownload] = await Promise.all([
-    page.waitForEvent('download'),
-    page.getByText('导出报告').click()
-  ]);
-  const acPath = await acDownload.path();
-  expect(acPath).toBeTruthy();
-
-  // Validate CSV structure
-  const acCsvContent = fs.readFileSync(acPath, 'utf-8');
-  expect(acCsvContent).toContain('skuId,accountId,fitScore,fitConfidence,qualityFlags,generatedAt,advice');
-
   // Verify that there are no console/runtime errors captured
   expect(errors).toHaveLength(0);
 });
