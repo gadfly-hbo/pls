@@ -2,45 +2,34 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-03（session 收尾：项目级数据准入口径放行到 API / 前端）
+最近更新：2026-07-03（A-P1-F2 抖音 BI SQLite 入库 / 原生 API / smoke 完稿）
 
 进度：
 
 - A-P0-3 / A-P0-B2 / A-P0-C1 已完稿。
-- A-P1-B1/B2/B3/B4 已完稿并通过总控复核：match_result latest view、Idempotency-Key、prediction async worker / timeout fallback、API smoke 脚本化均已归档。
-- A-P1-E3 已完稿：POST /account-matches 调用 M-P1-E2 `diagnoseAccountFit()`，输出 shape 对齐冻结契约，`qualityFlags` 保留 `algorithm_pending_user_formula`。
-- 本次按项目级新规则调整应用侧数据准入：`apps/server/src/lib/safety.ts` 保留 `checkSafety` / `deepScanSafety` 接口，但对用户授权数据始终返回 pass，不再按字段名或值形态拒绝。
-- 产品写入路径中的 taxonomy gate 未变：`mappedProductTags` 仍必须来自标签白名单；本次只取消隐私类 safety 拦截。
-- 前端 `apps/web/src/pages/Dashboard.tsx` 已去掉“请勿上传含个人隐私...”提示，改为允许录入用户授权进入 PLS 的业务数据。
+- A-P1-B1/B2/B3/B4 已完稿并通过总控复核。
+- A-P1-E3 已完稿。
+- **A-P1-F2 本轮完稿**：抖音 BI 数据资产化包（D-P1-F1，`data/p1/douyin-bi/`）已完整导入 `ws_demo` SQLite；8 张 `douyin_*` 表 + 8 个 `_latest` view；6 个读取 endpoint（`/bi/douyin/accounts` / `.../:id` / `products` / `.../:id` / `fits` / `.../:id` / `advice` / `summary-metrics` / `versions`）；支持 `?dataVersion=` / `?sourceBatchId=` 指定历史快照，默认 latest projection。
+- 应用侧数据准入按项目级放行口径，safety gate 保留但对用户授权数据默认 pass；taxonomy gate 未变。
+- 前端 Dashboard 隐私提示已删除。
 
-关键决策：
+关键决策（本轮）：
 
-- match_result 从 latest-overwrite 升级为 append-only；latest 通过 view 提供
-- 幂等 hash 只对 `application/json` 生效；PK 按 `(workspace_id, method, path, key)` 隔离
-- worker 用同进程 `runWithTimeout`，不引入外部队列
-- `simulatedDelayMs` 从公开 body 移除，改用非公开 header `X-PLS-Test-Delay-Ms`
-- A-P1-E3 直接调用 M-P1-E2 的 `diagnoseAccountFit()`，不自建 adapter
-- POST /account-matches 只处理指定 accountId，不 fallback 全量 channel
-- 隐私类 safety gate 不再作为 API 拦截层；后续如需拦截，只能基于用户新的明确规则重新设计。
-
-回补记录（总控审核 3 项阻塞 → 5 项阻塞）：
-
-- B2-1：`idempotency_key` PK 加 method+path，lookup/INSERT 同步更新
-- B2-2：`/batches` 按 Content-Type 分派 JSON/multipart
-- B3：`simulatedDelayMs` 移至 `X-PLS-Test-Delay-Ms` header，production 禁用
-- E3-1：删除自建 adapter，用 M-P1-E2 `diagnoseAccountFit()`；INSERT 写 qualityFlags
-- E3-2：POST /account-matches 只处理单 accountId
-- E3-3：adjustmentAdvice 对齐冻结契约（adviceId/priority/actionType/direction/rationale/evidence）
-- E3-4：mismatchedDimensions 只含 mismatch/unmapped
-- E3-5：`migrate.ts` DROP VIEW IF EXISTS 后重建
+- 抖音 BI 使用独立表命名空间 `douyin_*`，不复用 `channel_profile / sku / prediction / match_result`（避免污染 P0/P1 主链路）。
+- API 路径 `/api/v0/bi/douyin/*`，走既有 requestId → auth → workspace 中间件。
+- 表 PK 完整包含 `source_batch_id + data_version`；重复导入用 `INSERT OR REPLACE` 保证幂等（re-run 相同 batchId+version 不产生重复业务行）。
+- 每张表配 `douyin_*_latest` view（按 businessKey group + generated_at DESC + rowid DESC）。
+- 新增 `resource_type` 值 `bi_account / bi_product / bi_fit / bi_advice / bi_summary / bi_batch`。
+- 导入脚本 `scripts/import-douyin-bi.mjs`：读 `sqlite_import_manifest.json` → 事务批量 upsert → 写 `batch` 表 + `audit_event`。
+- 未同步登记 `douyin_account` 为 `channel_profile` 行（保持 E3 链路不被自动覆盖）。
+- `raw` 列保存原始 JSONL 行，用户授权 BI 字段（八大消费群体、legacyFitScore、性别/年龄/城市等级 profileDistribution 等）可 verbatim 输出。
 
 下一步：
 
-- P1-B 序列全部关闭，A-P1-E3 完稿；等待总控终审标记 done。
-- 候选：A-P1-E3 已交付，V 域可消费 `/account-matches` 接口。
-- match 链路是否接入 async worker 视 V 域需求。
-- A-P1-E3 的 POST /account-matches 暂未接入 Idempotency-Key（可后续补）。
-- P1-F 若继续，A-P1-F2 应消费 D-P1-F1 的 PLS 数据对象，API 可返回资产化后的完整 BI 字段，但不能让前端直接依赖原 dashboard 全局变量。
+- 等 X 总控复核 A-P1-F2 并 mark done。
+- V 域 (V-P1-F4 / V-P1-F5) 可直接消费 `/api/v0/bi/douyin/*` 读取 API。
+- M 域 (M-P1-F3) 可消费 fits / comparison_dimension / advice，输出 ProductAccountFitDiagnostic 后回流到本 API 层做投影。
+- `/bi/douyin/*` 目前是纯只读；导入 endpoint 若产品需要可后续新增（当前只支持 CLI 脚本导入）。
 
 阻塞：
 
@@ -48,15 +37,18 @@
 
 开放问题：
 
-- P0-C 保留问题：M baseline adapter 是否 P1 拆成单独 model-serving 进程（未变）。
-- P1-B2 幂等缓存 prune 每次读时 DELETE；量大后改后台 job。
-- P1-B4 smoke 需 server 已在 3100 运行；CI 层需自动拉起。
-- A-P1-E3 的 `match_result_latest` view 在已有 DB 上需 migration DROP+recreate（已实现）。
+- P1-B2 幂等缓存 prune 每次读时 DELETE；量大后改后台 job（未变）。
+- A-P1-F2 是否需要把 `douyin_account` 同步到 `channel_profile`（供既有 `/account-matches` 消费）？当前设计为否；如需要走 E3 链路，需回流 X 拍板。
+- 抖音 BI 导入 endpoint 化（HTTP POST 上传 + 后台 upsert）待需求确认。
 
 验证：
 
 - `apps/server npm run typecheck` 通过。
-- `apps/web npm run build` 通过。
+- `apps/server npm run migrate` 通过；重新迁移后 8 个 douyin_* 表 + 8 个 _latest view 就绪。
+- `apps/server node scripts/import-douyin-bi.mjs` 通过：692 行数据落地；重复执行不产生重复业务行（total = 692 保持不变）。
+- `apps/server npm run smoke:douyin-bi` 通过：15 项检查全绿（accounts / product / fit / advice / summary / versions / 401 / 400 / 404 / dataVersion filter）。
+- 多版本验证：临时导入第二个 dataVersion（v2_20260704），latest projection 自动更新到 v2，v1 仍可通过 `?dataVersion=v1_20260703` 读取；测试后 v2 已清理。
+- `apps/server npm run smoke` P0/P1 24 项全绿，未回退。
 
 ---
 
@@ -66,6 +58,7 @@
 - 用户授权进入 PLS 的数据默认放行；应用层不再按隐私字段名或值形态做 safety 拦截。
 - taxonomy gate、quality gate 和产品对象契约仍然有效。
 - pipeline 每一步要可追溯，便于后续回测和纠偏。
+- **抖音 BI 数据（D-P1-F1）作为独立数据资产存 `douyin_*` 表，不合并进主 `channel_profile / sku`；前端只能通过 `/api/v0/bi/douyin/*` 读取。**
 
 ## A-P0-3 沉淀
 

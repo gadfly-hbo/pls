@@ -75,18 +75,31 @@ test('End-to-End Smoke Test for PLS', async ({ page }) => {
   // 7. Go to Account Comparison
   const accountComparisonNav = page.getByText('账号画像与对比', { exact: true });
   await accountComparisonNav.click();
-  await expect(page.getByText('账号画像与匹配对比')).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('账号画像与匹配诊断')).toBeVisible({ timeout: 10000 });
 
-  // Verify the original Douyin BI dashboard is embedded and interactive.
-  const dashboardFrame = page.frameLocator('iframe[title="抖音商品全景分析"]');
-  await expect(dashboardFrame.getByText('商品人群洞察罗盘')).toBeVisible({ timeout: 10000 });
-  await expect(dashboardFrame.getByText('商品人群数据宽表').first()).toBeVisible();
-  await dashboardFrame.getByText('账号画像基准', { exact: true }).click();
-  await expect(dashboardFrame.locator('#pageTitleText')).toContainText('账号画像基准');
-  await dashboardFrame.getByText('款vs账号对比', { exact: true }).click();
-  await expect(dashboardFrame.locator('#pageTitleText')).toContainText('款vs账号TOP1对比');
-  await dashboardFrame.getByText('优化调整清单', { exact: true }).click();
-  await expect(dashboardFrame.locator('#pageTitleText')).toContainText('优化调整清单');
+  // Verify native React dashboard F4
+  await expect(page.getByText('账号画像基准').first()).toBeVisible();
+  await expect(page.getByText('商品人群罗盘').first()).toBeVisible();
+
+  // Go to F5 tab
+  const comparisonTab = page.getByText('款账号对比与优化建议');
+  await comparisonTab.click();
+
+  await expect(page.getByText('号货匹配诊断')).toBeVisible();
+  await expect(page.getByText('维度 TOP1 对比')).toBeVisible();
+  await expect(page.getByText('优化调整清单')).toBeVisible();
+
+  // Test CSV export from Account Comparison
+  const [acDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByText('导出 CSV').click()
+  ]);
+  const acPath = await acDownload.path();
+  expect(acPath).toBeTruthy();
+
+  // Validate CSV structure
+  const acCsvContent = fs.readFileSync(acPath, 'utf-8');
+  expect(acCsvContent).toContain('skuId,accountId,fitScore,fitConfidence,qualityFlags,generatedAt,advice');
 
   // Verify that there are no console/runtime errors captured
   expect(errors).toHaveLength(0);

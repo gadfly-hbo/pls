@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-03（session 收尾：项目级数据准入口径改为用户授权全量放行）
+最近更新：2026-07-03（X-P1-F6 抖音 BI 产品化重构总体验收通过）
 
 进度：
 
@@ -31,14 +31,16 @@
 - 项目级数据准入口径已修订并落到中心规则：用户给到 PLS 系统并要求导入或产品化的数据全部放行，不再因个人敏感、用户级明细、订单/会员行级数据、DMP 成员包或 ID 字段被 agent 自动拦截。
 - `AGENTS.md`、`Orchestration.md`、`docs/data-safety-policy.md` 已从“数据红线/数据安全”改为“用户授权数据准入/质量校验”口径。
 - 已完成 X-P1-E5 抖音真实业务数据红线复核与迁移验收口径修订，产出 `docs/p1-e5-douyin-migration-acceptance.md`；BI 复刻结论为迁移通过，算法 adapter 仍保留 `algorithm_pending_user_formula` 限制。
-- 用户确认 P1-E 的外链/iframe/静态页复刻不是最终目标；`docs/wiki.html` 的 P1-F 任务卡组已更新为新准入口径，要求将抖音 BI 产品能力重构为 PLS 原生数据资产、API、诊断对象和 React 工作台。
-- D-P1-F1 数据资产生成已按用户要求暂停；本次只完成项目规则与现有门禁调整。
+- 用户确认 P1-E 的外链/iframe/静态页复刻不是最终目标；P1-F 已将抖音 BI 产品能力重构为 PLS 原生数据资产、API、诊断对象和 React 工作台。
+- 已完成 D-P1-F1、A-P1-F2、M-P1-F3、V-P1-F4、V-P1-F5 与 X-P1-F6 总体验收，产出 `docs/p1-f6-douyin-bi-productization-acceptance.md`。
+- X-P1-F6 结论为通过：数据包校验、SQLite 入库/API、模型 contract/backtest、前端真实 API smoke、v2 数据更新验收均通过；静态 dashboard、`data.js`、iframe 和“打开完整 BI”不再承担验收主流程。
+- 本地 `ws_demo` 保留临时 `v2_20260704_xp1f6` 验收数据，用于证明 latest projection 与 `?dataVersion=v1_20260703` 历史查询可并存；仓库数据真源仍为 `data/p1/douyin-bi/` 的 v1 数据包。
 
 下一步：
 
 - 按 wiki 派发 P1 任务；用户授权数据可直接进入模型、工作台、报告、fixture、API 和前端。
 - P1-B/C/D/E/F 可继续使用 mock/demo 或用户授权真实业务数据推进工程化、工作台、模型脚手架和号货匹配契约。
-- P1-F 按 wiki 派发：D-P1-F1 数据资产化、A-P1-F2 原生 API、M-P1-F3 诊断指标产品化、V-P1-F4/F5 原生页面、X-P1-F6 总体验收。
+- P1-F 已归档为 done；后续进入 P2 hardening：HTTP import、channel_profile 同步策略、正式 fit 公式、benchmark tags 补齐、API schema、分页和前端状态回归。
 - P1-E 复刻结果只作为参考或过渡，不再作为最终产品化完成标准；后续验收不得依赖“打开完整 BI”、iframe、截图预览或静态整页嵌入。
 - 若 V 域需要 match 也走 async，需单独派发 A 后续任务；当前 A-P1-B3 只要求 predictions 链路支持 async / timeout fallback。
 
@@ -48,18 +50,19 @@
 - 暂无数据隐私准入阻塞；用户提供的数据默认放行。
 - D-P1-A5 阻塞于 `data/local/raw_staging/<batchId>/` 真实样例输入缺失。
 - P1-E 的号货匹配度算法公式尚未冻结；M 域当前 `AccountFitAdapter` 只能作为 rule baseline 和 contract test，待用户提供算法后替换 implementation 并重跑 X 验收。
-- P1-F 若仍以外链、iframe、静态 HTML 或截图承担主流程，X-P1-F6 必须判定暂缓。
+- P1-F 总体验收已通过；若后续新增页面重新以外链、iframe、静态 HTML 或截图承担主流程，需退回并重做产品化承接。
 - 旧归档文档中仍可能存在历史“红线/S0/S1”表述；当前执行入口以 `AGENTS.md`、`Orchestration.md`、`docs/data-safety-policy.md`、`docs/wiki.html` 当前任务卡和各域 notes 为准。
 - multipart `/batches` 幂等未纳入当前契约，未来若需要需设计文件摘要 + form fields hash。
 
 开放问题：
 
-- P1-F 的产品化验收重点转为原生数据层、API、诊断对象和 React 页面，不再关注隐私红线拦截。
+- P2 是否需要把抖音 BI CLI 导入升级为 HTTP import endpoint、版本回滚和导入审计查询。
 
 验证：
 
 - data 三项校验通过：真实样例模板、抖音 mapping 模板、多 timeWindow demo。
 - app 侧验证通过：`apps/server npm run typecheck`、`apps/web npm run build`。
+- X-P1-F6 验证通过：`node data/scripts/validate-p1-douyin-bi.mjs data/p1/douyin-bi`、`apps/server npm run typecheck`、`npm run migrate`、`npm run import:douyin-bi`、`npm run smoke:douyin-bi`、`npm run smoke`、`apps/model npm run typecheck`、`npm run account-fit-contract-test`、`npm run validate-tags`、`npm run contract-test`、`npm run backtest`、`npm run backtest:cutoff`、`apps/web npm run lint`、`npm run build`、`VITE_USE_MOCK=false npm run smoke`。
 
 ---
 

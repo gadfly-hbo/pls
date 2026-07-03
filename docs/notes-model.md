@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-02（model session 收尾）
+最近更新：2026-07-03（model session 收尾）
 
 进度：
 
@@ -14,6 +14,8 @@
 - 已完成 M-P1-D4 prediction feedback 样本回流设计草案，对齐 A 域 `/predictions/{predictionId}/feedback` 预留接口，不涉及 schema/API 落地。
 - 已完成 M-P1-E2 号货匹配度算法 adapter：`apps/model/src/account-fit.ts` 定义稳定 `AccountFitAdapterInput` / `AccountFitDiagnostic`，rule baseline 输出 `fitScore`、`fitConfidence`、matched/mismatched dimensions、positive/negative drivers、`adjustmentAdvice` 和 `qualityFlags`。
 - M-P1-E2 contract test 覆盖 matched、partial_mismatch、high_priority_adjustment、low_confidence 四类场景；当前 adapter 固定输出 `algorithm_pending_user_formula`，不得包装成正式号货匹配算法。
+- 已完成 M-P1-F3 号货诊断指标产品化：`AccountFitDiagnostic` 兼容旧 matched/mismatched 字段并新增 `dimensionDiagnostics`、`risks`、`legacyFitScore`，支持 BI `externalDimensionDiagnostics`、`adjustmentAdviceHints` 和 approved `sourceField` 追溯。
+- M-P1-F3 contract test 覆盖 matched、partial_mismatch、high_priority_adjustment、low_confidence、unmapped_external_dimension；`legacyFitScore` 固定为 `diagnostic_reference_only`，输出仍保留 `algorithm_pending_user_formula`。
 
 下一步：
 
@@ -21,6 +23,7 @@
 - Segment 权重校准需等待更大真实聚合样本；达到至少 30 个 SKU、6 个连续 `timeWindow` 后再评估是否调权。
 - `premium` keyword 是否映射到既有 `price.premium` 需 D/X review，不由 M 域单独决定。
 - 等待用户提供正式号货匹配公式；公式接入前，M-P1-E2 输出不得包装成正式算法结论。
+- M-P1-F3 已完成产品化 adapter 边界；后续 A-P1-F2 可从 SQLite latest/query 投影传入 BI comparison/advice 对象，V-P1-F5 消费 `dimensionDiagnostics` / `risks` / `adjustmentAdvice`。
 
 阻塞：
 
@@ -41,6 +44,7 @@
 - P1 mock 多窗口数据已支持 cutoff smoke，但仍不能声明真实泛化能力。
 - `midi` / `dress` 等结构 token 已由 M 域过滤出 `unmappedInputTokens`；D 域后续仍建议显式输出 `structuralTokens`。
 - M-P1-E2 rule baseline 只用于 contract test；正式 fitScore、recommendation、adjustmentAdvice 需等待用户公式校准。
+- M-P1-F3 仍不把 legacy dashboard `号货匹配度` 当作正式 `fitScore`；移除 `algorithm_pending_user_formula` 前必须由用户/X 冻结正式算法公式。
 
 ---
 

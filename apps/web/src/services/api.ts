@@ -1,4 +1,4 @@
-import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountMatchApiResponse } from '../types';
+import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass } from '../types';
 
 // Feature flag for local mock vs real backend
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
@@ -50,6 +50,169 @@ export const api = {
   getChannels: async () => {
     if (!USE_MOCK) return fetchApi<{items: ChannelProfile[]}>('/channels');
     return { data: { items: mockChannels } };
+  },
+
+  getAccountProfiles: async (): Promise<{ code: string; data: AccountProfile[] }> => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<{ items: any[] }>('/bi/douyin/accounts');
+      const items = res.data.items.map(r => ({
+        accountId: r.channelId,
+        accountName: r.accountName || r.displayName || r.channelId,
+        accountType: r.channelType || r.accountKind || 'unknown',
+        sampleSize: 0,
+        timeWindow: r.timeWindow || '',
+        coreTags: [],
+        interactionPreference: [],
+        performanceIndex: { followerCount: 0, engagementRate: 0, conversionRate: 0 }
+      }));
+      return { code: 'ok', data: items };
+    }
+    
+    // Mock Account Profiles
+    return {
+      code: 'ok',
+      data: mockChannels.map(c => ({
+        accountId: c.channelId,
+        accountName: c.channelName,
+        accountType: c.channelType,
+        sampleSize: 15000 + Math.floor(Math.random() * 50000),
+        timeWindow: '近30天',
+        coreTags: [],
+        interactionPreference: [],
+        performanceIndex: {
+          followerCount: 0,
+          engagementRate: 0,
+          conversionRate: 0
+        }
+      }))
+    };
+  },
+
+  getAccountProfileDetail: async (accountId: string): Promise<{ code: string; data: AccountProfile }> => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<any>(`/bi/douyin/accounts/${accountId}`);
+      const acc = res.data;
+      
+      const coreTags = (acc.benchmarkTags || []).map((t: any) => ({
+        tagId: t.optionLabel || t.dimension,
+        score: t.sharePercent || 0
+      })).slice(0, 5);
+
+      return {
+        code: 'ok',
+        data: {
+          accountId: acc.channelId,
+          accountName: acc.accountName || acc.displayName || acc.channelId,
+          accountType: acc.channelType || acc.accountKind || 'unknown',
+          sampleSize: acc.benchmarkTags?.[0]?.sampleSize || 0,
+          timeWindow: acc.timeWindow || '',
+          coreTags,
+          interactionPreference: [],
+          performanceIndex: { followerCount: 0, engagementRate: 0, conversionRate: 0 }
+        }
+      };
+    }
+
+    const mock = mockChannels.find(c => c.channelId === accountId) || mockChannels[0];
+    return {
+      code: 'ok',
+      data: {
+        accountId: mock.channelId,
+        accountName: mock.channelName,
+        accountType: mock.channelType,
+        sampleSize: 15000 + Math.floor(Math.random() * 50000),
+        timeWindow: '近30天',
+        coreTags: [
+          { tagId: 'demo.age_18_24', score: Math.random() },
+          { tagId: 'style.minimal', score: Math.random() },
+          { tagId: 'price.mid', score: Math.random() }
+        ],
+        interactionPreference: ['短视频观看', '直播互动', '分享转发'],
+        performanceIndex: {
+          followerCount: 500000 + Math.floor(Math.random() * 1000000),
+          engagementRate: 0.05 + Math.random() * 0.1,
+          conversionRate: 0.01 + Math.random() * 0.05
+        }
+      }
+    };
+  },
+
+  getProductCompass: async (skuId: string): Promise<{ code: string; data: ProductCompass }> => {
+    if (!USE_MOCK) {
+      try {
+        const res = await fetchApi<any>(`/bi/douyin/products/${skuId}`);
+        const p = res.data;
+        const dna = p.productAttributes?.styleKeywords || [];
+        
+        let audienceDistribution: { tagId: string; score: number }[] = [];
+        if (Array.isArray(p.mappedProfileTags) && p.mappedProfileTags.length > 0) {
+          audienceDistribution = p.mappedProfileTags.map((t: any) => ({
+            tagId: t.tagId || t.tagName || t.dimension || 'unknown',
+            score: Number(t.score || t.weight || t.share || 0)
+          }));
+        } else if (p.profileDistribution && typeof p.profileDistribution === 'object') {
+          Object.entries(p.profileDistribution).forEach(([dim, buckets]: [string, any]) => {
+             if (Array.isArray(buckets)) {
+               buckets.forEach(b => {
+                 audienceDistribution.push({
+                   tagId: b.label || b.bucket || b.name || String(dim),
+                   score: Number(b.share || b.weight || b.score || b.percent || 0)
+                 });
+               });
+             }
+          });
+        }
+
+        const metrics = p.performanceMetrics || {};
+        const index = p.performanceIndex || {};
+        const rawSalesVolume = index.salesVolume ?? metrics['2026合计净销量'] ?? metrics['商品链接数量'] ?? 0;
+        const salesVolume = Number(rawSalesVolume) || 0;
+        const salesAmount = Number(metrics['2026合计零售额']) || 0;
+        const avgOrderValue = salesVolume > 0 ? salesAmount / salesVolume : 0;
+        const conversionRate = 0; // Defensive fallback
+        
+        const salesMetrics = { salesVolume, conversionRate, avgOrderValue };
+        return {
+          code: 'ok',
+          data: {
+            skuId: p.skuId,
+            dna,
+            audienceDistribution,
+            salesMetrics,
+            qualityFlags: p.qualityFlags || []
+          }
+        };
+      } catch {
+        throw new Error('Failed to fetch product compass');
+      }
+    }
+
+    return {
+      code: 'ok',
+      data: {
+        skuId,
+        dna: ['简约', '通勤', '连衣裙', '无袖'],
+        audienceDistribution: [
+          { tagId: 'demo.age_25_34', score: 0.45 },
+          { tagId: 'demo.age_18_24', score: 0.35 },
+          { tagId: 'price.mid', score: 0.60 }
+        ],
+        salesMetrics: {
+          salesVolume: 1250,
+          conversionRate: 0.035,
+          avgOrderValue: 299
+        },
+        qualityFlags: ['数据充足', '置信度高']
+      }
+    };
+  },
+
+  getProducts: async () => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<{items: any[]}>('/bi/douyin/products?pageSize=1');
+      return { code: 'ok', data: res.data.items };
+    }
+    return { code: 'ok', data: [{ skuId: 'mock_sku_101' }] };
   },
 
   createProduct: async (productData: Partial<SKU>) => {
@@ -255,55 +418,50 @@ export const api = {
 
   getAccountMatch: async (skuId: string, accountId: string): Promise<{ code: string; data: AccountMatchResult }> => {
     if (!USE_MOCK) {
-      const res = await fetchApi<AccountMatchApiResponse>(`/account-matches?skuId=${skuId}&accountId=${accountId}&pageSize=1`);
-      const item = res.data.items?.[0];
-      if (!item) {
-        throw new Error('Account match not found');
+      const fitsRes = await fetchApi<{items: any[]}>(`/bi/douyin/fits?skuId=${skuId}&accountChannelId=${accountId}`);
+      const fit = fitsRes.data.items?.[0];
+      if (!fit) {
+        throw new Error('Account fit not found');
       }
+
+      const fitDetailRes = await fetchApi<any>(`/bi/douyin/fits/${fit.fitId}`);
+      const fitDetail = fitDetailRes.data;
+
+      const adviceRes = await fetchApi<{items: any[]}>(`/bi/douyin/advice?skuId=${skuId}&accountChannelId=${accountId}`);
+      const advices = adviceRes.data.items || [];
 
       // Generate View Model for baseline/comparison from the API fields
       const baseline = [
-        { dimension: '账号标识', value: item.accountId },
-        { dimension: '预测契合度', value: `Fit Score: ${(item.fitScore * 100).toFixed(0)}` }
+        { dimension: '账号标识', value: accountId },
+        { dimension: '预测契合度', value: `Fit Score: ${fit.legacyFitScore || 0}` }
       ];
 
-      const comparison: AccountMatchResult['comparison'] = [];
-      const misSet = new Set(item.mismatchedDimensions || []);
-      const posSet = new Set(item.positiveDrivers?.map(d => d.tagId) || []);
-      const negSet = new Set(item.negativeDrivers?.map(d => d.tagId) || []);
+      const comparison: AccountMatchResult['comparison'] = (fitDetail.dimensions || []).map((d: any) => ({
+        dimension: d.dimension,
+        accountTop1: { label: d.accountTop1Label || '-', value: '' },
+        skuTop1: { label: d.productTop1Label || '-', value: '' },
+        isAligned: d.isMatchLabel === 'Y' || d.isMatchLabel === 1 || d.isMatchLabel === true
+      }));
 
-      const allTags = new Set([...misSet, ...posSet, ...negSet]);
-      if (allTags.size === 0) allTags.add('综合标签匹配');
-
-      allTags.forEach(tag => {
-        const isAligned = !misSet.has(tag) && !negSet.has(tag);
-        comparison.push({
-          dimension: tag,
-          accountTop1: { label: '账号特征', value: '提取结果' },
-          skuTop1: { label: '商品特征', value: isAligned ? '高度吻合' : '存在偏离' },
-          isAligned
-        });
-      });
-
-      const adjustmentAdvice = (item.adjustmentAdvice || []).map((adv, idx) => ({
-        id: typeof adv.adviceId === 'number' ? adv.adviceId : (Number(adv.adviceId) || Date.now() + idx),
+      const adjustmentAdvice = advices.map((adv, idx) => ({
+        id: adv.adviceId || Date.now() + idx,
         item: `[${adv.priority}] ${adv.actionType} - ${adv.dimension}`,
-        suggestion: adv.rationale || adv.direction || '建议调整',
+        suggestion: adv.direction || '建议调整',
         status: 'pending'
       }));
 
       return { 
         code: 'ok', 
         data: {
-          accountId: item.accountId,
-          skuId: item.skuId,
-          fitScore: item.fitScore,
-          fitConfidence: item.fitConfidence,
+          accountId,
+          skuId,
+          fitScore: (fit.legacyFitScore || 0) / 100,
+          fitConfidence: 0.85,
           baseline,
           comparison,
-          mismatchedDimensions: item.mismatchedDimensions || [],
+          mismatchedDimensions: [],
           adjustmentAdvice,
-          qualityFlags: item.qualityFlags || []
+          qualityFlags: fit.qualityFlags || []
         }
       };
     }

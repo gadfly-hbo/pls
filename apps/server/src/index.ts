@@ -12,6 +12,7 @@ import tasks from "./routes/tasks.js";
 import taxonomy from "./routes/taxonomy.js";
 import audit from "./routes/audit.js";
 import accountMatches from "./routes/account-matches.js";
+import biDouyin from "./routes/bi-douyin.js";
 
 const app = new Hono();
 
@@ -32,6 +33,7 @@ api.route("/tasks", tasks);
 api.route("/taxonomy", taxonomy);
 api.route("/audit", audit);
 api.route("/account-matches", accountMatches);
+api.route("/bi/douyin", biDouyin);
 
 app.route("/api/v0", api);
 

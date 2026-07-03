@@ -5,6 +5,14 @@ export const ACCOUNT_FIT_ADAPTER_VERSION = "account-fit-rule-baseline-0.1";
 export type AccountFitDimension = "demo" | "style" | "price" | "occasion" | "intent" | "channel" | "external";
 export type AccountFitRecommendation = "priority_launch" | "test_launch" | "observe" | "avoid";
 export type DimensionStatus = "matched" | "mismatch" | "partial" | "unmapped";
+export type AccountFitRisk =
+  | "algorithm_formula_pending"
+  | "legacy_score_reference_only"
+  | "low_fit_confidence"
+  | "missing_dimension_top_tag"
+  | "unmapped_external_dimension"
+  | "low_profile_coverage"
+  | "low_sample_size";
 
 export interface AccountBenchmarkTopTag {
   dimension: AccountFitDimension;
@@ -22,6 +30,36 @@ export interface AccountFitQualityMetadata {
   qualityFlags?: string[];
 }
 
+export interface LegacyFitScoreReference {
+  score: number;
+  source: "legacy_dashboard";
+  usage: "diagnostic_reference_only";
+}
+
+export interface AccountFitExternalDimensionInput {
+  sourceField: string;
+  productTopLabel?: string;
+  accountTopLabel?: string;
+  productScore?: number;
+  accountScore?: number;
+  gapScore?: number;
+  confidence?: number;
+  status?: DimensionStatus;
+}
+
+export interface AccountFitAdjustmentAdviceHint {
+  adviceId?: string;
+  priority?: AccountFitAdjustmentAdvice["priority"];
+  dimension: AccountFitDimension;
+  currentProductTagId?: string;
+  targetAccountTagId?: string;
+  actionType?: AccountFitAdjustmentAdvice["actionType"];
+  direction?: string;
+  rationale?: string;
+  expectedImpactIndex?: number;
+  evidence?: AccountFitAdjustmentAdvice["evidence"];
+}
+
 export interface AccountFitAdapterInput {
   skuId: string;
   accountChannelId: string;
@@ -29,6 +67,9 @@ export interface AccountFitAdapterInput {
   accountProfileTags: ProfileTagScore[];
   productTopTags?: AccountBenchmarkTopTag[];
   accountBenchmarkTopTags?: AccountBenchmarkTopTag[];
+  externalDimensionDiagnostics?: AccountFitExternalDimensionInput[];
+  adjustmentAdviceHints?: AccountFitAdjustmentAdviceHint[];
+  legacyFitScore?: LegacyFitScoreReference;
   qualityMetadata?: AccountFitQualityMetadata;
 }
 
@@ -48,6 +89,7 @@ export interface AccountFitDimensionDiagnostic {
   gapScore: number;
   confidence: number;
   reasonCode: "same_top_tag" | "nearby_tag" | "top_tag_gap" | "missing_product_tag" | "missing_account_tag" | "unmapped_external_dimension";
+  sourceField?: string;
 }
 
 export interface AccountFitAdjustmentAdvice {
@@ -80,19 +122,26 @@ export interface AccountFitDiagnostic {
   recommendation: AccountFitRecommendation;
   matchedDimensions: AccountFitDimensionDiagnostic[];
   mismatchedDimensions: AccountFitDimensionDiagnostic[];
+  dimensionDiagnostics: AccountFitDimensionDiagnostic[];
   positiveDrivers: AccountFitDriver[];
   negativeDrivers: AccountFitDriver[];
   adjustmentAdvice: AccountFitAdjustmentAdvice[];
+  risks: AccountFitRisk[];
   qualityFlags: string[];
+  legacyFitScore?: LegacyFitScoreReference;
 }
 
 interface DimensionScores {
   dimension: AccountFitDimension;
-  productTopTag?: ProfileTagScore;
-  accountTopTag?: ProfileTagScore;
+  productTopTag?: TopTagScore;
+  accountTopTag?: TopTagScore;
   overlap: number;
   gap: number;
   confidence: number;
+}
+
+interface TopTagScore extends ProfileTagScore {
+  sourceField?: string;
 }
 
 const DIMENSION_WEIGHTS: Record<AccountFitDimension, number> = {
@@ -113,7 +162,7 @@ export function diagnoseAccountFit(input: AccountFitAdapterInput): AccountFitDia
   const productByDimension = topTagsByDimension(productTags, input.productTopTags);
   const accountByDimension = topTagsByDimension(accountTags, input.accountBenchmarkTopTags);
   const dimensionScores = DIMENSIONS.map((dimension) => scoreDimension(dimension, productByDimension.get(dimension), accountByDimension.get(dimension)));
-  const diagnostics = dimensionScores.map(toDimensionDiagnostic);
+  const diagnostics = [...dimensionScores.map(toDimensionDiagnostic), ...externalDimensionDiagnostics(input.externalDimensionDiagnostics)];
   const matchedDimensions = diagnostics.filter((item) => item.status === "matched" || item.status === "partial");
   const mismatchedDimensions = diagnostics.filter((item) => item.status === "mismatch" || item.status === "unmapped");
   const positiveDrivers = buildPositiveDrivers(dimensionScores);
@@ -121,6 +170,8 @@ export function diagnoseAccountFit(input: AccountFitAdapterInput): AccountFitDia
   const fitScore = weightedFitScore(dimensionScores);
   const fitConfidence = confidenceScore(dimensionScores, input.qualityMetadata);
   const qualityFlags = buildQualityFlags(input, dimensionScores, fitConfidence);
+  const risks = buildRisks(input, diagnostics, qualityFlags);
+  const adjustmentAdvice = buildAdjustmentAdvice(mismatchedDimensions, input.adjustmentAdviceHints);
 
   return {
     skuId: input.skuId,
@@ -134,10 +185,13 @@ export function diagnoseAccountFit(input: AccountFitAdapterInput): AccountFitDia
     recommendation: recommendation(fitScore, fitConfidence, qualityFlags),
     matchedDimensions,
     mismatchedDimensions,
+    dimensionDiagnostics: diagnostics,
     positiveDrivers,
     negativeDrivers,
-    adjustmentAdvice: buildAdjustmentAdvice(mismatchedDimensions),
+    adjustmentAdvice,
+    risks,
     qualityFlags,
+    legacyFitScore: input.legacyFitScore,
   };
 }
 
@@ -145,9 +199,9 @@ function sanitizeTags(tags: ProfileTagScore[]): ProfileTagScore[] {
   return tags.filter((tag) => tag.tagId.includes("."));
 }
 
-function topTagsByDimension(tags: ProfileTagScore[], explicitTopTags: AccountBenchmarkTopTag[] = []): Map<AccountFitDimension, ProfileTagScore> {
+function topTagsByDimension(tags: ProfileTagScore[], explicitTopTags: AccountBenchmarkTopTag[] = []): Map<AccountFitDimension, TopTagScore> {
   const byTagId = new Map(tags.map((tag) => [tag.tagId, tag]));
-  const result = new Map<AccountFitDimension, ProfileTagScore>();
+  const result = new Map<AccountFitDimension, TopTagScore>();
   for (const topTag of explicitTopTags) {
     if (!topTag.tagId || topTag.dimension === "external") continue;
     const tag = byTagId.get(topTag.tagId) ?? {
@@ -158,19 +212,19 @@ function topTagsByDimension(tags: ProfileTagScore[], explicitTopTags: AccountBen
       sampleSize: null,
       timeWindow: null,
     };
-    result.set(topTag.dimension, tag);
+    result.set(topTag.dimension, { ...tag, sourceField: topTag.sourceField });
   }
 
   for (const tag of tags) {
     const dimension = tagDimension(tag.tagId);
     if (!dimension || dimension === "external" || result.has(dimension)) continue;
     const current = result.get(dimension);
-    if (!current || tag.score > current.score) result.set(dimension, tag);
+    if (!current || tag.score > current.score) result.set(dimension, { ...tag, sourceField: tag.source });
   }
   return result;
 }
 
-function scoreDimension(dimension: AccountFitDimension, productTopTag?: ProfileTagScore, accountTopTag?: ProfileTagScore): DimensionScores {
+function scoreDimension(dimension: AccountFitDimension, productTopTag?: TopTagScore, accountTopTag?: TopTagScore): DimensionScores {
   if (!productTopTag || !accountTopTag) {
     return { dimension, productTopTag, accountTopTag, overlap: 0, gap: 1, confidence: mean([productTopTag?.confidence ?? 0.4, accountTopTag?.confidence ?? 0.4]) };
   }
@@ -202,7 +256,19 @@ function toDimensionDiagnostic(score: DimensionScores): AccountFitDimensionDiagn
     gapScore: round(score.gap),
     confidence: round(score.confidence),
     reasonCode,
+    sourceField: score.productTopTag?.sourceField ?? score.accountTopTag?.sourceField,
   };
+}
+
+function externalDimensionDiagnostics(inputs: AccountFitExternalDimensionInput[] = []): AccountFitDimensionDiagnostic[] {
+  return inputs.map((item) => ({
+    dimension: "external",
+    status: item.status ?? "unmapped",
+    gapScore: round(normalizeGap(item.gapScore ?? Math.abs((item.productScore ?? 0) - (item.accountScore ?? 0)))),
+    confidence: round(item.confidence ?? 0.4),
+    reasonCode: "unmapped_external_dimension",
+    sourceField: item.sourceField,
+  }));
 }
 
 function buildPositiveDrivers(scores: DimensionScores[]): AccountFitDriver[] {
@@ -235,19 +301,24 @@ function buildNegativeDrivers(scores: DimensionScores[]): AccountFitDriver[] {
     .slice(0, 5);
 }
 
-function buildAdjustmentAdvice(mismatches: AccountFitDimensionDiagnostic[]): AccountFitAdjustmentAdvice[] {
-  return mismatches.slice(0, 4).map((item, index) => ({
-    adviceId: `account_fit_advice_${index + 1}`,
-    priority: item.gapScore >= 0.7 ? "high" : item.gapScore >= 0.45 ? "medium" : "low",
-    dimension: item.dimension,
-    currentProductTagId: item.productTopTagId,
-    targetAccountTagId: item.accountTopTagId,
-    actionType: adviceActionType(item.dimension, item.status),
-    direction: adviceDirection(item),
-    rationale: `Dimension ${item.dimension} has status ${item.status} with reason ${item.reasonCode}.`,
-    expectedImpactIndex: round(Math.min(1, item.gapScore * DIMENSION_WEIGHTS[item.dimension] * 2)),
-    evidence: { gapScore: item.gapScore },
-  }));
+function buildAdjustmentAdvice(mismatches: AccountFitDimensionDiagnostic[], hints: AccountFitAdjustmentAdviceHint[] = []): AccountFitAdjustmentAdvice[] {
+  const hinted = hints.map((hint, index) => normalizeAdviceHint(hint, index));
+  const hintedKeys = new Set(hinted.map((item) => adviceKey(item.dimension, item.currentProductTagId, item.targetAccountTagId, item.evidence.sourceField)));
+  const generated: AccountFitAdjustmentAdvice[] = mismatches
+    .filter((item) => !hintedKeys.has(adviceKey(item.dimension, item.productTopTagId, item.accountTopTagId, item.sourceField)))
+    .map((item, index): AccountFitAdjustmentAdvice => ({
+      adviceId: `account_fit_advice_${index + 1}`,
+      priority: advicePriority(item.gapScore),
+      dimension: item.dimension,
+      currentProductTagId: item.productTopTagId,
+      targetAccountTagId: item.accountTopTagId,
+      actionType: adviceActionType(item.dimension, item.status),
+      direction: adviceDirection(item),
+      rationale: `Dimension ${item.dimension} has status ${item.status} with reason ${item.reasonCode}.`,
+      expectedImpactIndex: round(Math.min(1, item.gapScore * DIMENSION_WEIGHTS[item.dimension] * 2)),
+      evidence: { gapScore: item.gapScore, sourceField: item.sourceField },
+    }));
+  return [...hinted, ...generated].slice(0, 4);
 }
 
 function weightedFitScore(scores: DimensionScores[]): number {
@@ -271,13 +342,26 @@ function confidenceScore(scores: DimensionScores[], quality?: AccountFitQualityM
 
 function buildQualityFlags(input: AccountFitAdapterInput, scores: DimensionScores[], fitConfidence: number): string[] {
   const flags = new Set(["algorithm_pending_user_formula", ...(input.qualityMetadata?.qualityFlags ?? [])]);
+  if (input.legacyFitScore) flags.add("legacy_fit_score_reference_only");
   if ((input.qualityMetadata?.accountSampleSize ?? 500) < 500) flags.add("low_account_sample");
   if ((input.qualityMetadata?.productSampleSize ?? 500) < 500) flags.add("low_product_sample");
   if ((input.qualityMetadata?.accountProfileCoverageRate ?? 1) < 0.7) flags.add("low_account_profile_coverage");
   if ((input.qualityMetadata?.productProfileCoverageRate ?? 1) < 0.7) flags.add("low_product_profile_coverage");
   if (fitConfidence < 0.5) flags.add("low_fit_confidence");
   if (scores.some((score) => !score.productTopTag || !score.accountTopTag)) flags.add("missing_dimension_top_tag");
+  if ((input.externalDimensionDiagnostics ?? []).length > 0) flags.add("unmapped_external_dimension");
   return [...flags].sort();
+}
+
+function buildRisks(input: AccountFitAdapterInput, diagnostics: AccountFitDimensionDiagnostic[], qualityFlags: string[]): AccountFitRisk[] {
+  const risks = new Set<AccountFitRisk>(["algorithm_formula_pending"]);
+  if (input.legacyFitScore) risks.add("legacy_score_reference_only");
+  if (qualityFlags.includes("low_fit_confidence")) risks.add("low_fit_confidence");
+  if (qualityFlags.includes("missing_dimension_top_tag")) risks.add("missing_dimension_top_tag");
+  if (qualityFlags.includes("low_account_profile_coverage") || qualityFlags.includes("low_product_profile_coverage")) risks.add("low_profile_coverage");
+  if (qualityFlags.includes("low_account_sample") || qualityFlags.includes("low_product_sample")) risks.add("low_sample_size");
+  if (diagnostics.some((item) => item.reasonCode === "unmapped_external_dimension")) risks.add("unmapped_external_dimension");
+  return [...risks].sort();
 }
 
 function recommendation(fitScore: number, fitConfidence: number, qualityFlags: string[]): AccountFitRecommendation {
@@ -302,6 +386,32 @@ function adviceDirection(item: AccountFitDimensionDiagnostic): string {
   return `Align product ${item.dimension} signal ${item.productTopTagId} with account benchmark ${item.accountTopTagId}.`;
 }
 
+function normalizeAdviceHint(hint: AccountFitAdjustmentAdviceHint, index: number): AccountFitAdjustmentAdvice {
+  const gapScore = hint.evidence?.gapScore ?? 0;
+  return {
+    adviceId: hint.adviceId ?? `account_fit_hint_${index + 1}`,
+    priority: hint.priority ?? advicePriority(gapScore),
+    dimension: hint.dimension,
+    currentProductTagId: hint.currentProductTagId,
+    targetAccountTagId: hint.targetAccountTagId,
+    actionType: hint.actionType ?? adviceActionType(hint.dimension, hint.currentProductTagId && hint.targetAccountTagId ? "mismatch" : "unmapped"),
+    direction: hint.direction ?? `Review ${hint.dimension} account-fit signal.`,
+    rationale: hint.rationale ?? "User-authorized BI advice was normalized into PLS adjustment advice.",
+    expectedImpactIndex: hint.expectedImpactIndex ?? round(Math.min(1, gapScore * DIMENSION_WEIGHTS[hint.dimension] * 2)),
+    evidence: hint.evidence ?? {},
+  };
+}
+
+function advicePriority(gapScore: number): AccountFitAdjustmentAdvice["priority"] {
+  if (gapScore >= 0.7) return "high";
+  if (gapScore >= 0.45) return "medium";
+  return "low";
+}
+
+function adviceKey(dimension: AccountFitDimension, productTagId?: string, accountTagId?: string, sourceField?: string): string {
+  return [dimension, productTagId ?? "", accountTagId ?? "", sourceField ?? ""].join("|");
+}
+
 function tagDimension(tagId: string): AccountFitDimension | undefined {
   const dimension = tagId.split(".")[0] as AccountFitDimension | undefined;
   return dimension && dimension in DIMENSION_WEIGHTS ? dimension : undefined;
@@ -317,4 +427,8 @@ function clamp(value: number, min: number, max: number): number {
 
 function round(value: number): number {
   return Math.round(value * 1000) / 1000;
+}
+
+function normalizeGap(value: number): number {
+  return value > 1 ? value / 100 : value;
 }

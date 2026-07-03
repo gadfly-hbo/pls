@@ -144,6 +144,26 @@
   .cl-title { color: var(--muted); font-size: 14px; }
   .cl-item ul { margin: 8px 0 0; padding-left: 20px; }
   .cl-item li { font-size: 14px; color: #cdd2d7; margin: 4px 0; }
+  .asset-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 16px 0 24px; }
+  .asset-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .asset-card h3 { margin: 0 0 8px; font-size: 15px; }
+  .asset-card p { margin: 6px 0; color: var(--muted); font-size: 13px; }
+  .asset-card ul, .asset-block ul, .asset-block ol { margin: 8px 0 0; padding-left: 20px; }
+  .asset-card li, .asset-block li { color: #cdd2d7; font-size: 13px; margin: 4px 0; }
+  .asset-block {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px; margin-bottom: 16px;
+  }
+  .asset-block h3 { margin: 0 0 10px; font-size: 16px; }
+  .asset-block h4 { margin: 14px 0 6px; font-size: 14px; color: var(--fg); }
+  .asset-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+  .asset-table th, .asset-table td { border-top: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+  .asset-table th { color: var(--muted); font-weight: 600; background: var(--panel2); }
+  .asset-table td { color: #cdd2d7; }
+  .light .asset-card li, .light .asset-block li, .light .asset-table td { color: #334155; }
 </style>
 <script>
   if (localStorage.getItem("pls_theme") === "light") {
@@ -167,6 +187,7 @@
     <button class="tab" data-view="hotfix">快修任务</button>
     <button class="tab" data-view="notes">随手记</button>
     <button class="tab" data-view="prompts">常用 prompts</button>
+    <button class="tab" data-view="agentAssets">Agent 技能</button>
     <button class="tab" data-view="changelog">版本历史</button>
   </div>
 
@@ -299,6 +320,167 @@
 不要执行 git 操作。</script>
   </section>
 
+  <section id="agentAssets" class="view">
+    <p class="legend">四个 agent 当前由 AgentOps 统一管理技能资产。Codex 是主控；OpenCode、MimoCode、Antigravity CLI 是辅 agent。执行复杂任务时，必须先给目标、非目标、允许改动范围、验证方式和 handoff 格式。</p>
+
+    <div class="asset-grid">
+      <div class="asset-card">
+        <h3>Codex</h3>
+        <p><code>/Users/huangbo/.codex</code></p>
+        <ul>
+          <li>主控 agent：澄清、拆解、编排、集成、最终验证。</li>
+          <li>直接使用全套 skills / commands / agents。</li>
+        </ul>
+      </div>
+      <div class="asset-card">
+        <h3>OpenCode</h3>
+        <p><code>/Users/huangbo/.opencode</code> + <code>~/.config/opencode</code></p>
+        <ul>
+          <li>辅助实现 agent：适合边界清晰的小实现和局部重构。</li>
+          <li>当前与 Codex 同步同一套 AgentOps skills / commands / agents。</li>
+        </ul>
+      </div>
+      <div class="asset-card">
+        <h3>MimoCode</h3>
+        <p><code>/Users/huangbo/.config/mimocode</code></p>
+        <ul>
+          <li>独立检查 agent：适合第二意见、回归检查、轻量实现。</li>
+          <li>当前与 Codex 同步同一套 AgentOps skills / commands / agents。</li>
+        </ul>
+      </div>
+      <div class="asset-card">
+        <h3>Antigravity CLI</h3>
+        <p><code>/Users/huangbo/.gemini/config</code></p>
+        <ul>
+          <li>长流程 / 自动化团队实验 agent。</li>
+          <li>除 skills / commands / agents 外，额外同步 <code>workflows</code> 和 UI <code>.toml</code> commands。</li>
+          <li>UI 改造推荐用 <code>/ui</code>，不要用 <code>/product-ui-redesign</code>。</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="asset-block">
+      <h3>Skills 清单</h3>
+      <table class="asset-table">
+        <thead><tr><th>Skill</th><th>用途</th><th>Coding 时怎么用</th></tr></thead>
+        <tbody>
+          <tr><td><code>agentops-orchestration</code></td><td>多 agent 编排纪律</td><td>Codex 主控拆任务、写 brief、派发辅 agent、收 handoff 时使用。</td></tr>
+          <tr><td><code>antigravity-workflow-briefing</code></td><td>给 Antigravity 写任务 brief</td><td>让 Antigravity 做长流程或实验前，先生成边界清晰的 brief。</td></tr>
+          <tr><td><code>antigravity-result-synthesis</code></td><td>汇总 Antigravity 输出</td><td>Antigravity 完成后，由 Codex 判断采纳、返工或丢弃。</td></tr>
+          <tr><td><code>matt-ask-matt</code> / <code>ask-matt</code></td><td>选择流程</td><td>不确定该用 TDD、review、PRD、handoff 时使用。</td></tr>
+          <tr><td><code>matt-grilling</code> / <code>grilling</code></td><td>压测方案</td><td>需求不清、架构选择多、风险大时先追问和压力测试。</td></tr>
+          <tr><td><code>matt-grill-with-docs</code> / <code>grill-with-docs</code></td><td>压测并沉淀文档</td><td>大功能、架构决策、长期项目方向用，输出 ADR / 术语沉淀。</td></tr>
+          <tr><td><code>matt-tdd</code> / <code>tdd</code></td><td>测试驱动开发</td><td>修 bug、加核心逻辑、需要行为保障时用，按 red-green-refactor 小步推进。</td></tr>
+          <tr><td><code>matt-diagnosing-bugs</code> / <code>diagnosing-bugs</code></td><td>系统化排查 bug</td><td>先复现、定位、加证据，再修复和验证，不直接猜。</td></tr>
+          <tr><td><code>matt-code-review</code> / <code>code-review</code></td><td>代码审查</td><td>完成一轮改动后，按标准和规格双线 review。</td></tr>
+          <tr><td><code>matt-handoff</code> / <code>handoff</code></td><td>交接文档</td><td>长任务中断、切换 agent、交给辅 agent 前后使用。</td></tr>
+          <tr><td><code>matt-to-prd</code> / <code>to-prd</code></td><td>讨论转 PRD</td><td>需求已经清楚，需要固化为产品 / 工程说明时使用。</td></tr>
+          <tr><td><code>matt-to-issues</code> / <code>to-issues</code></td><td>计划拆 issues</td><td>把大功能拆成可独立执行、可验收的小任务。</td></tr>
+          <tr><td><code>matt-prototype</code> / <code>prototype</code></td><td>快速原型</td><td>UI、状态模型、交互不确定时先做 throwaway prototype。</td></tr>
+          <tr><td><code>matt-codebase-design</code> / <code>codebase-design</code></td><td>模块设计</td><td>重构、抽象、接口设计、深模块设计时使用。</td></tr>
+          <tr><td><code>matt-domain-modeling</code> / <code>domain-modeling</code></td><td>领域建模</td><td>复杂业务、概念混乱、数据模型设计时统一术语和边界。</td></tr>
+          <tr><td><code>ui</code></td><td>UI 改造短入口</td><td>日常推荐入口，会转发到 <code>product-ui-redesign</code>。</td></tr>
+          <tr><td><code>product-ui-redesign</code></td><td>产品 UI 改造完整流程</td><td>截图审计、设计原则、组件系统、实现、Playwright / browser 验证、polish。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="asset-block">
+      <h3>Commands 清单</h3>
+      <ul>
+        <li><code>agentops-plan</code>：先做多 agent 任务计划。</li>
+        <li><code>agentops-review</code>：对当前改动做 AgentOps 风格 review。</li>
+        <li><code>agentops-handoff</code>：生成交接摘要。</li>
+        <li><code>matt-tdd</code>：进入 TDD 流程。</li>
+        <li><code>matt-code-review</code>：审查当前分支或改动。</li>
+        <li><code>matt-diagnosing-bugs</code>：诊断 bug。</li>
+        <li><code>matt-grilling</code> / <code>matt-grill-with-docs</code>：压测方案，后者会沉淀文档。</li>
+        <li><code>matt-to-prd</code> / <code>matt-to-issues</code>：输出 PRD 或拆 issues。</li>
+        <li><code>matt-prototype</code>：做原型。</li>
+        <li><code>ui-screenshot-audit</code>：只做 UI 截图审计。</li>
+        <li><code>ui-redesign-plan</code>：只做 UI 改造计划。</li>
+        <li><code>ui-polish-pass</code>：做一轮 UI polish。</li>
+        <li><code>ui-visual-verify</code>：做视觉验证。</li>
+      </ul>
+    </div>
+
+    <div class="asset-block">
+      <h3>Auxiliary Agents</h3>
+      <table class="asset-table">
+        <thead><tr><th>Agent</th><th>建议用途</th></tr></thead>
+        <tbody>
+          <tr><td><code>codex-lead</code></td><td>主控，负责拆解、集成、验证和最终回复。</td></tr>
+          <tr><td><code>opencode-implementer</code></td><td>OpenCode 辅助实现。</td></tr>
+          <tr><td><code>mimo-independent-check</code></td><td>MimoCode 独立检查或第二意见。</td></tr>
+          <tr><td><code>antigravity-workflow-runner</code></td><td>Antigravity 长流程 / 自动化实验。</td></tr>
+          <tr><td><code>antigravity-architect</code></td><td>架构方案。</td></tr>
+          <tr><td><code>antigravity-implementer</code></td><td>实现任务。</td></tr>
+          <tr><td><code>antigravity-reviewer</code></td><td>独立 review。</td></tr>
+          <tr><td><code>antigravity-test-runner</code></td><td>独立测试验证。</td></tr>
+          <tr><td><code>ui-design-auditor</code></td><td>UI 审计。</td></tr>
+          <tr><td><code>design-system-architect</code></td><td>组件系统 / 设计系统。</td></tr>
+          <tr><td><code>frontend-polisher</code></td><td>前端实现和 polish。</td></tr>
+          <tr><td><code>visual-regression-reviewer</code></td><td>视觉回归验证。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="asset-block">
+      <h3>推荐使用流程</h3>
+      <h4>小修小改</h4>
+      <ol>
+        <li>Codex 直接读代码、改代码。</li>
+        <li>需要测试保障时用 <code>matt-tdd</code>。</li>
+        <li>完成后用 <code>matt-code-review</code> 或 <code>agentops-review</code>。</li>
+        <li>跑最小验证，Codex 汇总结论。</li>
+      </ol>
+      <h4>复杂功能</h4>
+      <ol>
+        <li>用 <code>matt-grilling</code> 或 <code>matt-grill-with-docs</code> 压测需求。</li>
+        <li>用 <code>matt-to-prd</code> 固化需求。</li>
+        <li>用 <code>matt-to-issues</code> 拆任务。</li>
+        <li>Codex 主控实现；必要时派 OpenCode / MimoCode / Antigravity 做独立子任务。</li>
+        <li>每个辅 agent 必须交 handoff。</li>
+        <li>Codex 集成、测试、最终说明。</li>
+      </ol>
+      <h4>Bug 修复</h4>
+      <ol>
+        <li>用 <code>matt-diagnosing-bugs</code> 先复现和定位。</li>
+        <li>明确根因后再改。</li>
+        <li>关键逻辑用 <code>matt-tdd</code> 补测试。</li>
+        <li>用 <code>matt-code-review</code> 检查回归风险。</li>
+      </ol>
+      <h4>UI 改造</h4>
+      <ol>
+        <li>用 <code>ui</code> 或 <code>product-ui-redesign</code>。</li>
+        <li>先截图审计，不先改颜色。</li>
+        <li>写 3-5 条产品 UI 原则。</li>
+        <li>定义组件系统或页面切片。</li>
+        <li>实现一页或一个 workflow。</li>
+        <li>用 Playwright / browser 截图验证桌面和移动端。</li>
+        <li>用 <code>ui-polish-pass</code> 做最后一轮细节。</li>
+      </ol>
+    </div>
+
+    <div class="asset-block">
+      <h3>调用示例</h3>
+      <pre class="brief">Codex:
+使用 matt-tdd 修这个 bug
+使用 matt-code-review review 当前改动
+使用 ui skill 改造 PLS 的核心页面
+把这个方案用 matt-to-prd 固化
+给 Antigravity 生成一个 workflow briefing
+
+Antigravity CLI:
+cd /Users/huangbo/Dev/Projects/pls
+agy
+/ui 先审计当前产品 UI，只做截图审计和改造计划，不要改代码
+
+或：
+使用 ui skill，按 product-ui-redesign 流程审计并改造当前项目 UI</pre>
+    </div>
+  </section>
+
   <section id="changelog" class="view">
     <div id="clList"></div>
     <p class="note">P0 前的文档协作骨架从 v0.1 开始记录。阶段完成后，总控把 done 任务归档进版本历史。</p>
@@ -306,7 +488,7 @@
 </div>
 
 <script>
-const VERSION = "0.18";
+const VERSION = "0.20";
 
 const DOMAINS = {
   X: { name: "总控", agent: "主控 Agent", color: "var(--x)" },
@@ -1279,7 +1461,7 @@ const TASKS = [
   },
   {
     dom: "D",
-    status: "todo",
+    status: "done",
     created: "2026-07-02 19:05",
     title: "D-P1-A5：真实样例本地资产化试跑",
     brief: `目标：在用户提供真实 raw staging 输入后，完成一次真实样例本地结构化、tag mapping 和质量报告试跑。
@@ -1359,7 +1541,7 @@ const TASKS = [
   },
   {
     dom: "A",
-    status: "todo",
+    status: "done",
     created: "2026-07-03 00:00",
     title: "A-P1-F2：抖音 BI SQLite 入库、原生 API 与查询投影",
     brief: `目标：为 PLS 原生页面提供抖音 BI 的 SQLite 存储、可重复入库和读取接口，替代前端静态 data.js / iframe / HTML 内嵌数据读取。
@@ -1390,7 +1572,7 @@ const TASKS = [
   },
   {
     dom: "M",
-    status: "todo",
+    status: "done",
     created: "2026-07-03 00:01",
     title: "M-P1-F3：号货诊断指标产品化",
     brief: `目标：把 BI 中的号货匹配度、维度差异和优化建议转换为 PLS 可解释诊断，而不是前端展示静态分数。
@@ -1417,7 +1599,7 @@ const TASKS = [
   },
   {
     dom: "V",
-    status: "todo",
+    status: "done",
     created: "2026-07-03 00:02",
     title: "V-P1-F4：账号画像工作台原生重构",
     brief: `目标：把账号画像与商品人群罗盘重构为 PLS React 原生工作台页面，移除外链、iframe、截图预览、静态整页嵌入和前端内嵌数据源依赖。
@@ -1444,7 +1626,7 @@ const TASKS = [
   },
   {
     dom: "V",
-    status: "todo",
+    status: "done",
     created: "2026-07-03 00:03",
     title: "V-P1-F5：款账号对比与优化清单原生重构",
     brief: `目标：把款账号 TOP1 对比、维度差异、号货匹配度和优化调整清单重构为 PLS 原生决策工作流。
@@ -1474,7 +1656,7 @@ const TASKS = [
   },
   {
     dom: "X",
-    status: "todo",
+    status: "done",
     created: "2026-07-03 00:04",
     title: "X-P1-F6：抖音 BI 产品化重构总体验收",
     brief: `目标：验收抖音 BI 是否真正重构进 PLS，而不是以外链、iframe、截图或静态页嵌入完成。
@@ -1502,9 +1684,21 @@ const HOTFIX = [];
 
 const CHANGELOG = [
   {
-    ver: "0.19",
+    ver: "0.20",
     date: "2026-07-03",
     current: true,
+    title: "X-P1-F6 抖音 BI 产品化重构验收通过",
+    items: [
+      "X-P1-F6 经总控验收标记 done，新增 docs/p1-f6-douyin-bi-productization-acceptance.md",
+      "复核 D/A/M/V 产物，确认抖音 BI 主流程已由 SQLite、内部 API、模型诊断对象和 React 原生页面承接",
+      "完成本地 v2_20260704_xp1f6 数据更新验收，latest projection 与 v1 历史快照查询均通过",
+      "明确 P2 hardening 清单：HTTP import、channel_profile 同步、正式 fit 公式、benchmark tags 补齐、API schema 和前端状态回归"
+    ]
+  },
+  {
+    ver: "0.19",
+    date: "2026-07-03",
+    current: false,
     title: "抖音 BI 产品化重构拆卡",
     items: [
       "新增 P1-F 任务卡组，目标从外链/iframe/静态 BI 复刻升级为 PLS 原生产品能力",

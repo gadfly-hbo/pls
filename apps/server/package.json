@@ -9,6 +9,8 @@
     "migrate": "tsx src/db/migrate.ts",
     "seed": "tsx scripts/seed.ts",
     "smoke": "tsx scripts/smoke.ts",
+    "smoke:douyin-bi": "node scripts/smoke-douyin-bi.mjs",
+    "import:douyin-bi": "node scripts/import-douyin-bi.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

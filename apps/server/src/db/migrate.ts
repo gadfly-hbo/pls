@@ -1,7 +1,12 @@
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { openDb } from "./connection.js";
-import { SCHEMA_DDL } from "./schema.js";
+import {
+  SCHEMA_DDL,
+  DOUYIN_BI_DDL,
+  DOUYIN_BI_DDL_PART2,
+  DOUYIN_BI_DDL_PART3,
+} from "./schema.js";
 
 const dataDir = resolve(import.meta.dirname, "../../../../data");
 const wsDir = resolve(dataDir, "workspaces", "ws_demo");
@@ -42,6 +47,27 @@ for (const sql of E3_COLS) {
     // Column already exists — SQLite doesn't support IF NOT EXISTS on ADD COLUMN
   }
 }
+
+// A-P1-F2: Douyin BI tables + latest views.
+// Views are dropped first so column additions to the underlying tables get
+// picked up on subsequent migrations (same pattern as match_result_latest).
+const DOUYIN_VIEWS = [
+  "douyin_account_latest",
+  "douyin_account_benchmark_tag_latest",
+  "douyin_account_report_latest",
+  "douyin_product_latest",
+  "douyin_product_account_fit_latest",
+  "douyin_comparison_dimension_latest",
+  "douyin_adjustment_advice_latest",
+  "douyin_summary_metric_latest",
+];
+for (const v of DOUYIN_VIEWS) db.exec(`DROP VIEW IF EXISTS ${v}`);
+// Re-exec SCHEMA_DDL to recreate douyin_account_latest (defined there),
+// then apply the split DOUYIN_BI_DDL parts which define the remaining views.
+db.exec(SCHEMA_DDL);
+db.exec(DOUYIN_BI_DDL);
+db.exec(DOUYIN_BI_DDL_PART2);
+db.exec(DOUYIN_BI_DDL_PART3);
 
 // Ensure workspace row exists
 db.prepare(

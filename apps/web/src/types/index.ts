@@ -84,6 +84,33 @@ export interface ChannelProfile {
   qualityFlags?: string[];
 }
 
+export interface AccountProfile {
+  accountId: string;
+  accountName: string;
+  accountType: string;
+  sampleSize: number;
+  timeWindow: string;
+  coreTags: { tagId: string; score: number }[];
+  interactionPreference: string[];
+  performanceIndex: {
+    followerCount: number;
+    engagementRate: number;
+    conversionRate: number;
+  };
+}
+
+export interface ProductCompass {
+  skuId: string;
+  dna: string[];
+  audienceDistribution: { tagId: string; score: number }[];
+  salesMetrics: {
+    salesVolume: number;
+    conversionRate: number;
+    avgOrderValue: number;
+  };
+  qualityFlags: string[];
+}
+
 export interface MatchDriver {
   tagId: string;
   productScore: number;
