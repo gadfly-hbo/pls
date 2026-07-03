@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import type { SKU, ProductProfile } from './types';
 import Dashboard from './pages/Dashboard';
-import ChannelHeatmap from './pages/ChannelHeatmap';
-import AccountComparison from './pages/AccountComparison';
+import MatchCoreWorkbench from './pages/MatchCoreWorkbench';
+import AccountProfileWorkbench from './pages/AccountProfileWorkbench';
+import FlywheelWorkbench from './pages/FlywheelWorkbench';
 
 function App() {
-  const [currentView, setCurrentView] = useState<'dashboard' | 'heatmap' | 'account-comparison'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'match-core' | 'account-workbench' | 'flywheel'>('dashboard');
   const [currentSku, setCurrentSku] = useState<SKU | null>(null);
   const [prediction, setPrediction] = useState<ProductProfile | null>(null);
+  const [flywheelDecisionId, setFlywheelDecisionId] = useState<string | undefined>();
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {
@@ -38,16 +40,22 @@ function App() {
             新品预测工作台
           </button>
           <button 
-            className={currentView === 'heatmap' ? 'active' : ''} 
-            onClick={() => setCurrentView('heatmap')}
+            className={currentView === 'match-core' ? 'active' : ''} 
+            onClick={() => setCurrentView('match-core')}
           >
-            渠道匹配热力图
+            人货匹配核心工作台
           </button>
           <button 
-            className={currentView === 'account-comparison' ? 'active' : ''} 
-            onClick={() => setCurrentView('account-comparison')}
+            className={currentView === 'account-workbench' ? 'active' : ''} 
+            onClick={() => setCurrentView('account-workbench')}
           >
-            账号画像与对比
+            实体与账号画像
+          </button>
+          <button 
+            className={currentView === 'flywheel' ? 'active' : ''} 
+            onClick={() => setCurrentView('flywheel')}
+          >
+            经营飞轮
           </button>
           <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 8px', alignSelf: 'center' }} />
           <button onClick={toggleTheme} title="切换主题">
@@ -63,14 +71,22 @@ function App() {
             setCurrentSku={setCurrentSku}
             prediction={prediction}
             setPrediction={setPrediction}
-            goToHeatmap={() => setCurrentView('heatmap')}
+            goToHeatmap={() => setCurrentView('match-core')}
           />
         )}
-        {currentView === 'heatmap' && (
-          <ChannelHeatmap />
+        {currentView === 'match-core' && (
+          <MatchCoreWorkbench 
+            goToFlywheel={(decisionId) => {
+              setFlywheelDecisionId(decisionId);
+              setCurrentView('flywheel');
+            }}
+          />
         )}
-        {currentView === 'account-comparison' && (
-          <AccountComparison />
+        {currentView === 'account-workbench' && (
+          <AccountProfileWorkbench />
+        )}
+        {currentView === 'flywheel' && (
+          <FlywheelWorkbench initialDecisionId={flywheelDecisionId} />
         )}
       </main>
     </div>

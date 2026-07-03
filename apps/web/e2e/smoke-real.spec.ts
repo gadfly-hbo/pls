@@ -12,9 +12,10 @@ test('End-to-End Real Backend Smoke Test', async ({ page }) => {
   });
   page.on('console', msg => {
     if (msg.type() === 'error') {
-      if (!msg.text().includes('favicon.ico')) {
-        console.error('CONSOLE ERROR:', msg.text());
-        errors.push(msg.text());
+      const text = msg.text();
+      if (!text.includes('favicon.ico')) {
+        console.error('CONSOLE ERROR:', text);
+        errors.push(text);
       }
     }
   });
@@ -22,33 +23,36 @@ test('End-to-End Real Backend Smoke Test', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByText('PLS 工作台')).toBeVisible();
 
-  // Go to Account Comparison
-  const accountComparisonNav = page.getByText('账号画像与对比', { exact: true });
+  // Go to Account Workbench
+  const accountComparisonNav = page.getByText('实体与账号画像', { exact: true });
   await accountComparisonNav.click();
-  await expect(page.getByText('账号画像与匹配诊断')).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('实体列表', { exact: true })).toBeVisible({ timeout: 10000 });
 
   // Select the specific real account
-  await page.locator('select').selectOption('douyin_account_semir_official_flagship_baseline');
+  await page.locator('input[placeholder="搜索店铺 / 账号 / 门店..."]').fill('douyin_account_semir_official_flagship_baseline');
+  await page.getByText('douyin_account_semir_official_flagship_baseline', { exact: false }).first().click();
   
   // Wait for loading to finish
-  await expect(page.getByText('加载中...')).not.toBeVisible();
+  await expect(page.getByText('加载详情中...')).not.toBeVisible();
 
   // Verify native React dashboard F4
-  await expect(page.getByText('账号画像基准').first()).toBeVisible();
-  await expect(page.getByText('商品人群罗盘').first()).toBeVisible();
+  await expect(page.getByText('有效数据样本量')).toBeVisible();
 
   // Go to F5 tab
-  const comparisonTab = page.getByText('款账号对比与优化建议');
+  const comparisonTab = page.getByText('号货匹配决策');
   await comparisonTab.click();
 
-  await expect(page.getByText('号货匹配诊断')).toBeVisible();
-  await expect(page.getByText('维度 TOP1 对比')).toBeVisible();
-  await expect(page.getByText('优化调整清单')).toBeVisible();
+  const analyzeBtn = page.getByText('分析匹配度');
+  await analyzeBtn.click();
+
+  await expect(page.getByText('号货匹配综合得分')).toBeVisible();
+  await expect(page.getByText('匹配维度对比')).toBeVisible();
+  await expect(page.getByText('策略调整与优化建议')).toBeVisible();
 
   // Test CSV export from Account Comparison
   const [acDownload] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByText('导出 CSV').click()
+    page.getByText('导出报告').click()
   ]);
   const acPath = await acDownload.path();
   expect(acPath).toBeTruthy();
@@ -56,6 +60,27 @@ test('End-to-End Real Backend Smoke Test', async ({ page }) => {
   // Validate CSV structure
   const acCsvContent = fs.readFileSync(acPath, 'utf-8');
   expect(acCsvContent).toContain('skuId,accountId,fitScore,fitConfidence,qualityFlags,generatedAt,advice');
+
+  // Go to Match Core Workbench
+  const matchCoreNav = page.getByText('人货匹配核心工作台', { exact: true });
+  await matchCoreNav.click();
+  await expect(page.getByText('人货匹配决策工作台')).toBeVisible({ timeout: 10000 });
+
+  // Mode: SKU to Channel
+  await expect(page.getByText('匹配的实体列表')).toBeVisible();
+  const firstChannelMatch = page.locator('.match-entity-item').first();
+  await firstChannelMatch.waitFor({ state: 'visible' });
+  await firstChannelMatch.click();
+  await expect(page.getByText('匹配决策解释报告')).toBeVisible({ timeout: 10000 });
+
+  // Mode: Channel to SKU
+  const modeChannelToSku = page.getByText('按实体找商品', { exact: true });
+  await modeChannelToSku.click();
+  await expect(page.getByText('匹配的商品列表')).toBeVisible();
+  const firstSkuMatch = page.locator('.match-entity-item').first();
+  await firstSkuMatch.waitFor({ state: 'visible' });
+  await firstSkuMatch.click();
+  await expect(page.getByText('匹配决策解释报告')).toBeVisible({ timeout: 10000 });
 
   // Verify that there are no console/runtime errors captured
   expect(errors).toHaveLength(0);

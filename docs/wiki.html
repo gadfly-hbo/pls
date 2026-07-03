@@ -488,7 +488,7 @@ agy
 </div>
 
 <script>
-const VERSION = "0.20";
+const VERSION = "0.29";
 
 const DOMAINS = {
   X: { name: "总控", agent: "主控 Agent", color: "var(--x)" },
@@ -1677,6 +1677,322 @@ const TASKS = [
 - 给出通过 / 暂缓 / 禁止进入产品主线的结论。
 - 明确剩余缺口 owner、风险等级和下一轮任务。
 - wiki changelog、各域 notes 和验收报告同步。`
+  },
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-03 18:20",
+    title: "X-P2-0：P2 产品信息架构与任务池冻结",
+    brief: `目标：基于 docs/p2-product-direction-ia.md 冻结 PLS P2 产品方向、一级模块、做 / 不做范围和任务池。
+
+背景：
+- X-P1-F6 已确认抖音 BI 产品化重构通过。
+- 用户确认 PLS 定位为具备模型预测能力的业务智能 BI 系统，覆盖数据管理、渠道人群、商品人群、人货匹配、新品预测和经营飞轮。
+
+范围：
+1. 复核 docs/p2-product-direction-ia.md 的产品定位、用户角色、6 个一级模块和对象关系。
+2. 冻结 P2 主路径：数据管理 -> 渠道人群 / 商品人群 -> 人货匹配 -> 新品预测 -> 经营飞轮。
+3. 明确 P2 初期解释型优先，不做自动决策。
+4. 确认 D/A/M/V 任务边界和跨域依赖。
+5. 输出 P2 冻结结论，并根据需要更新 notes。
+
+数据准入口径：
+- 用户提供或要求导入 PLS 的真实业务数据继续按项目规则全量放行。
+- 新品商品主数据字段尚未提供，不能提前编造字段枚举、默认值或业务 ID。
+
+验收：
+- P2 信息架构冻结结论明确。
+- wiki 中 P2 任务卡可被 D/A/M/V 复制执行。
+- 后续实现不得偏离店铺 / 账号优先、解释型匹配和数据可追溯原则。`
+  },
+  {
+    dom: "A",
+    status: "done",
+    created: "2026-07-03 18:21",
+    title: "A-P2-1：数据管理底座与导入审计 API",
+    brief: `目标：把 PLS 的数据导入、版本、质量和审计能力产品化为数据管理底座。
+
+前置：
+- X-P2-0 冻结 P2 信息架构。
+- X-P1-F6 已验证抖音 BI CLI 导入、latest projection 和历史 dataVersion 查询。
+
+范围：
+1. 设计 DataSource、ImportBatch、DataVersion、FieldMapping、DataQualityReport 的后端对象和读取接口。
+2. 支持查询现有抖音 BI 导入批次、版本、latest 状态、行数、质量报告和错误信息。
+3. 预留 HTTP import endpoint、版本回滚候选和导入审计查询，不要求一次性完成所有写入能力。
+4. 保持现有 /api/v0/bi/douyin/* 主流程兼容。
+5. 明确未来商品主数据、渠道画像、行动反馈数据源的接入方式。
+
+红线：
+- 不破坏现有 douyin_* 表和 ws_demo 的 v1 / v2 验证状态。
+- 不把数据管理 API 做成只服务抖音 BI 的一次性接口。
+
+验收：
+- typecheck / smoke 通过。
+- 能通过 API 读取导入批次、版本、质量和 latest 信息。
+- docs/api-contract.md 或对应文档补充数据管理 API contract。`
+  },
+  {
+    dom: "D",
+    status: "done",
+    created: "2026-07-03 18:22",
+    title: "D-P2-2：商品主数据与渠道实体 schema 草案",
+    brief: `目标：冻结 P2 商品主数据、渠道实体、字段映射和质量报告草案，为新品预测与店铺 / 账号优先渠道人群打底。
+
+前置：
+- X-P2-0 冻结 P2 信息架构。
+
+范围：
+1. 定义 ProductMaster 字段组草案：身份、类目、价格带、季节、卖点、材质、风格、场景、图文资产、相似 SKU 等。
+2. 定义 ChannelEntity 字段组草案：平台、店铺、账号、直播间、内容账号、省份、城市、商圈、门店等。
+3. 定义 FieldMapping 和 DataQualityReport 模板，支持源字段、目标字段、映射规则、未映射原因、覆盖率和置信度。
+4. 明确 ProductProfile、PredictedProductProfile、ChannelProfile 的输入边界。
+5. 对齐 docs/profile-taxonomy-v0.md，不新增未批准画像 tagId。
+
+数据准入口径：
+- 用户后续提供的商品主数据字段可全量进入 PLS；本卡只冻结结构，不编造真实字段和值。
+
+验收：
+- 输出 schema / mapping 模板文档或数据模板。
+- 能覆盖线上店铺 / 账号和线下省市商圈门店。
+- D/M/A/V 能基于草案判断后续 API、模型和前端输入范围。`
+  },
+  {
+    dom: "A",
+    status: "done",
+    created: "2026-07-03 18:23",
+    title: "A-P2-3：店铺 / 账号优先的渠道人群 API",
+    brief: `目标：把渠道人群查询从平台渠道优先调整为店铺 / 账号 / 门店实体优先，为 V-P2-4 工作台提供稳定 API。
+
+前置：
+- D-P2-2 给出 ChannelEntity / ChannelProfile 草案。
+- A-P2-1 明确数据版本和导入来源查询方式。
+
+范围：
+1. 设计 ChannelEntity 列表、详情、画像、benchmark、质量状态的读取接口。
+2. 支持线上平台下钻到店铺 / 账号 / 直播间 / 内容账号。
+3. 预留线下省份 / 城市 / 商圈 / 门店层级。
+4. 明确抖音 BI douyin_* 数据是否同步或投影到通用 ChannelProfile 的方案和风险。
+5. 保持现有抖音 BI API 与 P0/P1 heatmap API 不回退。
+
+红线：
+- 不在未拍板前强行合并 douyin_* 与 channel_profile 运行时真源。
+- 不编造线下门店真实数据。
+
+验收：
+- typecheck / smoke 通过。
+- API 能以店铺 / 账号为主实体返回画像、来源、版本、样本量和质量标记。
+- contract 文档说明 latest / dataVersion 查询语义。`
+  },
+  {
+    dom: "V",
+    status: "done",
+    created: "2026-07-03 18:24",
+    title: "V-P2-4：店铺 / 账号优先的渠道人群工作台",
+    brief: `目标：实现 P2 渠道人群工作台，让用户以店铺 / 账号 / 门店为第一入口查看人群画像和 benchmark 差异。
+
+前置：
+- A-P2-3 提供店铺 / 账号优先 API。
+
+范围：
+1. 设计实体列表、筛选、详情和画像视图，平台只作为分组维度。
+2. 支持账号画像、样本量、timeWindow、来源、质量标记和 benchmark tags。
+3. 同时提供决策视图和分析视图。
+4. 覆盖 loading、empty、error、low confidence、unmapped 状态。
+5. 移动端和窄屏不能出现文字、按钮、卡片或工具栏重叠。
+
+红线：
+- 不用 iframe、静态整页 HTML、截图或前端内嵌 data.js 承担主流程。
+- 不引入与现有设计系统冲突的新 UI 风格。
+
+验收：
+- lint / build / Playwright smoke 通过。
+- 真实 API 模式下完成店铺 / 账号列表到详情主流程。
+- desktop / mobile 截图或等价视觉检查无明显溢出、遮挡和重叠。`
+  },
+  {
+    dom: "M",
+    status: "done",
+    created: "2026-07-03 18:25",
+    title: "M-P2-5：解释型人货匹配 contract",
+    brief: `目标：冻结 P2 解释型人货匹配输出 contract，为正式 fit formula 替换和前端解释面板打底。
+
+前置：
+- D-P2-2 给出 ProductProfile / ChannelProfile 输入边界。
+- 用户尚未提供正式号货匹配公式。
+
+范围：
+1. 定义 ProductChannelFit 与 FitExplanation 输出对象。
+2. 输出 matchedTags、conflictTags、missingTags、lowConfidenceTags、recommendation、riskFlags、confidence。
+3. 保留 legacyFitScore 为 diagnostic_reference_only，不作为正式产品算法结论。
+4. 覆盖 matched、mismatch、low confidence、unmapped、insufficient sample 等 contract 场景。
+5. 明确未来正式 fit formula 的替换点和回测口径。
+
+红线：
+- 不输出无法追溯到 tagId、sourceField 或字段字典的黑盒解释。
+- 不假设用户尚未提供的算法权重或公式。
+
+验收：
+- model typecheck / contract-test 通过。
+- contract 文档说明输入、输出、置信度、不可用边界和替换点。
+- 前端可直接据此实现解释面板。`
+  },
+  {
+    dom: "V",
+    status: "done",
+    created: "2026-07-03 18:26",
+    title: "V-P2-6：人货匹配核心工作台",
+    brief: `目标：把人货匹配升级为 PLS 核心决策工作台，支持按商品找渠道和按渠道找商品。
+
+前置：
+- A-P2-3 提供店铺 / 账号优先 API。
+- M-P2-5 提供解释型匹配 contract。
+
+范围：
+1. 实现按商品找店铺 / 账号 / 门店的匹配列表和详情。
+2. 实现按店铺 / 账号 / 门店找商品的匹配列表和详情。
+3. 展示匹配分、置信度、相似标签、冲突标签、缺失标签、风险提示和推荐理由。
+4. 支持筛选、排序和导出，导出字段来自 PLS 数据对象。
+5. 覆盖 empty、error、low confidence、unmapped、insufficient sample 状态。
+
+红线：
+- 不把匹配结果包装成自动决策；P2 只提供解释型建议。
+- 不用单一黑盒分数替代解释层。
+
+验收：
+- lint / build / Playwright smoke 通过。
+- 真实 API 模式下至少跑通一个按商品找渠道和一个按渠道找商品流程。
+- desktop / mobile 视觉检查通过。`
+  },
+  {
+    dom: "D",
+    status: "done",
+    created: "2026-07-03 18:27",
+    title: "D-P2-7：新品主数据预测输入模板",
+    brief: `目标：在用户提供具体字段前，先冻结新品主数据预测输入模板的字段组、质量要求和映射边界。
+
+前置：
+- D-P2-2 商品主数据 schema 草案完成。
+
+范围：
+1. 基于 ProductMaster 定义新品预测输入模板。
+2. 区分必填、可选、后续增强字段组，但不编造真实字段值。
+3. 定义图文资产、相似 SKU、价格带、卖点、材质、风格、场景等字段组的映射说明。
+4. 输出质量检查规则：缺失、冲突、不可映射、低置信度。
+5. 为 M/A 新品预测 baseline 提供 fixture 或模板。
+
+数据准入口径：
+- 用户后续提供的新品商品主数据可全量进入 PLS；脱敏和聚合不作为默认前置条件。
+
+验收：
+- 模板可被后续脚本或 API 校验。
+- 未提供具体字段前不生成虚假的业务枚举、ID 或默认值。
+- D/M/A 能据此推进新品预测 contract。`
+  },
+  {
+    dom: "M",
+    status: "done",
+    created: "2026-07-03 18:28",
+    title: "M-P2-8：新品人群预测 baseline contract",
+    brief: `目标：基于新品商品主数据定义预测画像输出 contract 和可解释 baseline，让新品结果能进入人货匹配链路。
+
+前置：
+- D-P2-7 给出新品主数据预测输入模板。
+
+范围：
+1. 定义 PredictedProductProfile 输出对象：预测标签、置信度、来源、相似历史商品、风险和不可用边界。
+2. 设计 baseline adapter，可先基于商品主数据和相似 SKU 生成可解释预测。
+3. 输出预测结果进入 ProductChannelFit 的衔接方式。
+4. 覆盖输入不足、无相似样本、低置信度、tag unmapped 等 contract 场景。
+5. 明确后续真实模型替换点。
+
+红线：
+- 不把 baseline 伪装成已训练模型。
+- 不编造用户尚未提供的商品主数据字段和值。
+
+验收：
+- model typecheck / contract-test 通过。
+- contract 文档说明输入、输出、解释依据和不可用边界。
+- A/V 能据此实现新品预测入口和结果页。`
+  },
+  {
+    dom: "A",
+    status: "done",
+    created: "2026-07-03 18:29",
+    title: "A-P2-9：新品预测 API 与匹配衔接",
+    brief: `目标：为新品主数据预测提供 API，并把预测画像结果接入人货匹配链路。
+
+前置：
+- D-P2-7 新品输入模板完成。
+- M-P2-8 新品预测 baseline contract 完成。
+
+范围：
+1. 设计新品预测提交、查询、状态和结果 API。
+2. 支持同步或异步返回，复用现有 prediction async / timeout 口径。
+3. 保存 PredictedProductProfile、来源、版本、质量和置信度。
+4. 支持将预测画像作为 ProductProfile 输入调用匹配能力。
+5. 保持现有 P0/P1 prediction 和 match API 不回退。
+
+红线：
+- 不破坏现有 predictionId / matchId 持久化语义。
+- 不把未校验的新品输入直接写入不可追溯结果。
+
+验收：
+- typecheck / smoke 通过。
+- API 能跑通新品提交 -> 预测结果 -> 匹配建议的最小链路。
+- docs/api-contract.md 或对应文档补充 contract。`
+  },
+  {
+    dom: "A",
+    status: "done",
+    created: "2026-07-03 18:30",
+    title: "A-P2-10：经营飞轮最小闭环 API",
+    brief: `目标：为经营飞轮提供决策记录、行动记录、反馈导入和复盘状态 API。
+
+前置：
+- 人货匹配结果能稳定产生可引用的 ProductChannelFit 或等价结果 ID。
+
+范围：
+1. 定义 DecisionRecord、ActionRecord、FeedbackRecord、StrategyAdjustment 存储和读取接口。
+2. 支持从匹配建议创建决策记录。
+3. 支持记录上架、铺货、投放、内容、直播、活动、价格策略等行动类型。
+4. 支持反馈导入摘要：销量、GMV、转化、ROI、退货、复购、人群偏差。
+5. 支持复盘状态：待执行、执行中、待复盘、已验证、需调整。
+
+红线：
+- P2 初期只做记录与复盘，不做自动策略执行。
+- 反馈数据必须保留来源、批次、时间窗口和质量标记。
+
+验收：
+- typecheck / smoke 通过。
+- 能从一条匹配建议创建决策和行动记录，并导入反馈进入复盘状态。
+- API contract 明确对象关系和状态流转。`
+  },
+  {
+    dom: "V",
+    status: "done",
+    created: "2026-07-03 18:31",
+    title: "V-P2-11：经营飞轮最小闭环视图",
+    brief: `目标：实现经营飞轮的最小闭环视图，让用户从决策、行动、反馈到策略调整形成可追踪流程。
+
+前置：
+- A-P2-10 提供经营飞轮 API。
+
+范围：
+1. 从匹配建议创建决策记录入口。
+2. 展示行动列表、负责人、时间、状态和关联商品 / 店铺 / 账号。
+3. 展示反馈摘要、效果判断、人群偏差和待调整事项。
+4. 支持状态流转：待执行、执行中、待复盘、已验证、需调整。
+5. 覆盖 empty、error、无反馈、低置信度状态。
+
+红线：
+- 不做自动投放、自动上架或自动策略执行。
+- 不把飞轮做成与匹配、新品预测脱节的独立看板。
+
+验收：
+- lint / build / Playwright smoke 通过。
+- 可从匹配建议进入决策记录，再查看行动和反馈复盘。
+- desktop / mobile 视觉检查通过。`
   }
 ];
 
@@ -1684,9 +2000,117 @@ const HOTFIX = [];
 
 const CHANGELOG = [
   {
-    ver: "0.20",
+    ver: "0.29",
     date: "2026-07-03",
     current: true,
+    title: "D-P2-7 新品主数据预测输入模板验收通过",
+    items: [
+      "D-P2-7 经总控复核标记 done，新增 docs/p2-7-new-product-input-template-acceptance.md",
+      "确认 data/templates/new-product-prediction-input/ 冻结新品预测输入模板、字段映射模板、质量报告模板和校验脚本",
+      "确认模板阶段用户待提供字段保持 null、空数组或空对象，不生成假 ID、假枚举、假业务值或未批准 tagId",
+      "复验 validate-new-product-prediction-template 通过，结果 0 error / 0 warning"
+    ]
+  },
+  {
+    ver: "0.28",
+    date: "2026-07-03",
+    current: false,
+    title: "V-P2-6 人货匹配核心工作台验收通过",
+    items: [
+      "V-P2-6 经总控复核通过，新增 docs/p2-6-match-core-workbench-acceptance.md",
+      "确认 MatchCoreWorkbench 支持按商品找实体和按实体找商品，并提供解释报告、策略筛选、排序和 CSV 导出",
+      "验收中修正真实 API 实体来源，工作台改为消费 /api/v0/channels/entities 并通过 sourceEntityKey 兼容现有 match result",
+      "修正模式切换 Match not found 假阳性、真实 API smoke 断言缺口和空分数防御，复验 lint、build、Mock Playwright smoke、真实 API Playwright smoke 与 desktop / mobile 视觉检查"
+    ]
+  },
+  {
+    ver: "0.27",
+    date: "2026-07-03",
+    current: false,
+    title: "M-P2-5 解释型人货匹配 Contract 验收通过",
+    items: [
+      "M-P2-5 经总控复核标记 done，新增 docs/p2-5-product-channel-fit-contract-acceptance.md",
+      "确认 ProductChannelFit / FitExplanation 输出 matched、conflict、missing、low-confidence 标签解释，可供前端解释面板直接消费",
+      "保留 legacyFitScore 为 diagnostic_reference_only，当前 fitScore 仅作为 contract baseline，不包装成正式算法结论",
+      "复验 apps/model typecheck 与 contract-test 通过，覆盖 matched、mismatch、low_confidence、unmapped、insufficient_sample"
+    ]
+  },
+  {
+    ver: "0.26",
+    date: "2026-07-03",
+    current: false,
+    title: "V-P2-4 店铺 / 账号优先渠道人群工作台验收通过",
+    items: [
+      "V-P2-4 经总控复核标记 done，新增 docs/p2-4-channel-entity-workbench-acceptance.md",
+      "确认 AccountProfileWorkbench 以店铺 / 账号实体为第一入口，支持平台分组、搜索、画像分析和号货匹配决策双视图",
+      "验收中修正真实 API 接入点，前端列表与详情主流程改为消费 /api/v0/channels/entities",
+      "复验 lint、build、Mock Playwright smoke、真实 API Playwright smoke，并完成 desktop / mobile 视觉检查"
+    ]
+  },
+  {
+    ver: "0.25",
+    date: "2026-07-03",
+    current: false,
+    title: "A-P2-3 店铺 / 账号优先渠道人群 API 验收通过",
+    items: [
+      "A-P2-3 经总控复核标记 done，新增 docs/p2-3-channel-entities-acceptance.md",
+      "新增 channel_entity 投影表、channel_entity_latest view、sync:channel-entities 和 /api/v0/channels/entities 读取 API",
+      "确认 channel_entity 只作为 P2 渠道人群投影层，不修改 douyin_* 或 channel_profile 源表",
+      "复验 typecheck、migrate、seed:data-sources、sync:channel-entities、smoke:channel-entities、smoke:douyin-bi、smoke:data-management 和基础 smoke 均通过"
+    ]
+  },
+  {
+    ver: "0.24",
+    date: "2026-07-03",
+    current: false,
+    title: "D-P2-2 商品主数据与渠道实体 Schema 验收通过",
+    items: [
+      "D-P2-2 经总控复核标记 done，新增 docs/p2-2-product-channel-schema-acceptance.md",
+      "确认 docs/p2-2-product-channel-schema.md 可作为 P2 数据域结构草案",
+      "冻结 ProductMaster、ChannelEntity、FieldMapping、DataQualityReport 草案和 ProductProfile / PredictedProductProfile / ChannelProfile 输入边界",
+      "明确物理表、地理字典和 priceBand / seasonBand / platformType 全局枚举仍需后续任务单独拍板"
+    ]
+  },
+  {
+    ver: "0.23",
+    date: "2026-07-03",
+    current: false,
+    title: "A-P2-1 数据管理底座验收通过",
+    items: [
+      "A-P2-1 经总控复核标记 done，新增 docs/p2-1-data-management-acceptance.md",
+      "确认 data_source 注册表与 adapter 模式满足 source-agnostic 数据管理底座要求",
+      "确认 /api/v0/data-management/* 读取型 API、quality report、audit 查询和 501 占位写路径可作为 P2 第一阶段交付",
+      "复验 typecheck、migrate、seed:data-sources、smoke:data-management、smoke:douyin-bi 和基础 smoke 均通过"
+    ]
+  },
+  {
+    ver: "0.22",
+    date: "2026-07-03",
+    current: false,
+    title: "X-P2-0 P2 产品信息架构与任务池冻结",
+    items: [
+      "X-P2-0 经总控复核标记 done，新增 docs/p2-0-product-ia-freeze.md",
+      "确认 docs/p2-product-direction-ia.md 可作为 P2 产品口径来源",
+      "冻结 P2 主路径：数据管理 -> 渠道人群 / 商品人群 -> 人货匹配 -> 新品预测 -> 经营飞轮",
+      "明确 P2 初期不做自动决策，后续实现必须遵循店铺 / 账号优先、解释型匹配和数据可追溯原则"
+    ]
+  },
+  {
+    ver: "0.21",
+    date: "2026-07-03",
+    current: false,
+    title: "P2 产品方向冻结与任务池拆卡",
+    items: [
+      "新增 docs/p2-product-direction-ia.md，确认 PLS 定位为具备模型预测能力的业务智能 BI 系统",
+      "冻结 P2 一级模块：数据管理、渠道人群、商品人群、人货匹配、新品预测、经营飞轮",
+      "新增 X-P2-0 至 V-P2-11 任务卡，覆盖数据管理、店铺 / 账号优先渠道人群、解释型匹配、新品预测和经营飞轮最小闭环",
+      "明确 P2 初期以解释型建议和可追溯数据为主，不做自动决策"
+    ]
+  },
+  {
+    ver: "0.20",
+    date: "2026-07-03",
+    current: false,
     title: "X-P1-F6 抖音 BI 产品化重构验收通过",
     items: [
       "X-P1-F6 经总控验收标记 done，新增 docs/p1-f6-douyin-bi-productization-acceptance.md",

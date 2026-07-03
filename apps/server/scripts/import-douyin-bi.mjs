@@ -34,6 +34,14 @@ const manifest = JSON.parse(readFileSync(join(packageDir, "sqlite_import_manifes
 const batchId = manifest.batchId;
 const dataVersion = manifest.dataVersion;
 
+// Read quality report if present (D-P1-F1 packages include quality_report.json).
+let qualityReportJson = "{}";
+try {
+  qualityReportJson = readFileSync(join(packageDir, "quality_report.json"), "utf-8");
+} catch {
+  console.log("  (no quality_report.json found — quality_report column will be empty)");
+}
+
 console.log(`Importing douyin BI package`);
 console.log(`  packageDir = ${packageDir}`);
 console.log(`  workspace  = ${workspaceId}`);
@@ -238,9 +246,9 @@ const transactionBody = () => {
     total += count;
   }
 
-  db.prepare(`INSERT OR REPLACE INTO batch (batch_id, workspace_id, batch_type, source, source_type, time_window, row_count, entity_counts, created_at)
-    VALUES (?, ?, 'douyin_bi_import', ?, 'user_authorized', ?, ?, ?, datetime('now'))`).run(
-    importBatchId, workspaceId, `douyin_report_dashboard`, timeWindow, total, JSON.stringify(entityCounts));
+  db.prepare(`INSERT OR REPLACE INTO batch (batch_id, workspace_id, batch_type, source, source_type, time_window, row_count, entity_counts, quality_report, created_at)
+    VALUES (?, ?, 'douyin_bi_import', ?, 'user_authorized', ?, ?, ?, ?, datetime('now'))`).run(
+    importBatchId, workspaceId, `douyin_report_dashboard`, timeWindow, total, JSON.stringify(entityCounts), qualityReportJson);
 
   db.prepare(`INSERT INTO audit_event (audit_id, workspace_id, actor, request_id, resource_type, resource_id, event, meta, occurred_at)
     VALUES (?, ?, 'import-script', ?, 'bi_batch', ?, 'import_completed', ?, datetime('now'))`).run(

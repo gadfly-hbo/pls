@@ -6,6 +6,10 @@ import {
   DOUYIN_BI_DDL,
   DOUYIN_BI_DDL_PART2,
   DOUYIN_BI_DDL_PART3,
+  DATA_MANAGEMENT_DDL,
+  CHANNEL_ENTITY_DDL,
+  NEW_PRODUCT_DDL,
+  FLYWHEEL_DDL,
 } from "./schema.js";
 
 const dataDir = resolve(import.meta.dirname, "../../../../data");
@@ -60,6 +64,7 @@ const DOUYIN_VIEWS = [
   "douyin_comparison_dimension_latest",
   "douyin_adjustment_advice_latest",
   "douyin_summary_metric_latest",
+  "channel_entity_latest",
 ];
 for (const v of DOUYIN_VIEWS) db.exec(`DROP VIEW IF EXISTS ${v}`);
 // Re-exec SCHEMA_DDL to recreate douyin_account_latest (defined there),
@@ -68,6 +73,10 @@ db.exec(SCHEMA_DDL);
 db.exec(DOUYIN_BI_DDL);
 db.exec(DOUYIN_BI_DDL_PART2);
 db.exec(DOUYIN_BI_DDL_PART3);
+db.exec(DATA_MANAGEMENT_DDL);
+db.exec(CHANNEL_ENTITY_DDL);
+db.exec(NEW_PRODUCT_DDL);
+db.exec(FLYWHEEL_DDL);
 
 // Ensure workspace row exists
 db.prepare(

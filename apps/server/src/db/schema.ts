@@ -577,3 +577,237 @@ FROM (
   FROM douyin_summary_metric
 ) WHERE _latest_rank = 1;
 `;
+
+// ============================================================================
+// A-P2-1: Data management foundation.
+// Generic data source registry. Each row identifies a logical data source
+// (douyin_bi, product_master, channel_profile, action_feedback, ...) and
+// points at the adapter + table prefix that the data-management API uses to
+// project import batches, versions, latest status and quality reports.
+//
+// The registry is intentionally source-agnostic so the data-management API
+// is not a douyin-BI-only surface. Existing batch / audit_event rows remain
+// the authoritative import log; data_source just tags them with a sourceId.
+// ============================================================================
+export const DATA_MANAGEMENT_DDL = `
+CREATE TABLE IF NOT EXISTS data_source (
+  source_id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspace(workspace_id),
+  source_kind TEXT NOT NULL,
+  display_name TEXT,
+  adapter TEXT NOT NULL,
+  schema_prefix TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  description TEXT,
+  config TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_data_source_workspace ON data_source(workspace_id, source_kind);
+CREATE INDEX IF NOT EXISTS idx_data_source_status ON data_source(workspace_id, status);
+`;
+
+// ============================================================================
+// A-P2-3: Channel entity projection table.
+//
+// P2 makes ChannelEntity (shop / account / livestream / content_account /
+// province / city / trade_area / store) the first-class channel anchor.
+// This table is a read-optimized projection populated by a sync/seed script
+// from the source-of-truth tables (douyin_account_latest, channel_profile,
+// and future sources). Source tables are NOT modified or merged at runtime.
+//
+// The projection is batch-synced (idempotent INSERT OR REPLACE keyed by
+// channel_entity_id + data_version). Re-running the sync script after a new
+// import refreshes the projection without touching source tables.
+//
+// V-P2-4 and downstream APIs query this table; they do NOT query douyin_*
+// or channel_profile directly. This decouples the V/M domain from source
+// table schemas.
+// ============================================================================
+export const CHANNEL_ENTITY_DDL = `
+CREATE TABLE IF NOT EXISTS channel_entity (
+  workspace_id TEXT NOT NULL REFERENCES workspace(workspace_id),
+  channel_entity_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  source_entity_key TEXT NOT NULL,
+  display_name TEXT,
+  platform_type TEXT,
+  platform_name TEXT,
+  parent_entity_id TEXT,
+  entity_path TEXT NOT NULL DEFAULT '[]',
+  entity_status TEXT NOT NULL DEFAULT 'active',
+  shop_id TEXT,
+  account_id TEXT,
+  account_kind TEXT,
+  content_format TEXT NOT NULL DEFAULT '[]',
+  country TEXT,
+  province TEXT,
+  city TEXT,
+  district TEXT,
+  trade_area TEXT,
+  mall_name TEXT,
+  store_id TEXT,
+  store_format TEXT,
+  profile_tags TEXT NOT NULL DEFAULT '[]',
+  benchmark_tags TEXT NOT NULL DEFAULT '[]',
+  performance_metrics TEXT NOT NULL DEFAULT '{}',
+  unmapped_profile_fields TEXT NOT NULL DEFAULT '[]',
+  raw_business_fields TEXT NOT NULL DEFAULT '{}',
+  source_id TEXT NOT NULL,
+  source_batch_id TEXT,
+  data_version TEXT NOT NULL,
+  generated_at TEXT NOT NULL,
+  time_window TEXT,
+  source_type TEXT,
+  quality_flags TEXT NOT NULL DEFAULT '[]',
+  upsert_key TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (workspace_id, channel_entity_id, data_version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_channel_entity_type ON channel_entity(workspace_id, entity_type);
+CREATE INDEX IF NOT EXISTS idx_channel_entity_platform ON channel_entity(workspace_id, platform_type);
+CREATE INDEX IF NOT EXISTS idx_channel_entity_source ON channel_entity(workspace_id, source_id);
+CREATE INDEX IF NOT EXISTS idx_channel_entity_parent ON channel_entity(workspace_id, parent_entity_id);
+
+CREATE VIEW IF NOT EXISTS channel_entity_latest AS
+SELECT workspace_id, channel_entity_id, entity_type, source_entity_key, display_name,
+       platform_type, platform_name, parent_entity_id, entity_path, entity_status,
+       shop_id, account_id, account_kind, content_format,
+       country, province, city, district, trade_area, mall_name, store_id, store_format,
+       profile_tags, benchmark_tags, performance_metrics, unmapped_profile_fields, raw_business_fields,
+       source_id, source_batch_id, data_version, generated_at, time_window, source_type,
+       quality_flags, upsert_key, created_at, updated_at
+FROM (
+  SELECT channel_entity.*,
+         ROW_NUMBER() OVER (
+           PARTITION BY workspace_id, channel_entity_id
+           ORDER BY generated_at DESC, rowid DESC
+         ) AS _latest_rank
+  FROM channel_entity
+) WHERE _latest_rank = 1;
+`;
+
+// ============================================================================
+// A-P2-9: New product prediction storage.
+// Stores PredictedProductProfile output from the new product prediction
+// baseline. Separate from the existing `prediction` table (P0/P1) to keep
+// new product predictions traceable to their ProductMaster input.
+// ============================================================================
+export const NEW_PRODUCT_DDL = `
+CREATE TABLE IF NOT EXISTS new_product_prediction (
+  prediction_id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspace(workspace_id),
+  task_id TEXT,
+  sku_id TEXT,
+  resolved_product_key TEXT NOT NULL DEFAULT '{}',
+  input_snapshot TEXT NOT NULL DEFAULT '{}',
+  model_version TEXT NOT NULL,
+  contract_version TEXT NOT NULL,
+  model_path TEXT NOT NULL,
+  source TEXT NOT NULL,
+  source_type TEXT NOT NULL DEFAULT 'derived',
+  predicted_profile_tags TEXT NOT NULL DEFAULT '[]',
+  confidence REAL NOT NULL DEFAULT 0,
+  top_segments TEXT NOT NULL DEFAULT '[]',
+  similar_historical_products TEXT NOT NULL DEFAULT '[]',
+  explanation_sources TEXT NOT NULL DEFAULT '[]',
+  risk_flags TEXT NOT NULL DEFAULT '[]',
+  unavailable_reasons TEXT NOT NULL DEFAULT '[]',
+  quality_flags TEXT NOT NULL DEFAULT '[]',
+  lineage TEXT NOT NULL DEFAULT '{}',
+  generated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_npp_workspace ON new_product_prediction(workspace_id, generated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_npp_sku ON new_product_prediction(workspace_id, sku_id);
+CREATE INDEX IF NOT EXISTS idx_npp_task ON new_product_prediction(workspace_id, task_id);
+`;
+
+// ============================================================================
+// A-P2-10: Operation flywheel — decision / action / feedback / review.
+// P2 Phase 1: record and review only, no auto-execution.
+//
+// Lifecycle: match_result -> decision_record -> action_record(s) ->
+//            feedback_record(s) -> strategy_review(s)
+//
+// Every table carries workspace_id for multi-tenant isolation and
+// source/batch/timeWindow/qualityFlags for data lineage.
+// ============================================================================
+export const FLYWHEEL_DDL = `
+CREATE TABLE IF NOT EXISTS decision_record (
+  decision_id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspace(workspace_id),
+  match_id TEXT,
+  sku_id TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
+  recommendation TEXT NOT NULL,
+  rationale TEXT,
+  decision_type TEXT NOT NULL DEFAULT 'launch',
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_by TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_decision_workspace ON decision_record(workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_decision_sku_channel ON decision_record(workspace_id, sku_id, channel_id);
+CREATE INDEX IF NOT EXISTS idx_decision_status ON decision_record(workspace_id, status);
+
+CREATE TABLE IF NOT EXISTS action_record (
+  action_id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspace(workspace_id),
+  decision_id TEXT NOT NULL,
+  action_type TEXT NOT NULL,
+  action_detail TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'pending',
+  scheduled_at TEXT,
+  executed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_action_workspace ON action_record(workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_action_decision ON action_record(workspace_id, decision_id);
+
+CREATE TABLE IF NOT EXISTS feedback_record (
+  feedback_id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspace(workspace_id),
+  decision_id TEXT NOT NULL,
+  action_id TEXT,
+  feedback_type TEXT NOT NULL,
+  metric_name TEXT NOT NULL,
+  metric_value REAL,
+  metric_unit TEXT,
+  time_window TEXT,
+  source TEXT,
+  source_type TEXT,
+  source_batch_id TEXT,
+  data_version TEXT,
+  quality_flags TEXT NOT NULL DEFAULT '[]',
+  raw_metrics TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_workspace ON feedback_record(workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_feedback_decision ON feedback_record(workspace_id, decision_id);
+
+CREATE TABLE IF NOT EXISTS strategy_review (
+  review_id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspace(workspace_id),
+  decision_id TEXT NOT NULL,
+  review_status TEXT NOT NULL DEFAULT 'pending_review',
+  adjustment_type TEXT,
+  adjustment_detail TEXT NOT NULL DEFAULT '{}',
+  rationale TEXT,
+  reviewer TEXT,
+  reviewed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_review_workspace ON strategy_review(workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_review_decision ON strategy_review(workspace_id, decision_id);
+`;

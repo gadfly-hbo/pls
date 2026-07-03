@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-03（X-P1-F6 抖音 BI 产品化重构总体验收通过）
+最近更新：2026-07-03（D-P2-7 新品主数据预测输入模板验收通过）
 
 进度：
 
@@ -35,12 +35,31 @@
 - 已完成 D-P1-F1、A-P1-F2、M-P1-F3、V-P1-F4、V-P1-F5 与 X-P1-F6 总体验收，产出 `docs/p1-f6-douyin-bi-productization-acceptance.md`。
 - X-P1-F6 结论为通过：数据包校验、SQLite 入库/API、模型 contract/backtest、前端真实 API smoke、v2 数据更新验收均通过；静态 dashboard、`data.js`、iframe 和“打开完整 BI”不再承担验收主流程。
 - 本地 `ws_demo` 保留临时 `v2_20260704_xp1f6` 验收数据，用于证明 latest projection 与 `?dataVersion=v1_20260703` 历史查询可并存；仓库数据真源仍为 `data/p1/douyin-bi/` 的 v1 数据包。
+- 用户确认 PLS 后续方向为具备模型预测能力的业务智能 BI 系统，覆盖数据管理、渠道人群、商品人群、人货匹配、新品预测和经营飞轮。
+- 已新增 `docs/p2-product-direction-ia.md`，冻结 P2 产品方向草案、6 个一级模块、多角色用户故事、数据对象关系和任务拆分建议。
+- `docs/wiki.html` 已升级到 v0.21，并新增 X-P2-0 至 V-P2-11 todo 任务卡，覆盖 P2 信息架构冻结、数据管理底座、商品主数据与渠道实体 schema、店铺 / 账号优先渠道人群、解释型人货匹配、新品预测和经营飞轮最小闭环。
+- 已完成 X-P2-0，产出 `docs/p2-0-product-ia-freeze.md`；`docs/wiki.html` 已升级到 v0.22，并将 X-P2-0 标记为 done。
+- X-P2-0 冻结结论：`docs/p2-product-direction-ia.md` 作为 P2 产品口径来源；后续实现必须遵循店铺 / 账号优先、解释型匹配、数据可追溯和 P2 初期不自动决策。
+- 已完成 A-P2-1 总控复核，产出 `docs/p2-1-data-management-acceptance.md`；`docs/wiki.html` 已升级到 v0.23，并将 A-P2-1 标记为 done。
+- A-P2-1 结论为通过：`data_source` 注册表 + adapter 模式满足 source-agnostic 要求，`/api/v0/data-management/*` 读取型 API、quality report、audit 查询和 501 占位写路径可作为 P2 第一阶段交付。
+- 已完成 D-P2-2 总控复核，产出 `docs/p2-2-product-channel-schema-acceptance.md`；`docs/wiki.html` 已升级到 v0.24，并将 D-P2-2 标记为 done。
+- D-P2-2 结论为通过：`docs/p2-2-product-channel-schema.md` 可作为 P2 数据域结构草案，覆盖 `ProductMaster`、`ChannelEntity`、`FieldMapping`、`DataQualityReport` 和三类 profile 输入边界。
+- 已完成 A-P2-3 总控复核，产出 `docs/p2-3-channel-entities-acceptance.md`；`docs/wiki.html` 已升级到 v0.25，并将 A-P2-3 标记为 done。
+- A-P2-3 结论为通过：`channel_entity` 投影表和 `/api/v0/channels/entities` API 可作为 P2 店铺 / 账号优先渠道人群读取层；源表 `douyin_*` 与 `channel_profile` 未被合并或破坏。
+- 已完成 V-P2-4 总控复核，产出 `docs/p2-4-channel-entity-workbench-acceptance.md`；`docs/wiki.html` 已升级到 v0.26，并将 V-P2-4 标记为 done。
+- V-P2-4 结论为通过：`AccountProfileWorkbench` 已成为店铺 / 账号优先的渠道人群工作台，真实 API 主流程已改为消费 `/api/v0/channels/entities`，并保留分析视图与决策视图双轨。
+- 已完成 M-P2-5 总控复核，产出 `docs/p2-5-product-channel-fit-contract-acceptance.md`；`docs/wiki.html` 已升级到 v0.27，并将 M-P2-5 标记为 done。
+- M-P2-5 结论为通过：`ProductChannelFit` / `FitExplanation` contract 已冻结，解释项覆盖 matched、conflict、missing、low-confidence、unmapped 和 insufficient sample，正式 fit formula 未提供前继续保留 `algorithm_pending_user_formula`。
+- 已完成 V-P2-6 总控复核，产出 `docs/p2-6-match-core-workbench-acceptance.md`；`docs/wiki.html` 已升级到 v0.28，并确认 V-P2-6 为 done。
+- V-P2-6 结论为通过：`MatchCoreWorkbench` 支持按商品找实体和按实体找商品，真实 API 模式已消费 `/api/v0/channels/entities`，并以 `sourceEntityKey` 兼容当前 match result。
+- 已完成 D-P2-7 总控复核，产出 `docs/p2-7-new-product-input-template-acceptance.md`；`docs/wiki.html` 已升级到 v0.29，并将 D-P2-7 标记为 done。
+- D-P2-7 结论为通过：`data/templates/new-product-prediction-input/` 可作为新品预测输入模板，覆盖字段组、映射边界和质量规则，且不编造用户尚未提供的业务值。
 
 下一步：
 
-- 按 wiki 派发 P1 任务；用户授权数据可直接进入模型、工作台、报告、fixture、API 和前端。
-- P1-B/C/D/E/F 可继续使用 mock/demo 或用户授权真实业务数据推进工程化、工作台、模型脚手架和号货匹配契约。
-- P1-F 已归档为 done；后续进入 P2 hardening：HTTP import、channel_profile 同步策略、正式 fit 公式、benchmark tags 补齐、API schema、分页和前端状态回归。
+- 按 wiki 派发 P2 任务；X-P2-0、A-P2-1、D-P2-2、A-P2-3、V-P2-4、M-P2-5、V-P2-6、D-P2-7 已完成，下一步可优先派发 M-P2-8 新品人群预测 baseline contract，或推进 A/M 对正式 ProductChannelFit API 的后端落地。
+- P2 主路径为：数据管理 -> 渠道人群 / 商品人群 -> 人货匹配 -> 新品预测 -> 经营飞轮；店铺 / 账号优先，解释型匹配优先，真实数据导入和版本审计作为底座。
+- P2 hardening 与产品化任务已合并进任务池：HTTP import / 导入审计、channel_profile 同步策略、正式 fit 公式、benchmark tags 补齐、API schema、分页、前端状态回归、新品主数据预测和飞轮闭环。
 - P1-E 复刻结果只作为参考或过渡，不再作为最终产品化完成标准；后续验收不得依赖“打开完整 BI”、iframe、截图预览或静态整页嵌入。
 - 若 V 域需要 match 也走 async，需单独派发 A 后续任务；当前 A-P1-B3 只要求 predictions 链路支持 async / timeout fallback。
 
@@ -56,13 +75,22 @@
 
 开放问题：
 
-- P2 是否需要把抖音 BI CLI 导入升级为 HTTP import endpoint、版本回滚和导入审计查询。
+- 抖音 BI `douyin_*` 数据当前投影到 `channel_entity`，不合并进通用 `channel_profile`；后续如需反向写入 `channel_profile` 需单独拍板。
+- 正式 fit formula、商品主数据字段和真实行动反馈字段仍待用户后续提供或冻结。
+- `data_source` 当前以 `source_id` 单列为主键；若后续支持多 workspace 复用同名 sourceId，需评估是否迁移为 `(workspace_id, source_id)` 复合主键。
 
 验证：
 
 - data 三项校验通过：真实样例模板、抖音 mapping 模板、多 timeWindow demo。
 - app 侧验证通过：`apps/server npm run typecheck`、`apps/web npm run build`。
 - X-P1-F6 验证通过：`node data/scripts/validate-p1-douyin-bi.mjs data/p1/douyin-bi`、`apps/server npm run typecheck`、`npm run migrate`、`npm run import:douyin-bi`、`npm run smoke:douyin-bi`、`npm run smoke`、`apps/model npm run typecheck`、`npm run account-fit-contract-test`、`npm run validate-tags`、`npm run contract-test`、`npm run backtest`、`npm run backtest:cutoff`、`apps/web npm run lint`、`npm run build`、`VITE_USE_MOCK=false npm run smoke`。
+- A-P2-1 验证通过：`apps/server npm run typecheck`、`npm run migrate`、`npm run seed:data-sources`、`npm run smoke:data-management`、`npm run smoke:douyin-bi`、`npm run smoke`。
+- D-P2-2 验证通过：文档结构检查、taxonomy 引用检查、标题层级检查；显式 `demo.female` / `demo.male` 均存在于 `docs/profile-taxonomy-v0.md`。
+- A-P2-3 验证通过：`apps/server npm run typecheck`、`npm run migrate`、`npm run seed:data-sources`、`npm run sync:channel-entities`、`npm run smoke:channel-entities`、`npm run smoke:douyin-bi`、`npm run smoke:data-management`、`npm run smoke`。
+- V-P2-4 验证通过：`apps/web npm run lint`、`npm run build`、Mock Playwright smoke、真实 API Playwright smoke；真实 API smoke 前已执行 `apps/server npm run migrate`、`npm run seed:data-sources`、`npm run sync:channel-entities`；desktop / mobile 视觉检查未发现明显溢出、遮挡和重叠。
+- M-P2-5 验证通过：`apps/model npm run typecheck`、`npm run contract-test`；contract-test 返回 `ok: true`，覆盖 matched、mismatch、low_confidence、unmapped、insufficient_sample。
+- V-P2-6 验证通过：`apps/web npm run lint`、`npm run build`、Mock Playwright smoke、真实 API Playwright smoke；desktop / mobile 工作台与解释面板截图未发现明显溢出、遮挡和重叠。
+- D-P2-7 验证通过：`node data/templates/new-product-prediction-input/scripts/validate-new-product-prediction-template.mjs`，结果 `0 error / 0 warning`。
 
 ---
 

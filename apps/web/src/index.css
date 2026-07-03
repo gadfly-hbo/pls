@@ -1,56 +1,68 @@
-:root {
-  --background: hsl(0 0% 98%);
-  --foreground: hsl(0 0% 9%);
-  --card: hsl(0 0% 100%);
-  --card-foreground: hsl(0 0% 9%);
-  --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(0 0% 9%);
-  --primary: hsl(0 0% 9%);
-  --primary-foreground: hsl(0 0% 98%);
-  --secondary: hsl(0 0% 96%);
-  --secondary-foreground: hsl(0 0% 15%);
-  --muted: hsl(0 0% 92%);
-  --muted-foreground: hsl(0 0% 45%);
-  --accent: hsl(0 0% 96%);
-  --accent-foreground: hsl(0 0% 9%);
-  --destructive: hsl(0 84.2% 60.2%);
-  --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(0 0% 90%);
-  --input: hsl(0 0% 90%);
-  --ring: hsl(0 0% 30%);
-  --radius: 0.5rem;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-  --success: hsl(142.1 76.2% 36.3%);
-  --success-bg: hsl(142.1 76.2% 96.3%);
-  --warning: hsl(38 92% 50%);
-  --warning-bg: hsl(38 92% 95%);
+:root {
+  --background: hsl(0, 0%, 98%);
+  --foreground: hsl(240, 10%, 15%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(240, 10%, 15%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(240, 10%, 15%);
+  --primary: hsl(220, 90%, 56%);
+  --primary-hover: hsl(220, 90%, 46%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --secondary: hsl(240, 5%, 96%);
+  --secondary-foreground: hsl(240, 10%, 20%);
+  --muted: hsl(240, 5%, 94%);
+  --muted-foreground: hsl(240, 5%, 45%);
+  --accent: hsl(240, 5%, 96%);
+  --accent-foreground: hsl(240, 10%, 15%);
+  --destructive: hsl(348, 83%, 58%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --border: hsl(240, 6%, 90%);
+  --input: hsl(240, 6%, 85%);
+  --ring: hsl(220, 90%, 56%);
+  --radius: 12px;
+  
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+
+  --success: hsl(152, 69%, 40%);
+  --success-bg: hsl(152, 69%, 95%);
+  --warning: hsl(35, 92%, 50%);
+  --warning-bg: hsl(35, 92%, 95%);
 }
 
 .dark {
-  --background: hsl(0 0% 4%);
-  --foreground: hsl(0 0% 96%);
-  --card: hsl(0 0% 7%);
-  --card-foreground: hsl(0 0% 96%);
-  --popover: hsl(0 0% 9%);
-  --popover-foreground: hsl(0 0% 96%);
-  --primary: hsl(0 0% 96%);
-  --primary-foreground: hsl(0 0% 9%);
-  --secondary: hsl(0 0% 15%);
-  --secondary-foreground: hsl(0 0% 96%);
-  --muted: hsl(0 0% 15%);
-  --muted-foreground: hsl(0 0% 64%);
-  --accent: hsl(0 0% 15%);
-  --accent-foreground: hsl(0 0% 96%);
-  --destructive: hsl(0 62.8% 45%);
-  --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(0 0% 15%);
-  --input: hsl(0 0% 25%);
-  --ring: hsl(0 0% 64%);
+  --background: hsl(240, 10%, 6%);
+  --foreground: hsl(0, 0%, 98%);
+  --card: hsl(240, 10%, 10%);
+  --card-foreground: hsl(0, 0%, 98%);
+  --popover: hsl(240, 10%, 10%);
+  --popover-foreground: hsl(0, 0%, 98%);
+  --primary: hsl(220, 90%, 60%);
+  --primary-hover: hsl(220, 90%, 70%);
+  --primary-foreground: hsl(240, 10%, 6%);
+  --secondary: hsl(240, 10%, 15%);
+  --secondary-foreground: hsl(0, 0%, 98%);
+  --muted: hsl(240, 10%, 15%);
+  --muted-foreground: hsl(240, 5%, 65%);
+  --accent: hsl(240, 10%, 15%);
+  --accent-foreground: hsl(0, 0%, 98%);
+  --destructive: hsl(348, 83%, 65%);
+  --destructive-foreground: hsl(0, 0%, 98%);
+  --border: hsl(240, 10%, 20%);
+  --input: hsl(240, 10%, 25%);
+  --ring: hsl(220, 90%, 60%);
+  
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.5);
 
-  --success: hsl(142.1 70.6% 45.3%);
-  --success-bg: hsl(142.1 70.6% 15.3%);
-  --warning: hsl(38 92% 50%);
-  --warning-bg: hsl(38 92% 15%);
+  --success: hsl(152, 69%, 45%);
+  --success-bg: hsl(152, 69%, 15%);
+  --warning: hsl(35, 92%, 55%);
+  --warning-bg: hsl(35, 92%, 15%);
 }
 
 * {
@@ -59,7 +71,7 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: var(--foreground);
   background-color: var(--background);
   line-height: 1.5;
@@ -80,26 +92,33 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .header {
-  height: 56px;
-  padding: 0 32px;
+  height: 64px;
+  padding: 0 40px;
   color: var(--foreground);
   background: var(--card);
   border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow-sm);
 }
 
-.header h1 {
-  font-size: 1.125rem;
+.header h1, .header .logo {
+  font-size: 1.25rem;
   margin: 0;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: -0.025em;
+  background: linear-gradient(135deg, var(--foreground), var(--muted-foreground));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .header-nav {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
@@ -110,9 +129,9 @@ h1, h2, h3, h4, h5, h6 {
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  padding: 4px 8px;
-  border-radius: var(--radius);
-  transition: all 0.2s;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
 }
 
 .header-nav button:hover {
@@ -123,12 +142,13 @@ h1, h2, h3, h4, h5, h6 {
 .header-nav button.active {
   color: var(--primary-foreground);
   background: var(--primary);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .content {
-  padding: 32px;
+  padding: 40px;
   flex: 1;
-  max-width: 1400px;
+  max-width: 1440px;
   margin: 0 auto;
   width: 100%;
 }
@@ -137,9 +157,14 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 24px;
+  padding: 28px;
   margin-bottom: 24px;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-md);
+  transition: box-shadow 0.2s ease;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-lg);
 }
 
 .form-item {
@@ -157,54 +182,63 @@ h1, h2, h3, h4, h5, h6 {
 .form-control {
   width: 100%;
   max-width: 100%;
-  padding: 8px 12px;
+  padding: 10px 14px;
   box-sizing: border-box;
   color: var(--foreground);
   font-size: 14px;
   background-color: var(--background);
   border: 1px solid var(--input);
-  border-radius: var(--radius);
-  transition: border-color 0.2s, box-shadow 0.2s;
+  border-radius: 8px;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+
+.form-control:hover {
+  border-color: var(--muted-foreground);
 }
 
 .form-control:focus {
   border-color: var(--ring);
   outline: 0;
-  box-shadow: 0 0 0 1px var(--ring);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  background-color: var(--card);
 }
 
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
-  transition: all 0.2s;
-  height: 36px;
-  padding: 0 16px;
+  transition: all 0.2s ease;
+  height: 40px;
+  padding: 0 20px;
   font-size: 14px;
-  border-radius: var(--radius);
+  border-radius: 8px;
   cursor: pointer;
-  border: 1px solid var(--input);
-  background: var(--background);
+  border: 1px solid var(--border);
+  background: var(--card);
   color: var(--foreground);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn:hover {
   background: var(--accent);
   color: var(--accent-foreground);
+  border-color: var(--input);
 }
 
 .btn-primary {
   background: var(--primary);
   color: var(--primary-foreground);
-  border-color: var(--primary);
+  border: none;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
 }
 
 .btn-primary:hover {
-  background: var(--primary);
-  opacity: 0.9;
+  background: var(--primary-hover);
   color: var(--primary-foreground);
+  box-shadow: 0 4px 6px rgba(59, 130, 246, 0.4);
+  transform: translateY(-1px);
 }
 
 /* Dashboard Grid */
@@ -221,66 +255,164 @@ h1, h2, h3, h4, h5, h6 {
   margin-top: 16px;
 }
 
-/* Tags & Badges */
 .tag {
   box-sizing: border-box;
-  margin: 0 8px 8px 0;
+  margin: 0 6px 6px 0;
   color: var(--foreground);
   font-size: 12px;
   font-weight: 500;
-  line-height: 22px;
+  line-height: 1;
   white-space: nowrap;
   background: var(--secondary);
   border: 1px solid var(--border);
-  border-radius: 9999px;
-  padding: 0 10px;
+  border-radius: 6px;
+  padding: 6px 10px;
   display: inline-flex;
   align-items: center;
 }
 
-.tag-red { color: var(--destructive); background: var(--background); border-color: var(--destructive); }
+.tag-red { color: var(--destructive); background: var(--destructive-bg, transparent); border-color: var(--destructive); }
 .tag-green { color: var(--success); background: var(--success-bg); border-color: var(--success); }
 .tag-orange { color: var(--warning); background: var(--warning-bg); border-color: var(--warning); }
 
 .alert {
-  padding: 12px 16px;
-  border-radius: var(--radius);
-  margin-bottom: 16px;
+  padding: 16px 20px;
+  border-radius: 8px;
+  margin-bottom: 24px;
   font-size: 14px;
+  display: flex;
+  align-items: flex-start;
+  border-left: 4px solid transparent;
 }
 
 .alert-warning {
   background-color: var(--warning-bg);
   border: 1px solid var(--warning);
+  border-left-color: var(--warning);
   color: var(--warning);
 }
 
 .heatmap-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
 .heatmap-table th, .heatmap-table td {
-  border: 1px solid var(--border);
-  padding: 12px 16px;
+  padding: 16px;
   text-align: center;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
+.heatmap-table th:last-child, .heatmap-table td:last-child {
+  border-right: none;
+}
+.heatmap-table tr:last-child td {
+  border-bottom: none;
 }
 
 .heatmap-table th {
   background: var(--secondary);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--secondary-foreground);
+  letter-spacing: 0.02em;
 }
 
 .heatmap-cell {
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s;
   font-weight: 600;
 }
 
 .heatmap-cell:hover {
-  opacity: 0.8;
+  transform: scale(1.02);
+  box-shadow: var(--shadow-md);
+  z-index: 10;
+  position: relative;
+}
+
+/* Metric Cards (Data Overview style) */
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.metric-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+}
+
+.metric-title {
+  font-size: 13px;
+  color: var(--muted-foreground);
+  font-weight: 500;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--foreground);
+  line-height: 1.2;
+}
+
+.metric-sub {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.trend-up {
+  color: var(--destructive); /* Red for up */
+  font-weight: 500;
+}
+
+.trend-down {
+  color: var(--success); /* Green for down */
+  font-weight: 500;
+}
+
+/* Data Table */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.data-table th {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font-weight: 500;
+  text-align: left;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--foreground);
+}
+
+.data-table tbody tr:hover {
+  background: var(--background);
 }
 
 /* Drawer */
@@ -288,8 +420,14 @@ h1, h2, h3, h4, h5, h6 {
   position: fixed;
   top: 0; right: 0; bottom: 0; left: 0;
   z-index: 1000;
-  background-color: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(2px);
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .drawer-content {

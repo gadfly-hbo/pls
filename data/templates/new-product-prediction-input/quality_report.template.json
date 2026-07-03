@@ -1,0 +1,77 @@
+{
+  "reportId": null,
+  "sourceId": "product_master",
+  "sourceBatchId": null,
+  "dataVersion": null,
+  "generatedAt": null,
+  "scope": "new_product_prediction_input_template",
+  "admissionPolicy": "user_authorized_full_passthrough",
+  "objectCounts": {
+    "NewProductPredictionInput": {
+      "rowCount": 0,
+      "validRowCount": 0,
+      "invalidRowCount": 0
+    }
+  },
+  "fieldCoverage": [
+    {
+      "fieldPath": "productMaster.identity.productId",
+      "requirement": "required_when_real_input",
+      "presentCount": 0,
+      "missingCount": 0,
+      "coverageRate": 0,
+      "confidence": 0
+    },
+    {
+      "fieldPath": "productMaster.category.categoryLv1",
+      "requirement": "required_when_real_input",
+      "presentCount": 0,
+      "missingCount": 0,
+      "coverageRate": 0,
+      "confidence": 0
+    },
+    {
+      "fieldPath": "productMaster.lineage.sourceBatchId",
+      "requirement": "required_when_real_input",
+      "presentCount": 0,
+      "missingCount": 0,
+      "coverageRate": 0,
+      "confidence": 0
+    }
+  ],
+  "mappingCoverage": {
+    "totalSourceFields": 0,
+    "mappedFieldCount": 0,
+    "unmappedFieldCount": 0,
+    "taxonomyMappedFieldCount": 0,
+    "coverageRate": 0,
+    "averageMappingConfidence": 0
+  },
+  "qualityRules": {
+    "missing": [
+      "missing_required_identity",
+      "missing_required_category",
+      "source_lineage_incomplete",
+      "asset_reference_missing",
+      "similar_product_reference_missing"
+    ],
+    "conflict": [
+      "conflicting_product_identity",
+      "conflicting_price_fields",
+      "conflicting_category_path"
+    ],
+    "unmappable": [
+      "unmapped_required_field",
+      "taxonomy_unmapped_high",
+      "unapproved_tag_id"
+    ],
+    "lowConfidence": [
+      "low_mapping_confidence",
+      "low_similar_product_confidence",
+      "low_asset_feature_confidence"
+    ]
+  },
+  "blockingIssues": [],
+  "warnings": [],
+  "qualityFlags": []
+}

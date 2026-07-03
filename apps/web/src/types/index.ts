@@ -86,6 +86,8 @@ export interface ChannelProfile {
 
 export interface AccountProfile {
   accountId: string;
+  sourceEntityKey?: string;
+  sourceId?: string;
   accountName: string;
   accountType: string;
   sampleSize: number;
@@ -97,6 +99,8 @@ export interface AccountProfile {
     engagementRate: number;
     conversionRate: number;
   };
+  platformType?: string;
+  qualityFlags?: string[];
 }
 
 export interface ProductCompass {
@@ -229,4 +233,34 @@ export interface AccountMatchApiResponse {
     pageSize: number;
     hasMore: boolean;
   };
+}
+
+export interface ActionRecord {
+  actionId: string;
+  type: string;
+  description: string;
+  status: 'pending' | 'completed' | 'failed';
+  executedAt?: string;
+}
+
+export interface FeedbackRecord {
+  summary: string;
+  effectJudgment: 'positive' | 'neutral' | 'negative' | 'unknown';
+  audienceDeviation: string;
+  adjustments: string[];
+  submittedAt: string;
+}
+
+export interface DecisionRecord {
+  decisionId: string;
+  matchId?: string;
+  skuId: string;
+  entityId: string; 
+  entityType: 'channel' | 'account';
+  status: 'pending_execution' | 'in_progress' | 'pending_review' | 'verified' | 'needs_adjustment';
+  owner: string;
+  createdAt: string;
+  updatedAt: string;
+  actions: ActionRecord[];
+  feedback?: FeedbackRecord;
 }

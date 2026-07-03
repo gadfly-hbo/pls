@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { api } from '../services/api';
 import type { HeatmapData, MatchResult, ChannelProfile } from '../types';
+import { translateChannel, translateTag } from '../utils/translate';
 
 export default function ChannelHeatmap() {
   const [loading, setLoading] = useState(true);
@@ -104,8 +105,8 @@ export default function ChannelHeatmap() {
     const rows = heatmapData.rows.flatMap(r => 
       r.cells.map(c => {
         const detail = matchDetails[r.skuId]?.[c.channelId];
-        const posDrivers = detail?.positiveDrivers.map(d => d.tagId).join(';') || '';
-        const negDrivers = detail?.negativeDrivers.map(d => d.tagId).join(';') || '';
+        const posDrivers = detail?.positiveDrivers.map(d => translateTag(d.tagId)).join(';') || '';
+        const negDrivers = detail?.negativeDrivers.map(d => translateTag(d.tagId)).join(';') || '';
         const risks = detail?.risks.join(';') || '';
         const generatedAt = detail?.generatedAt || heatmapData.generatedAt;
         return [
@@ -199,13 +200,13 @@ export default function ChannelHeatmap() {
             value={filterRec} 
             onChange={e => setFilterRec(e.target.value)}
           >
-            <option value="all">全部分组 (All)</option>
-            <option value="priority_launch">重点铺货 (Priority)</option>
-            <option value="test_launch">测试铺货 (Test)</option>
-            <option value="observe">暂缓铺货 (Observe)</option>
-            <option value="avoid">熔断拦截 (Avoid)</option>
+            <option value="all">全部分组</option>
+            <option value="priority_launch">重点铺货</option>
+            <option value="test_launch">测试铺货</option>
+            <option value="observe">暂缓铺货</option>
+            <option value="avoid">熔断拦截</option>
           </select>
-          <button className="btn btn-primary" onClick={exportCSV}>导出匹配报告 (CSV)</button>
+          <button className="btn btn-primary" onClick={exportCSV}>导出匹配报告</button>
         </div>
       </div>
 
@@ -217,14 +218,14 @@ export default function ChannelHeatmap() {
             <table className="heatmap-table" style={{ minWidth: 800 }}>
               <thead>
                 <tr>
-                  <th style={{ width: 150 }}>SKU ID</th>
+                  <th style={{ width: 150 }}>商品 ID</th>
                   {allChannels.map(channelId => (
                     <th 
                       key={channelId} 
                       onClick={() => toggleSort(channelId)}
                       style={{ cursor: 'pointer', userSelect: 'none' }}
                     >
-                      {channelId} {sortByChannel === channelId ? (sortDesc ? '↓' : '↑') : ''}
+                      {translateChannel(channelId)} {sortByChannel === channelId ? (sortDesc ? '↓' : '↑') : ''}
                     </th>
                   ))}
                 </tr>
@@ -240,6 +241,7 @@ export default function ChannelHeatmap() {
                       // Show drivers/risks summary in cell tooltip or small text (C2)
                       const detail = matchDetails[row.skuId]?.[channelId];
                       const topDriver = detail?.positiveDrivers[0]?.tagId || '';
+                      const displayDriver = topDriver ? translateTag(topDriver) : '';
                       const riskCount = detail?.risks.length || 0;
 
                       return (
@@ -256,8 +258,8 @@ export default function ChannelHeatmap() {
                           <div style={{ fontWeight: 600, fontSize: 16 }}>{(cell.matchScore * 100).toFixed(0)}</div>
                           {detail && (
                             <div style={{ fontSize: 11, opacity: 0.8, marginTop: 4, lineHeight: 1.2 }}>
-                              {topDriver && <div title="Top Driver">{topDriver}</div>}
-                              {riskCount > 0 && <div title="Risks" style={{ color: cell.recommendation === 'avoid' ? '#fff' : 'var(--destructive)', marginTop: 2 }}>⚠️ {riskCount} 风险</div>}
+                              {displayDriver && <div title="核心驱动">{displayDriver}</div>}
+                              {riskCount > 0 && <div title="风险" style={{ color: cell.recommendation === 'avoid' ? '#fff' : 'var(--destructive)', marginTop: 2 }}>⚠️ {riskCount} 风险</div>}
                             </div>
                           )}
                         </td>
@@ -288,7 +290,7 @@ export default function ChannelHeatmap() {
                 <div style={{ marginBottom: 24, padding: 16, background: 'var(--panel)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
                   <h4 style={{ margin: '0 0 12px 0' }}>渠道画像摘要</h4>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13, color: 'var(--muted-foreground)' }}>
-                    <div><strong>渠道名称：</strong> {channelInfo?.channelName || selectedMatch.channelId}</div>
+                    <div><strong>渠道名称：</strong> {channelInfo?.channelName || translateChannel(selectedMatch.channelId)}</div>
                     <div><strong>渠道类型：</strong> {channelInfo?.channelType || selectedMatch.channelType}</div>
                     <div><strong>平台类型：</strong> {channelInfo?.platformType || '未知'}</div>
                     <div><strong>样本量：</strong> {channelInfo?.sampleSize || '未提供'}</div>
@@ -321,12 +323,12 @@ export default function ChannelHeatmap() {
                 )}
 
                 <div style={{ marginBottom: 32 }}>
-                  <h4 style={{ color: 'var(--success)', borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>正向驱动因素 (Positive Drivers)</h4>
+                  <h4 style={{ color: 'var(--success)', borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>正向驱动因素</h4>
                   {selectedMatch.positiveDrivers.length === 0 ? <p style={{color:'var(--muted-foreground)'}}>暂无</p> : (
                     <ul style={{ paddingLeft: 20, color: 'var(--muted-foreground)', marginTop: 12 }}>
                       {selectedMatch.positiveDrivers.map(d => (
                         <li key={d.tagId} style={{ marginBottom: 8 }}>
-                          <strong style={{ color: 'var(--foreground)' }}>{d.tagId}</strong> 
+                          <strong style={{ color: 'var(--foreground)' }}>{translateTag(d.tagId)}</strong> 
                           <span style={{ marginLeft: 8 }}>(匹配度: {(Math.min(d.productScore, d.channelScore)*100).toFixed(0)}%)</span>
                         </li>
                       ))}
@@ -335,12 +337,12 @@ export default function ChannelHeatmap() {
                 </div>
 
                 <div style={{ marginBottom: 32 }}>
-                  <h4 style={{ color: 'var(--destructive)', borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>负向拦截因素 (Negative Drivers)</h4>
+                  <h4 style={{ color: 'var(--destructive)', borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>负向拦截因素</h4>
                   {selectedMatch.negativeDrivers.length === 0 ? <p style={{color:'var(--muted-foreground)'}}>暂无</p> : (
                     <ul style={{ paddingLeft: 20, color: 'var(--muted-foreground)', marginTop: 12 }}>
                       {selectedMatch.negativeDrivers.map(d => (
                         <li key={d.tagId} style={{ marginBottom: 8 }}>
-                          <strong style={{ color: 'var(--foreground)' }}>{d.tagId}</strong> 
+                          <strong style={{ color: 'var(--foreground)' }}>{translateTag(d.tagId)}</strong> 
                           <span style={{ marginLeft: 8 }}>(商品/渠道分歧)</span>
                         </li>
                       ))}

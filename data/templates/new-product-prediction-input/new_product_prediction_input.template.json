@@ -1,0 +1,153 @@
+{
+  "schemaVersion": "d-p2-7.new_product_prediction_input.v0.1",
+  "templateMode": true,
+  "productMaster": {
+    "identity": {
+      "workspaceId": null,
+      "productMasterId": null,
+      "productId": null,
+      "productVariantId": null,
+      "sourceProductKey": null,
+      "sourceKeyPolicy": null,
+      "productLifecycleStatus": null,
+      "launchDate": null
+    },
+    "category": {
+      "categoryLv1": null,
+      "categoryLv2": null,
+      "categoryLv3": null,
+      "categoryPath": [],
+      "brandName": null,
+      "seriesName": null,
+      "genderScope": null,
+      "ageScope": null
+    },
+    "priceAndSeason": {
+      "listPrice": null,
+      "salePrice": null,
+      "priceCurrency": null,
+      "priceBand": null,
+      "season": null,
+      "seasonBand": null,
+      "promotionPosition": null
+    },
+    "sellingPoints": {
+      "sellingPoints": [],
+      "copyFeatureSummary": {}
+    },
+    "material": {
+      "materialComposition": {},
+      "fabricType": null,
+      "colorFamily": null,
+      "fitType": null,
+      "patternType": null
+    },
+    "styleAndScenario": {
+      "styleKeywords": [],
+      "scenarioKeywords": [],
+      "intentKeywords": [],
+      "mappedProductTags": [],
+      "unmappedProductFields": []
+    },
+    "assets": {
+      "assetRefs": [],
+      "imageFeatureSummary": {}
+    },
+    "similarProducts": {
+      "similarProducts": []
+    },
+    "lineage": {
+      "sourceId": null,
+      "sourceBatchId": null,
+      "dataVersion": null,
+      "generatedAt": null,
+      "sourceType": null,
+      "timeWindow": null
+    },
+    "quality": {
+      "qualityFlags": [],
+      "blockingIssues": [],
+      "warnings": [],
+      "fieldCoverageRate": null,
+      "mappingCoverageRate": null,
+      "averageMappingConfidence": null
+    }
+  },
+  "predictionInput": {
+    "requiredGroups": [
+      "productMaster.identity",
+      "productMaster.category",
+      "productMaster.lineage"
+    ],
+    "optionalGroups": [
+      "productMaster.priceAndSeason",
+      "productMaster.sellingPoints",
+      "productMaster.material",
+      "productMaster.styleAndScenario",
+      "productMaster.assets",
+      "productMaster.similarProducts"
+    ],
+    "enhancementGroups": [
+      "productMaster.assets.imageFeatureSummary",
+      "productMaster.sellingPoints.copyFeatureSummary",
+      "productMaster.similarProducts.similarProducts"
+    ],
+    "modelInputBoundary": [
+      "Use only pre-launch ProductMaster fields, mappedProductTags, similarProducts, imageFeatureSummary, and copyFeatureSummary.",
+      "Do not require post-launch buyerProfileTags, sales labels, or channel feedback unless running an explicit backtest.",
+      "Do not create tagIds outside docs/profile-taxonomy-v0.md."
+    ]
+  },
+  "mappingContext": {
+    "taxonomyDoc": "docs/profile-taxonomy-v0.md",
+    "allowedTagNamespaces": ["demo", "style", "price", "occasion", "intent", "channel"],
+    "unmappedHandling": "Keep unmapped source labels in productMaster.styleAndScenario.unmappedProductFields with sourceField, sourceValue, reason, recommendedHandling, and confidence=0."
+  },
+  "qualityRequirements": {
+    "requiredFieldPolicy": [
+      {
+        "fieldPath": "productMaster.identity.productId",
+        "requirement": "required_when_real_input",
+        "qualityRule": "missing_required_identity"
+      },
+      {
+        "fieldPath": "productMaster.identity.sourceProductKey",
+        "requirement": "required_when_real_input",
+        "qualityRule": "missing_required_identity"
+      },
+      {
+        "fieldPath": "productMaster.category.categoryLv1",
+        "requirement": "required_when_real_input",
+        "qualityRule": "missing_required_category"
+      },
+      {
+        "fieldPath": "productMaster.lineage.sourceBatchId",
+        "requirement": "required_when_real_input",
+        "qualityRule": "source_lineage_incomplete"
+      },
+      {
+        "fieldPath": "productMaster.lineage.dataVersion",
+        "requirement": "required_when_real_input",
+        "qualityRule": "source_lineage_incomplete"
+      }
+    ],
+    "qualityFlags": [
+      "missing_required_identity",
+      "missing_required_category",
+      "conflicting_product_identity",
+      "conflicting_price_fields",
+      "unmapped_required_field",
+      "taxonomy_unmapped_high",
+      "low_mapping_confidence",
+      "asset_reference_missing",
+      "similar_product_reference_missing",
+      "source_lineage_incomplete"
+    ],
+    "blockingIssues": [
+      "missing_required_identity",
+      "missing_required_category",
+      "conflicting_product_identity",
+      "source_lineage_incomplete"
+    ]
+  }
+}

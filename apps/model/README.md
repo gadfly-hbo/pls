@@ -60,6 +60,22 @@ Contract test:
 npm run account-fit-contract-test
 ```
 
+## P2 Product Channel Fit Contract
+
+`src/product-channel-fit.ts` defines `ProductChannelFit` and `FitExplanation` for entity-first product x channel explanation panels. It freezes matched/conflict/missing/low-confidence tag explanations, risk flags, confidence, and legacy score handling. Until the formal fit formula is provided, it always emits `algorithm_pending_user_formula`.
+
+Contract coverage is included in:
+
+```bash
+npm run contract-test
+```
+
+## P2 New Product Prediction Contract
+
+`src/new-product-prediction.ts` defines `PredictedProductProfile` for D-P2-7 `ProductMaster` inputs. The baseline uses only pre-launch mapped product tags, similar products, lineage, and quality metadata. It is not a trained model and always emits `baseline_not_trained_model`.
+
+`toProductChannelFitProfile()` bridges the prediction output into the P2 `ProductChannelFit` chain.
+
 ## C3 Follow-Up
 
 See `../../docs/model-c3-prep.md` for `unmappedInputTokens` handling, P1 time-split data requirements, and A adapter contract test expectations.

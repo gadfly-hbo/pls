@@ -1,4 +1,4 @@
-import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass } from '../types';
+import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord } from '../types';
 
 // Feature flag for local mock vs real backend
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
@@ -25,7 +25,66 @@ const db = {
   products: [] as SKU[],
   predictions: [] as ProductProfile[],
   matches: [] as MatchResult[],
+  decisions: [] as any[], // DecisionRecord not directly imported here to avoid cycle or just any
 };
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function asArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null && !Array.isArray(item)) : [];
+}
+
+function toDecisionStatus(row: Record<string, unknown>, actions: ActionRecord[], reviews: Record<string, unknown>[]): DecisionRecord['status'] {
+  const latestReview = reviews.at(-1);
+  const reviewStatus = typeof latestReview?.reviewStatus === 'string' ? latestReview.reviewStatus : '';
+  const status = typeof row.status === 'string' ? row.status : '';
+  if (status === 'verified' || reviewStatus === 'verified') return 'verified';
+  if (status === 'needs_adjustment' || reviewStatus === 'needs_adjustment') return 'needs_adjustment';
+  if (reviewStatus === 'pending_review') return 'pending_review';
+  if (actions.length > 0) return 'in_progress';
+  return 'pending_execution';
+}
+
+function normalizeOperationDecision(row: Record<string, unknown>): DecisionRecord {
+  const actions = asArray(row.actions).map((action): ActionRecord => {
+    const detail = asRecord(action.actionDetail);
+    return {
+      actionId: String(action.actionId ?? ''),
+      type: String(action.actionType ?? 'other'),
+      description: String(detail.description ?? ''),
+      status: action.status === 'completed' || action.status === 'failed' ? action.status : 'pending',
+      executedAt: typeof action.executedAt === 'string' ? action.executedAt : undefined,
+    };
+  }).filter((action) => action.actionId);
+  const feedbacks = asArray(row.feedbacks);
+  const reviews = asArray(row.reviews);
+  const latestFeedback = feedbacks.at(-1);
+  const latestReview = reviews.at(-1);
+  const rawMetrics = asRecord(latestFeedback?.rawMetrics);
+  const feedback: FeedbackRecord | undefined = latestFeedback ? {
+    summary: String(rawMetrics.summary ?? latestFeedback.metricName ?? ''),
+    effectJudgment: latestReview?.reviewStatus === 'needs_adjustment' ? 'negative' : latestReview?.reviewStatus === 'verified' ? 'positive' : 'neutral',
+    audienceDeviation: String(rawMetrics.audienceDeviation ?? ''),
+    adjustments: Array.isArray(rawMetrics.adjustments) ? rawMetrics.adjustments.filter((item): item is string => typeof item === 'string') : [],
+    submittedAt: String(latestFeedback.createdAt ?? new Date().toISOString()),
+  } : undefined;
+
+  return {
+    decisionId: String(row.decisionId ?? ''),
+    matchId: typeof row.matchId === 'string' && row.matchId ? row.matchId : undefined,
+    skuId: String(row.skuId ?? ''),
+    entityId: String(row.channelId ?? ''),
+    entityType: 'channel',
+    status: toDecisionStatus(row, actions, reviews),
+    owner: String(row.createdBy ?? '运营专员'),
+    createdAt: String(row.createdAt ?? new Date().toISOString()),
+    updatedAt: String(row.updatedAt ?? row.createdAt ?? new Date().toISOString()),
+    actions,
+    feedback,
+  };
+}
 
 const mockChannels: ChannelProfile[] = [
   { channelId: 'mock_douyin_live_001', channelName: 'Mock Douyin Live', channelType: 'live_stream', platformType: 'content_ecommerce' },
@@ -33,6 +92,76 @@ const mockChannels: ChannelProfile[] = [
   { channelId: 'mock_red_store', channelName: 'Mock RED Store', channelType: 'content_seeding', platformType: 'content_ecommerce' },
   { channelId: 'mock_wechat_miniprogram', channelName: 'Mock WeChat Mini Program', channelType: 'private_domain', platformType: 'social_ecommerce' },
 ];
+
+interface ChannelEntityApiItem {
+  channelEntityId: string;
+  entityType: string;
+  sourceEntityKey: string;
+  displayName?: string | null;
+  platformType?: string | null;
+  platformName?: string | null;
+  accountKind?: string | null;
+  profileTags?: Array<{ tagId?: string; score?: number }>;
+  benchmarkTags?: Array<{
+    mappedTagId?: string | null;
+    optionLabel?: string | null;
+    dimension?: string | null;
+    sharePercent?: number | null;
+  }>;
+  performanceMetrics?: {
+    followerCount?: number;
+    engagementRate?: number;
+    conversionRate?: number;
+    trafficIndex?: number;
+    conversionIndex?: number;
+    sampleSize?: number;
+  };
+  sourceId?: string;
+  timeWindow?: string | null;
+  qualityFlags?: string[];
+}
+
+function normalizeScore(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return n > 1 ? n / 100 : n;
+}
+
+function mapChannelEntityToAccountProfile(entity: ChannelEntityApiItem): AccountProfile {
+  const benchmarkTags = entity.benchmarkTags ?? [];
+  const profileTags = entity.profileTags ?? [];
+  const coreTags = profileTags.length > 0
+    ? profileTags.map((tag) => ({
+        tagId: tag.tagId ?? 'unknown',
+        score: normalizeScore(tag.score),
+      }))
+    : benchmarkTags.map((tag) => ({
+        tagId: tag.mappedTagId ?? tag.optionLabel ?? tag.dimension ?? 'unknown',
+        score: normalizeScore(tag.sharePercent),
+      }));
+
+  const metrics = entity.performanceMetrics ?? {};
+  const sampleSize = Number(metrics.sampleSize) || 0;
+
+  return {
+    accountId: entity.channelEntityId,
+    sourceEntityKey: entity.sourceEntityKey,
+    sourceId: entity.sourceId,
+    accountName: entity.displayName || entity.sourceEntityKey || entity.channelEntityId,
+    accountType: entity.entityType || entity.accountKind || 'unknown',
+    platformType: entity.platformType || 'unknown',
+    qualityFlags: entity.qualityFlags || [],
+    sampleSize,
+    timeWindow: entity.timeWindow || '',
+    coreTags,
+    interactionPreference: [],
+    performanceIndex: {
+      followerCount: Number(metrics.followerCount) || Number(metrics.trafficIndex) || 0,
+      engagementRate: normalizeScore(metrics.engagementRate),
+      conversionRate: normalizeScore(metrics.conversionRate ?? metrics.conversionIndex),
+    },
+  };
+}
 
 export const api = {
   getTaxonomy: async () => {
@@ -52,19 +181,27 @@ export const api = {
     return { data: { items: mockChannels } };
   },
 
+  getMatchEntities: async (): Promise<{ code: string; data: { items: ChannelProfile[] } }> => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<{ items: ChannelEntityApiItem[] }>('/channels/entities');
+      const items = res.data.items.map((entity) => ({
+        channelId: entity.sourceEntityKey || entity.channelEntityId,
+        channelName: entity.displayName || entity.sourceEntityKey || entity.channelEntityId,
+        channelType: entity.entityType || entity.accountKind || 'unknown',
+        platformType: entity.platformType || 'unknown',
+        sampleSize: Number(entity.performanceMetrics?.sampleSize) || null,
+        timeWindow: entity.timeWindow || null,
+        qualityFlags: entity.qualityFlags || [],
+      }));
+      return { code: 'ok', data: { items } };
+    }
+    return { code: 'ok', data: { items: mockChannels } };
+  },
+
   getAccountProfiles: async (): Promise<{ code: string; data: AccountProfile[] }> => {
     if (!USE_MOCK) {
-      const res = await fetchApi<{ items: any[] }>('/bi/douyin/accounts');
-      const items = res.data.items.map(r => ({
-        accountId: r.channelId,
-        accountName: r.accountName || r.displayName || r.channelId,
-        accountType: r.channelType || r.accountKind || 'unknown',
-        sampleSize: 0,
-        timeWindow: r.timeWindow || '',
-        coreTags: [],
-        interactionPreference: [],
-        performanceIndex: { followerCount: 0, engagementRate: 0, conversionRate: 0 }
-      }));
+      const res = await fetchApi<{ items: ChannelEntityApiItem[] }>('/channels/entities');
+      const items = res.data.items.map(mapChannelEntityToAccountProfile);
       return { code: 'ok', data: items };
     }
     
@@ -73,8 +210,12 @@ export const api = {
       code: 'ok',
       data: mockChannels.map(c => ({
         accountId: c.channelId,
+        sourceEntityKey: c.channelId,
+        sourceId: 'mock',
         accountName: c.channelName,
         accountType: c.channelType,
+        platformType: c.platformType || 'unknown',
+        qualityFlags: c.qualityFlags || ['数据充足'],
         sampleSize: 15000 + Math.floor(Math.random() * 50000),
         timeWindow: '近30天',
         coreTags: [],
@@ -90,27 +231,8 @@ export const api = {
 
   getAccountProfileDetail: async (accountId: string): Promise<{ code: string; data: AccountProfile }> => {
     if (!USE_MOCK) {
-      const res = await fetchApi<any>(`/bi/douyin/accounts/${accountId}`);
-      const acc = res.data;
-      
-      const coreTags = (acc.benchmarkTags || []).map((t: any) => ({
-        tagId: t.optionLabel || t.dimension,
-        score: t.sharePercent || 0
-      })).slice(0, 5);
-
-      return {
-        code: 'ok',
-        data: {
-          accountId: acc.channelId,
-          accountName: acc.accountName || acc.displayName || acc.channelId,
-          accountType: acc.channelType || acc.accountKind || 'unknown',
-          sampleSize: acc.benchmarkTags?.[0]?.sampleSize || 0,
-          timeWindow: acc.timeWindow || '',
-          coreTags,
-          interactionPreference: [],
-          performanceIndex: { followerCount: 0, engagementRate: 0, conversionRate: 0 }
-        }
-      };
+      const res = await fetchApi<ChannelEntityApiItem>(`/channels/entities/${accountId}`);
+      return { code: 'ok', data: mapChannelEntityToAccountProfile(res.data) };
     }
 
     const mock = mockChannels.find(c => c.channelId === accountId) || mockChannels[0];
@@ -118,8 +240,12 @@ export const api = {
       code: 'ok',
       data: {
         accountId: mock.channelId,
+        sourceEntityKey: mock.channelId,
+        sourceId: 'mock',
         accountName: mock.channelName,
         accountType: mock.channelType,
+        platformType: mock.platformType || 'unknown',
+        qualityFlags: mock.qualityFlags || ['数据充足', '置信度高'],
         sampleSize: 15000 + Math.floor(Math.random() * 50000),
         timeWindow: '近30天',
         coreTags: [
@@ -494,5 +620,113 @@ export const api = {
       qualityFlags: ['数据充足_置信度高']
     };
     return { code: 'ok', data: mockMatch };
+  },
+
+  createDecision: async (data: any) => {
+    if (!USE_MOCK) {
+      return fetchApi<{ decisionId: string; status: string }>('/operations/decisions', {
+        method: 'POST',
+        body: JSON.stringify({
+          skuId: data.skuId,
+          channelId: data.entityId,
+          recommendation: data.recommendation,
+          rationale: data.rationale,
+          matchId: data.matchId,
+          decisionType: 'launch',
+          createdBy: data.owner ?? '运营专员',
+        })
+      });
+    }
+    const newDecision = {
+      decisionId: `dec_${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      status: 'pending_execution',
+      owner: data.owner || 'System',
+      actions: [],
+      ...data
+    };
+    db.decisions.push(newDecision);
+    return { code: 'ok', data: newDecision };
+  },
+
+  getDecisions: async (skuId?: string, entityId?: string) => {
+    if (!USE_MOCK) {
+      const qs = new URLSearchParams();
+      if (skuId) qs.append('skuId', skuId);
+      const list = await fetchApi<{ items: Record<string, unknown>[] }>(`/operations/decisions?${qs.toString()}`);
+      const details = await Promise.all(
+        list.data.items.map((item) => fetchApi<Record<string, unknown>>(`/operations/decisions/${String(item.decisionId)}`).then((res) => normalizeOperationDecision(res.data)))
+      );
+      const items = entityId ? details.filter((item) => item.entityId === entityId) : details;
+      return { code: 'ok', data: { items } };
+    }
+    let res = [...db.decisions];
+    if (skuId) res = res.filter(d => d.skuId === skuId);
+    if (entityId) res = res.filter(d => d.entityId === entityId);
+    // Sort descending by created time
+    res.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return { code: 'ok', data: { items: res } };
+  },
+
+  updateDecision: async (decisionId: string, updates: any) => {
+    if (!USE_MOCK) {
+      if (Array.isArray(updates.actions) && updates.actions.length > 0) {
+        const nextAction = updates.actions[updates.actions.length - 1] as ActionRecord;
+        await fetchApi<{ actionId: string }>(`/operations/decisions/${decisionId}/actions`, {
+          method: 'POST',
+          body: JSON.stringify({
+            actionType: nextAction.type,
+            detail: { description: nextAction.description },
+            status: nextAction.status,
+          }),
+        });
+      }
+      if (updates.status === 'pending_review') {
+        await fetchApi<{ reviewId: string }>(`/operations/decisions/${decisionId}/review`, {
+          method: 'POST',
+          body: JSON.stringify({ reviewStatus: 'pending_review', rationale: 'pending business review' }),
+        });
+      }
+      if (updates.status === 'needs_adjustment') {
+        await fetchApi<{ reviewId: string }>(`/operations/decisions/${decisionId}/review`, {
+          method: 'POST',
+          body: JSON.stringify({ reviewStatus: 'needs_adjustment', rationale: 'marked for adjustment from flywheel workbench' }),
+        });
+      }
+      if (updates.feedback) {
+        const feedback = updates.feedback as FeedbackRecord;
+        await fetchApi<{ feedbackId: string }>(`/operations/decisions/${decisionId}/feedback`, {
+          method: 'POST',
+          body: JSON.stringify({
+            feedbackType: 'business_review',
+            metricName: 'review_summary',
+            source: 'flywheel_workbench',
+            sourceType: 'user_input',
+            qualityFlags: [],
+            rawMetrics: {
+              summary: feedback.summary,
+              effectJudgment: feedback.effectJudgment,
+              audienceDeviation: feedback.audienceDeviation,
+              adjustments: feedback.adjustments,
+            },
+          }),
+        });
+        await fetchApi<{ reviewId: string }>(`/operations/decisions/${decisionId}/review`, {
+          method: 'POST',
+          body: JSON.stringify({
+            reviewStatus: updates.status === 'needs_adjustment' ? 'needs_adjustment' : 'verified',
+            rationale: feedback.summary,
+            adjustmentDetail: { adjustments: feedback.adjustments },
+          }),
+        });
+      }
+      const detail = await fetchApi<Record<string, unknown>>(`/operations/decisions/${decisionId}`);
+      return { code: 'ok', data: normalizeOperationDecision(detail.data) };
+    }
+    const idx = db.decisions.findIndex(d => d.decisionId === decisionId);
+    if (idx === -1) throw new Error('Decision not found');
+    db.decisions[idx] = { ...db.decisions[idx], ...updates, updatedAt: new Date().toISOString() };
+    return { code: 'ok', data: db.decisions[idx] };
   }
 };

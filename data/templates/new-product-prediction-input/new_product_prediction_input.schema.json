@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pls.local/schemas/new_product_prediction_input.schema.json",
+  "title": "PLS New Product Prediction Input Template",
+  "description": "D-P2-7 schema draft. Template mode allows null values so it does not invent user business IDs or enum values before real fields arrive.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "templateMode",
+    "productMaster",
+    "predictionInput",
+    "mappingContext",
+    "qualityRequirements"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "d-p2-7.new_product_prediction_input.v0.1" },
+    "templateMode": { "type": "boolean", "const": true },
+    "productMaster": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "category",
+        "priceAndSeason",
+        "sellingPoints",
+        "material",
+        "styleAndScenario",
+        "assets",
+        "similarProducts",
+        "lineage",
+        "quality"
+      ],
+      "properties": {
+        "identity": { "$ref": "#/$defs/identityGroup" },
+        "category": { "$ref": "#/$defs/categoryGroup" },
+        "priceAndSeason": { "$ref": "#/$defs/priceSeasonGroup" },
+        "sellingPoints": { "$ref": "#/$defs/sellingPointGroup" },
+        "material": { "$ref": "#/$defs/materialGroup" },
+        "styleAndScenario": { "$ref": "#/$defs/styleScenarioGroup" },
+        "assets": { "$ref": "#/$defs/assetGroup" },
+        "similarProducts": { "$ref": "#/$defs/similarProductGroup" },
+        "lineage": { "$ref": "#/$defs/lineageGroup" },
+        "quality": { "$ref": "#/$defs/qualityGroup" }
+      }
+    },
+    "predictionInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requiredGroups", "optionalGroups", "enhancementGroups", "modelInputBoundary"],
+      "properties": {
+        "requiredGroups": { "type": "array", "items": { "type": "string" } },
+        "optionalGroups": { "type": "array", "items": { "type": "string" } },
+        "enhancementGroups": { "type": "array", "items": { "type": "string" } },
+        "modelInputBoundary": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "mappingContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taxonomyDoc", "allowedTagNamespaces", "unmappedHandling"],
+      "properties": {
+        "taxonomyDoc": { "type": "string" },
+        "allowedTagNamespaces": { "type": "array", "items": { "type": "string" } },
+        "unmappedHandling": { "type": "string" }
+      }
+    },
+    "qualityRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requiredFieldPolicy", "qualityFlags", "blockingIssues"],
+      "properties": {
+        "requiredFieldPolicy": { "type": "array", "items": { "$ref": "#/$defs/fieldPolicy" } },
+        "qualityFlags": { "type": "array", "items": { "type": "string" } },
+        "blockingIssues": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "$defs": {
+    "nullableString": { "type": ["string", "null"] },
+    "nullableNumber": { "type": ["number", "null"] },
+    "identityGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workspaceId", "productMasterId", "productId", "productVariantId", "sourceProductKey", "sourceKeyPolicy", "productLifecycleStatus", "launchDate"],
+      "properties": {
+        "workspaceId": { "$ref": "#/$defs/nullableString" },
+        "productMasterId": { "$ref": "#/$defs/nullableString" },
+        "productId": { "$ref": "#/$defs/nullableString" },
+        "productVariantId": { "$ref": "#/$defs/nullableString" },
+        "sourceProductKey": { "$ref": "#/$defs/nullableString" },
+        "sourceKeyPolicy": { "$ref": "#/$defs/nullableString" },
+        "productLifecycleStatus": { "$ref": "#/$defs/nullableString" },
+        "launchDate": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "categoryGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["categoryLv1", "categoryLv2", "categoryLv3", "categoryPath", "brandName", "seriesName", "genderScope", "ageScope"],
+      "properties": {
+        "categoryLv1": { "$ref": "#/$defs/nullableString" },
+        "categoryLv2": { "$ref": "#/$defs/nullableString" },
+        "categoryLv3": { "$ref": "#/$defs/nullableString" },
+        "categoryPath": { "type": "array", "items": { "type": "string" } },
+        "brandName": { "$ref": "#/$defs/nullableString" },
+        "seriesName": { "$ref": "#/$defs/nullableString" },
+        "genderScope": { "$ref": "#/$defs/nullableString" },
+        "ageScope": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "priceSeasonGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["listPrice", "salePrice", "priceCurrency", "priceBand", "season", "seasonBand", "promotionPosition"],
+      "properties": {
+        "listPrice": { "$ref": "#/$defs/nullableNumber" },
+        "salePrice": { "$ref": "#/$defs/nullableNumber" },
+        "priceCurrency": { "$ref": "#/$defs/nullableString" },
+        "priceBand": { "$ref": "#/$defs/nullableString" },
+        "season": { "$ref": "#/$defs/nullableString" },
+        "seasonBand": { "$ref": "#/$defs/nullableString" },
+        "promotionPosition": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "sellingPointGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sellingPoints", "copyFeatureSummary"],
+      "properties": {
+        "sellingPoints": { "type": "array", "items": { "type": "string" } },
+        "copyFeatureSummary": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "materialGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["materialComposition", "fabricType", "colorFamily", "fitType", "patternType"],
+      "properties": {
+        "materialComposition": { "type": "object", "additionalProperties": true },
+        "fabricType": { "$ref": "#/$defs/nullableString" },
+        "colorFamily": { "$ref": "#/$defs/nullableString" },
+        "fitType": { "$ref": "#/$defs/nullableString" },
+        "patternType": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "styleScenarioGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["styleKeywords", "scenarioKeywords", "intentKeywords", "mappedProductTags", "unmappedProductFields"],
+      "properties": {
+        "styleKeywords": { "type": "array", "items": { "type": "string" } },
+        "scenarioKeywords": { "type": "array", "items": { "type": "string" } },
+        "intentKeywords": { "type": "array", "items": { "type": "string" } },
+        "mappedProductTags": { "type": "array", "items": { "$ref": "#/$defs/profileTagScore" } },
+        "unmappedProductFields": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      }
+    },
+    "assetGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assetRefs", "imageFeatureSummary"],
+      "properties": {
+        "assetRefs": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "imageFeatureSummary": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "similarProductGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["similarProducts"],
+      "properties": {
+        "similarProducts": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      }
+    },
+    "lineageGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceId", "sourceBatchId", "dataVersion", "generatedAt", "sourceType", "timeWindow"],
+      "properties": {
+        "sourceId": { "$ref": "#/$defs/nullableString" },
+        "sourceBatchId": { "$ref": "#/$defs/nullableString" },
+        "dataVersion": { "$ref": "#/$defs/nullableString" },
+        "generatedAt": { "$ref": "#/$defs/nullableString" },
+        "sourceType": { "$ref": "#/$defs/nullableString" },
+        "timeWindow": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "qualityGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qualityFlags", "blockingIssues", "warnings", "fieldCoverageRate", "mappingCoverageRate", "averageMappingConfidence"],
+      "properties": {
+        "qualityFlags": { "type": "array", "items": { "type": "string" } },
+        "blockingIssues": { "type": "array", "items": { "type": "string" } },
+        "warnings": { "type": "array", "items": { "type": "string" } },
+        "fieldCoverageRate": { "$ref": "#/$defs/nullableNumber" },
+        "mappingCoverageRate": { "$ref": "#/$defs/nullableNumber" },
+        "averageMappingConfidence": { "$ref": "#/$defs/nullableNumber" }
+      }
+    },
+    "profileTagScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tagId", "score", "confidence", "source", "sampleSize", "timeWindow"],
+      "properties": {
+        "tagId": { "type": "string" },
+        "score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "source": { "type": "string" },
+        "sampleSize": { "type": ["number", "null"] },
+        "timeWindow": { "type": ["string", "null"] }
+      }
+    },
+    "fieldPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fieldPath", "requirement", "qualityRule"],
+      "properties": {
+        "fieldPath": { "type": "string" },
+        "requirement": { "type": "string" },
+        "qualityRule": { "type": "string" }
+      }
+    }
+  }
+}

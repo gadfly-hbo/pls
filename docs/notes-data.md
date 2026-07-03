@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-03（session 收尾：D-P1-F1 抖音 BI 数据资产化本地实现完成，等待 X 总控终审；未标 done）
+最近更新：2026-07-03（D-P2-7 新品主数据预测输入模板验收通过）
 
 进度：
 
@@ -25,6 +25,8 @@
 - D-P1-E1 已产出抖音账号与商品画像字段映射模板：`data/templates/douyin-account-product-mapping/`，包含字段类别、placeholder bucket、mapping rule、unmapped reason 和 quality report 模板。
 - D-P1-F1 抖音 BI 数据资产化本地实现已完成，等待 X 总控终审后再改 wiki 状态为 done。产出目录 `data/p1/douyin-bi/`，覆盖 8 个 PLS 数据对象共 692 行（`accounts=13`、`account_benchmark_tags=26`、`account_reports=12`、`products=73`、`product_account_fits=73`、`comparison_dimensions=365`、`adjustment_advice=105`、`summary_metrics=25`）。每行携带 `sourceBatchId=batch_douyin_bi_20260703`、`dataVersion=v1_20260703`、`generatedAt`、`upsertKey`；`upsertKey.hash` 为行级 SHA1 前 16 位，同对象内唯一。
 - D-P1-F1 附带 `field_dictionary.csv`、`unmapped_fields.csv`、`quality_report.json`、`source_manifest.json`、`sqlite_import_manifest.json`、README；生成脚本 `data/scripts/generate-p1-douyin-bi.mjs`，校验脚本 `data/scripts/validate-p1-douyin-bi.mjs`。
+- D-P2-2 已通过总控复核，产出 `docs/p2-2-product-channel-schema.md` 与 `docs/p2-2-product-channel-schema-acceptance.md`，冻结 `ProductMaster`、`ChannelEntity`、`FieldMapping`、`DataQualityReport` 草案和 `ProductProfile` / `PredictedProductProfile` / `ChannelProfile` 输入边界。
+- D-P2-7 已通过 X 总控复核，产出 `data/templates/new-product-prediction-input/` 与 `docs/p2-7-new-product-input-template-acceptance.md`；`docs/wiki.html` 已升级到 v0.29，并将 D-P2-7 标记为 done。
 
 下一步：
 
@@ -33,12 +35,15 @@
 - P1-F 后续 A/M/V 必须消费 PLS 数据对象，不再让前端直接依赖原 dashboard `data.js` 全局变量。
 - D-P1-A5 / D-P1-A2 后续如继续执行，验收重点改为结构、字段映射、质量报告和建模可用性，不再做隐私红线拦截。
 - D-P1-F1 数据包本地实现和校验已通过；等 X 总控终审后由总控把 wiki 中 D-P1-F1 状态改为 done。A-P1-F2 可直接消费 `sqlite_import_manifest.json` 定义的目标表、businessKey、upsertKey。
+- M-P2-8 可据此冻结新品人群预测 baseline contract，A-P2-9 可据此设计新品预测 API 输入校验和版本追踪。
 
 阻塞：
 
 - D-P1-A5 阻塞于真实样例输入缺失；当前 D-P1-A1 只能代表 no-input preflight 归档。
 - `data/p1/multi-timewindow-demo/` 为 mock aggregate cutoff smoke 数据，仅用于 M-P1-A3 开发验证。
 - P1-F 的抖音 BI 数据已获用户确认放行；`data/p1/douyin-bi/` 数据包已生成并保留真实账号名、款号、销售额、legacy 号货匹配度、业务明细字段和值。A-P1-F2 需按 `sqlite_import_manifest.json` 冻结 SQLite schema；总控终审前 D-P1-F1 在 wiki 中仍保持 todo。
+- D-P2-2 仅冻结结构，不编造真实新品字段、枚举默认值、业务 ID 或未批准画像 tagId；`priceBand`、`seasonBand`、`platformType` 当前只作为 D 域草案枚举，不作为全局冻结枚举。
+- D-P2-7 模板使用 `null`、空数组和空对象作为用户待提供字段占位；不得把模板占位当作真实业务值、默认枚举、默认 ID 或训练 fixture。
 
 开放问题：
 
@@ -54,6 +59,8 @@
 - `node data/templates/douyin-account-product-mapping/scripts/validate-douyin-mapping-template.mjs` 通过。
 - `node data/scripts/validate-p1-multi-timewindow-demo.mjs data/p1/multi-timewindow-demo` 通过。
 - `node data/scripts/validate-p1-douyin-bi.mjs data/p1/douyin-bi` 通过（0 error / 0 warning）。
+- D-P2-2 总控验收通过：`docs/p2-2-product-channel-schema.md` 包含 ProductMaster / ChannelEntity / FieldMapping / DataQualityReport，显式 `tagId` 引用均存在于 `docs/profile-taxonomy-v0.md`，文档标题层级已修正为不超过三级。
+- `node data/templates/new-product-prediction-input/scripts/validate-new-product-prediction-template.mjs` 通过（0 error / 0 warning）。
 
 ---
 
@@ -119,3 +126,28 @@
 - 生成脚本 `data/scripts/generate-p1-douyin-bi.mjs`：可传 `--source`、`--batchId`、`--dataVersion`、`--generatedAt`、`--timeWindow`；输出汇总 JSON 到 stdout。
 - 校验脚本 `data/scripts/validate-p1-douyin-bi.mjs`：结构、meta、`upsertKey.hash` 行级唯一性、manifest 声明的 `businessKey / upsertKey` 组合值唯一性、引用完整性、tagId 白名单、manifest ↔ 数据对象计数、`tables.file` 存在性；非零错误退出。
 - 校验命令：`node data/scripts/validate-p1-douyin-bi.mjs data/p1/douyin-bi`。
+
+## D-P2-2 沉淀
+
+- 产出文档固定为 `docs/p2-2-product-channel-schema.md`，总控验收报告为 `docs/p2-2-product-channel-schema-acceptance.md`。
+- `ProductMaster` 推荐粒度：`workspaceId + productId + productVariantId + dataVersion`；字段组覆盖身份、类目、价格/季节、卖点、材质、风格、场景、图文资产、相似商品、原始业务字段、lineage 和 upsert key。
+- `ChannelEntity` 推荐粒度：`workspaceId + entityType + sourceEntityKey + dataVersion`；`entityType` 覆盖 `platform`、`shop`、`account`、`livestream_room`、`content_account`、`province`、`city`、`trade_area`、`store`，支持线上店铺/账号和线下省市商圈门店。
+- `FieldMapping` 模板字段覆盖 `sourceObject/sourceField/sourceValuePattern -> targetObject/targetField`、`mappingRule`、`mappedTagId`、`confidence`、`requiredFor`、`unmappedReason`、`recommendedHandling`、owner、version。
+- `DataQualityReport` 模板覆盖对象行数、字段覆盖率、mapping 覆盖率、平均置信度、blocking issues、warnings、quality flags 和 `admissionPolicy=user_authorized_full_passthrough`。
+- 输入边界：`ProductProfile` 使用历史/在售商品真实画像和表现；`PredictedProductProfile` 只用上新前可得的 `ProductMaster` 字段、相似商品和图文特征；`ChannelProfile` 以 `ChannelEntity` 为主键，平台只作为维度。
+- taxonomy 边界：不新增 `tagId`；所有 `ProfileTagScore.tagId` 必须来自 `docs/profile-taxonomy-v0.md`，不能映射的源字段进入 `unmappedProductFields` 或 `unmappedProfileFields`。
+- 留给 X 的评审点：`ProductMaster` / `ChannelEntity` 是否成为物理 SQLite 顶层表，线下区域层级是否需要统一地理字典，`priceBand` / `seasonBand` / `platformType` 是否全局冻结。
+- 校验方式：本轮执行文档结构与显式 `tagId` 引用检查，确认 ProductMaster / ChannelEntity / FieldMapping / DataQualityReport 四段存在，且显式 tag 引用均在 taxonomy 内。
+
+## D-P2-7 沉淀
+
+- 模板目录固定为 `data/templates/new-product-prediction-input/`。
+- 产出文件：`new_product_prediction_input.schema.json`、`new_product_prediction_input.template.json`、`field_mapping.template.csv`、`quality_report.template.json`、`README.md`、`scripts/validate-new-product-prediction-template.mjs`。
+- 新品预测输入基于 D-P2-2 `ProductMaster`：字段组包括 `identity`、`category`、`priceAndSeason`、`sellingPoints`、`material`、`styleAndScenario`、`assets`、`similarProducts`、`lineage`、`quality`。
+- 必填（真实输入时）：商品身份/source key、一级类目或等价映射字段、source lineage（`sourceBatchId`、`dataVersion`、`generatedAt`、`sourceType`）。模板阶段这些字段保持 `null`，不生成假 ID、假枚举或默认业务值。
+- 可选但模型可用：价格带、季节、卖点、材质、风格、场景、图文资产、相似 SKU/SPU、`mappedProductTags`、`unmappedProductFields`。
+- 后续增强字段：`assets.imageFeatureSummary`、`sellingPoints.copyFeatureSummary`、`similarProducts.similarProducts`；这些字段提升 baseline 质量，但不作为 P2 contract 硬前置。
+- 映射边界：只允许映射到 `docs/profile-taxonomy-v0.md` 现有命名空间 `demo/style/price/occasion/intent/channel`；不可映射字段进入 `unmappedProductFields`，不得强行造 `tagId`。
+- 质量规则覆盖四类：缺失（`missing_required_identity`、`missing_required_category`、`source_lineage_incomplete` 等）、冲突（`conflicting_product_identity`、`conflicting_price_fields` 等）、不可映射（`unmapped_required_field`、`taxonomy_unmapped_high`、`unapproved_tag_id`）、低置信度（`low_mapping_confidence`、`low_similar_product_confidence`、`low_asset_feature_confidence`）。
+- 模板明确 M/A 输入边界：M-P2-8 只能使用上新前可得的 `ProductMaster` 字段、`mappedProductTags`、相似商品和图文摘要；不得要求 post-launch buyer profile、销售标签或渠道反馈，除非显式 backtest。
+- 校验命令：`node data/templates/new-product-prediction-input/scripts/validate-new-product-prediction-template.mjs`。

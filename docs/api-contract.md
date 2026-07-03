@@ -625,3 +625,276 @@ A 域对 M 域匹配输出的封装，等价于 `model-plan.md §4.4` 的 `chann
 - **鉴权升级**：P1 需要接入基于用户的多租户；本文的 `X-PLS-Workspace` 与 `Authorization` 为占位方案。
 - **feedback 接口 schema**：待 M 域纠偏机制落地后回流。
 - **热力图缓存策略**：P0 直接读 `MatchResult`；如后续引入投放实时反馈，需追加 `matchScoreAsOf` 字段。
+
+---
+
+## 9. 数据管理底座 API（A-P2-1）
+
+P2 新增。把 PLS 的数据导入、版本、质量和审计能力产品化为通用数据管理底座。所有接口前缀 `/api/v0/data-management`，走 §2.2 鉴权。
+
+### 9.1 设计原则
+
+- **source-agnostic**：API 不耦合抖音 BI。`data_source` 注册表是 source 清单的唯一真源；每个 source 注册一个 adapter，adapter 负责把"版本/行数/latest/质量报告"从具体表中投影出来。
+- **不复制 import 元数据**：`batch` 表 + `audit_event` 表仍是导入真源。数据管理 API 只读取和投影这些已有记录，不建并行表。
+- **读取优先**：本阶段只做读取型 API + 501 占位写路径。HTTP import endpoint 和版本回滚留待后续 P2 任务。
+- **未来扩展**：商品主数据、渠道画像、行动反馈数据源通过注册新 adapter 接入，不改 API shape。
+
+### 9.2 核心对象
+
+**DataSource**
+
+```json
+{
+  "sourceId": "douyin_bi",
+  "sourceKind": "douyin_bi",
+  "displayName": "抖音 BI 数据资产",
+  "adapter": "douyin_bi",
+  "schemaPrefix": "douyin_",
+  "status": "active",
+  "description": "D-P1-F1 assetized dashboard snapshot...",
+  "config": { "primaryTable": "douyin_account", "importScript": "scripts/import-douyin-bi.mjs" },
+  "createdAt": "2026-07-03T...",
+  "updatedAt": "2026-07-03T..."
+}
+```
+
+`status` 枚举：`active`（有 backing table 和 adapter 实现）/ `stub`（已注册占位，待上游任务冻结 schema）。
+
+当前注册的 source：
+
+| sourceId | sourceKind | status | 说明 |
+|---|---|---|---|
+| `douyin_bi` | `douyin_bi` | active | D-P1-F1 资产化包，backed by `douyin_*` 表 |
+| `product_master` | `product_master` | stub | 待 D-P2-2 冻结商品主数据 schema |
+| `channel_profile` | `channel_profile` | active | A-P2-3 店铺/账号优先 `channel_entity` 投影 |
+| `action_feedback` | `action_feedback` | stub | 待 A-P2-10 经营飞轮闭环 |
+
+**DataVersion**
+
+```json
+{
+  "sourceId": "douyin_bi",
+  "sourceKind": "douyin_bi",
+  "sourceBatchId": "batch_douyin_bi_20260703",
+  "dataVersion": "v1_20260703",
+  "generatedAt": "2026-07-03T00:00:00Z",
+  "timeWindow": "2026-05-01/2026-05-31",
+  "isLatest": false,
+  "rowCount": 692
+}
+```
+
+`isLatest` 由 adapter 按 `MAX(generated_at)` 推导。同一 sourceBatchId 下可有多个 dataVersion；latest projection 由 `/api/v0/bi/douyin/*` 消费。
+
+**DataQualityReport**
+
+```json
+{
+  "sourceBatchId": "batch_douyin_bi_20260703",
+  "dataVersion": "v1_20260703",
+  "qualityFlags": ["algorithm_pending_user_formula", "single_baseline_account_only"],
+  "coverage": { "accountsWithBenchmarkTags": 1, "productsWithProfileDistribution": 1 },
+  "objectCounts": { "accounts": 13, "products": 73, ... },
+  "totalRows": 692,
+  "admissionPolicy": "user_authorized_full_passthrough",
+  "notes": []
+}
+```
+
+由 D-P1-F1 `quality_report.json` 在导入时写入 `batch.quality_report` 列；adapter 按 `(sourceBatchId, dataVersion)` 查回。
+
+### 9.3 接口清单
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/data-management/data-sources` | 列出注册的数据源，支持 `?status=` / `?sourceKind=` 过滤 |
+| GET | `/data-management/data-sources/:sourceId` | 数据源详情 + versions 列表（含 latestDataVersion） |
+| GET | `/data-management/import-batches` | 查询导入批次（读 `batch` 表），支持 `?batchType=` / `?sourceBatchId=` / `?pageSize=` |
+| GET | `/data-management/import-batches/:batchId` | 批次详情（含 entityCounts + qualityReport） |
+| GET | `/data-management/data-versions` | 跨 source 版本列表，支持 `?sourceId=` 过滤 |
+| GET | `/data-management/data-versions/:sourceId/:dataVersion/quality` | 指定版本的质量报告 |
+| GET | `/data-management/audit` | 导入与数据管理审计事件查询，支持 `?resourceType=` / `?resourceId=` / `?actor=` / `?event=` |
+| POST | `/data-management/import-batches` | **预留** — HTTP 导入 endpoint，当前返回 `501 not_implemented` |
+| POST | `/data-management/data-versions/:sourceId/:dataVersion/rollback` | **预留** — 版本回滚，当前返回 `501 not_implemented` |
+
+### 9.4 audit 落库口径
+
+数据管理 API 的查询操作统一写 `audit_event`：
+
+- `resource_type`：`bi_data_source` / `bi_data_version` / `bi_batch`（复用已有 `bi_*` 前缀，不新增枚举段）。
+- `event`：`query`（读操作）/ `import_completed`（导入脚本写入，已由 A-P1-F2 落地）。
+- `meta`：记录查询参数摘要、返回 count、sourceId / dataVersion 等。
+
+### 9.5 未来数据源接入方式
+
+新数据源接入只需 3 步：
+
+1. 在 `data_source` 表 `INSERT OR IGNORE` 一行（sourceId / sourceKind / adapter / status）。
+2. 在 `services/data-source-registry.ts` 实现 adapter（`listVersions` + `getQualityReport`），注册到 `ADAPTERS`。
+3. 导入脚本在写业务数据时同步写 `batch` 表（`batch_type` 与 sourceKind 对齐）+ `audit_event`。
+
+不需要改 `/data-management/*` 路由层。`/bi/douyin/*` 等业务读取 API 仍由各域自行维护；数据管理底座只负责"有什么数据、哪个版本、质量如何、谁导的"。
+
+---
+
+## 10. 渠道人群实体 API（A-P2-3）
+
+P2 新增。以店铺 / 账号 / 门店为第一分析实体，替代平台优先查询。所有接口前缀 `/api/v0/channels/entities`，走 §2.2 鉴权。
+
+### 10.1 设计原则
+
+- **实体优先**：`ChannelEntity` 是 P2 渠道人群的 first-class 锚。平台只作为 `platformType` 维度，不作为主查询轴。
+- **投影表，非运行时合并**：`channel_entity` 表是读优化投影，由 `sync:channel-entities` 脚本从 `douyin_account_latest` + `channel_profile` 填充。源表不修改、不合并。
+- **source-agnostic**：投影表带 `source_id` 字段，未来新数据源（product_master、action_feedback）通过同步脚本接入，不改 API shape。
+- **latest 语义**：默认走 `channel_entity_latest` view（按 `channel_entity_id` 分组 + `MAX(generated_at)` 取最新）；`?dataVersion=` 可查历史投影。
+
+### 10.2 核心对象
+
+**ChannelEntity**
+
+```json
+{
+  "channelEntityId": "douyin:shop:douyin_account_semir_official_flagship_baseline",
+  "entityType": "shop",
+  "sourceEntityKey": "douyin_account_semir_official_flagship_baseline",
+  "displayName": "森马官方旗舰店(基准)",
+  "platformType": "content_ecommerce",
+  "platformName": "抖音",
+  "parentEntityId": null,
+  "entityStatus": "active",
+  "shopId": "douyin_account_semir_official_flagship_baseline",
+  "accountId": null,
+  "accountKind": "douyin_shop",
+  "profileTags": [],
+  "benchmarkTags": [{ "dimension": "age", "optionLabel": "24-30", "sharePercent": 34.83 }],
+  "performanceMetrics": {},
+  "unmappedProfileFields": [],
+  "sourceId": "douyin_bi",
+  "sourceBatchId": "batch_douyin_bi_20260703",
+  "dataVersion": "v1_20260703",
+  "generatedAt": "2026-07-03T00:00:00Z",
+  "timeWindow": "2026-05-01/2026-05-31",
+  "qualityFlags": []
+}
+```
+
+**entityType 枚举**（来自 `docs/p2-2-product-channel-schema.md`）：
+
+| entityType | 含义 | 当前来源 |
+|---|---|---|
+| `shop` | 线上店铺 / 商城店 | `douyin_shop` → shop；`shelf_ecommerce` → shop |
+| `account` | 社交 / 内容 / 电商账号 | `douyin_account` → account；`private_domain` → account |
+| `livestream_room` | 直播间 | `douyin_live_room` → livestream；`live_stream` → livestream |
+| `content_account` | 内容账号 | `douyin_short_video_account` → content；`short_video` → content |
+| `province` / `city` / `trade_area` / `store` | 线下层级 | 预留，当前无数据 |
+
+### 10.3 接口清单
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/channels/entities` | 实体列表，支持 `?entityType=` / `?platformType=` / `?sourceId=` / `?dataVersion=` / `?pageSize=` |
+| GET | `/channels/entities/:entityId` | 实体详情（含 profileTags / benchmarkTags / performanceMetrics / qualityFlags），支持 `?dataVersion=` |
+
+**注意**：`/channels/entities` 必须在 `/channels` 之前注册，否则 Hono 的 `/:channelId` 会错误匹配 `entities` 路径。
+
+### 10.4 投影策略与风险
+
+**方案**：`channel_entity` 表由 `sync:channel-entities` 脚本从源表读取并 INSERT OR REPLACE。脚本幂等，重跑不产生重复行。`channel_entity_latest` view 自动取 `MAX(generated_at)` 作为 latest。
+
+**当前数据源**：
+
+| source_id | 实体数 | entityType | 投影来源 |
+|---|---|---|---|
+| `douyin_bi` | 13 | shop(3) + account(6) + content_account(3) + livestream(1) | `douyin_account_latest` + `douyin_account_benchmark_tag_latest` |
+| `channel_profile` | 4 | shop(1) + account(1) + content_account(1) + livestream(1) | `channel_profile`（P0 mock） |
+
+**风险与后续**：
+
+- `channel_entity` 是投影表，不是源表。数据更新需先导入源表（`import:douyin-bi`），再重跑 `sync:channel-entities`。
+- 当前 `profileTags` 为空（账号级无 mapped tags）；未来 D 域可补充账号画像后在同步脚本中投影。
+- 线下层级（province / city / trade_area / store）预留字段已建，等真实线下数据接入后填充。
+- `parentEntityId` 为 null（无 hierarchy）；未来 account → shop、store → city → province 的层级关系需 D 域提供 parentEntityKey 映射。
+- `/channels`（P0 mock）和 `/channels/entities`（P2 投影）并存；V-P2-4 应优先消费 `/channels/entities`。
+
+---
+
+## 11. 新品预测 API（A-P2-9）
+
+P2 新增。为新品主数据预测提供 API，并把预测画像结果接入人货匹配链路。前缀 `/api/v0/new-products`。
+
+### 11.1 接口清单
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/new-products/predictions` | 提交新品预测（sync）。Body: `NewProductMasterPredictionInput`。返回 `PredictedProductProfile`。 |
+| GET | `/new-products/predictions` | 列表，支持 `?skuId=` / `?pageSize=` |
+| GET | `/new-products/predictions/:predictionId` | 详情 |
+| POST | `/new-products/predictions/:predictionId/match` | 将预测画像投入匹配链路。Body: `{ channelIds?: string[] }`。返回匹配结果列表。 |
+
+### 11.2 核心对象
+
+#### NewProductMasterPredictionInput
+
+对齐 `docs/p2-7-new-product-input-template/` 模板结构。必填字段：
+- `productMaster.identity`：productId 或 sourceProductKey（至少一个）
+- `productMaster.category.categoryLv1`：一级类目
+- `productMaster.lineage`：sourceBatchId + dataVersion
+
+可选字段：`priceAndSeason`、`styleAndScenario.mappedProductTags`、`similarProducts`、`quality`。
+
+#### PredictedProductProfile
+
+对齐 `docs/model-p2-8-new-product-prediction-contract.md`。关键字段：
+- `skuId`：解析后的商品 ID（缺失身份时为 null）
+- `predictedProfileTags`：预测画像标签（使用 taxonomy 已有 tagId）
+- `confidence`：综合置信度（0-1）
+- `riskFlags`：风险标记（如 `baseline_not_trained_model`、`missing_required_identity`）
+- `unavailableReasons`：不可用原因
+- `modelPath`: `"new_product_explainable_baseline"`
+
+### 11.3 匹配衔接
+
+`POST /new-products/predictions/:predictionId/match` 调用 `toProductChannelFitProfile()` 将预测结果桥接为 `ProductProfileDraft`，再调用 `matchFromPredictionAndChannels()` 生成匹配结果存入 `match_result` 表。如果 `skuId` 为 null，桥接函数会抛错，阻止无可追溯身份的结果进入匹配链路。
+
+---
+
+## 12. 经营飞轮 API（A-P2-10）
+
+P2 新增。为经营飞轮提供决策记录、行动记录、反馈导入和复盘状态。前缀 `/api/v0/operations`。
+
+### 12.1 设计原则
+
+- **只记录与复盘**：P2 Phase 1 不做自动策略执行。
+- **从匹配建议创建决策**：decision_record 关联 match_result。
+- **反馈数据保留来源**：每条 feedback 带 source / sourceBatchId / dataVersion / qualityFlags。
+- **状态流转**：decision status: `pending` → `verified` / `needs_adjustment`；review status: `pending_review` / `verified` / `needs_adjustment`。
+
+### 12.2 接口清单
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/operations/decisions` | 从匹配建议创建决策。Body: `{ skuId, channelId, recommendation, rationale?, matchId? }` |
+| GET | `/operations/decisions` | 列表，支持 `?status=` / `?skuId=` |
+| GET | `/operations/decisions/:decisionId` | 详情（含 actions / feedbacks / reviews） |
+| POST | `/operations/decisions/:decisionId/actions` | 记录行动。Body: `{ actionType, detail?, status?, scheduledAt? }` |
+| POST | `/operations/decisions/:decisionId/feedback` | 导入反馈。Body: `{ feedbackType, metricName, metricValue?, source?, timeWindow?, ... }` |
+| POST | `/operations/decisions/:decisionId/review` | 创建复盘。Body: `{ reviewStatus, adjustmentType?, rationale?, reviewer? }` |
+| GET | `/operations/decisions/:decisionId/review` | 复盘记录列表 |
+
+### 12.3 行动类型
+
+`actionType` 枚举（P2 初期）：`listing`（上架）、`distribution`（铺货）、`advertising`（投放）、`content`（内容）、`livestream`（直播）、`promotion`（活动）、`pricing`（价格策略）、`other`。
+
+### 12.4 反馈类型
+
+`feedbackType` 枚举：`sales`（销量）、`gmv`（GMV）、`conversion`（转化）、`roi`（ROI）、`return_rate`（退货）、`repurchase`（复购）、`crowd_deviation`（人群偏差）、`other`。
+
+### 12.5 状态流转
+
+```text
+decision:   pending ──→ verified (review confirmed)
+            pending ──→ needs_adjustment (review flagged)
+
+review:     pending_review ──→ verified
+            pending_review ──→ needs_adjustment
+```

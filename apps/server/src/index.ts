@@ -13,6 +13,10 @@ import taxonomy from "./routes/taxonomy.js";
 import audit from "./routes/audit.js";
 import accountMatches from "./routes/account-matches.js";
 import biDouyin from "./routes/bi-douyin.js";
+import dataManagement from "./routes/data-management.js";
+import channelEntities from "./routes/channel-entities.js";
+import newProducts from "./routes/new-products.js";
+import flywheel from "./routes/flywheel.js";
 
 const app = new Hono();
 
@@ -25,6 +29,7 @@ api.use("*", requestId);
 api.use("*", auth);
 api.use("*", workspace);
 api.route("/products", products);
+api.route("/channels/entities", channelEntities);
 api.route("/channels", channels);
 api.route("/predictions", predictions);
 api.route("/matches", matches);
@@ -34,6 +39,9 @@ api.route("/taxonomy", taxonomy);
 api.route("/audit", audit);
 api.route("/account-matches", accountMatches);
 api.route("/bi/douyin", biDouyin);
+api.route("/data-management", dataManagement);
+api.route("/new-products", newProducts);
+api.route("/operations", flywheel);
 
 app.route("/api/v0", api);
 
