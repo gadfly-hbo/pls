@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-04（X-P3-DB-MGMT-4 总体验收通过：Admin Database API 与 smoke 闭环通过）
+最近更新：2026-07-04（X-P4-TOOLS-6 工具模块第一期总体验收通过）
 
 进度：
 
@@ -18,6 +18,9 @@
 - **A-P3-DB-MGMT-1 已完成**：Admin Database API 可操作化加固，统一 dry run / 正式执行响应、补齐 after snapshot、导入重放、危险操作 confirmText 和 audit 闭环。
 - **A-P3-DB-MGMT-3 已完成并经总控 mark done**：拆分空库 smoke（`smoke:admin-empty`）与导入后 smoke（`smoke:admin-imported`）；dangerous 操作正式执行仅使用临时 workspace；新增 `smoke:admin-summary` 输出 JSON summary；README 明确每条 smoke 对数据库状态的前置假设。
 - **X-P3-DB-MGMT-4 已完成**：总控验收确认 Admin Database API、empty/imported/summary smoke、版本管理、危险操作 dry run / confirmText / admin token / Idempotency-Key / audit 闭环通过。
+- **A-P4-TOOLS-1 已完成并经总控 mark done**：新增工具注册表、本地 runner、运行记录与 artifact 查询 API；注册一个 L1 样例工具 `sample-profile-extract`；工具输出统一写入 `data/local/tool-runs/<runId>/`；总控修复 run / artifact 查询的 workspace 隔离缺口后，`smoke:tools` 27/27 通过。
+- **A-P4-TOOLS-4 已完成并经总控 mark done**：将 `profile-extract` / `business-aggregate` 工具输出包接入 Admin Import / Data Management 闭环；新增 `apps/server/src/lib/import-tool-packages.ts`、扩展 `/tools/runs/:runId/import-dry-run` 与 `/tools/runs/:runId/import`、注册 `profile_extract` / `business_aggregate` 数据源 adapter；dry-run 返回统一 `OperationImpact`，导入复用 admin token / Idempotency-Key / confirmText / audit 全套约束。总控补强 import-dry-run / import 的 workspace 隔离后，`smoke:tools-import` 33/33 通过，`smoke:tools` 回归 27/27 通过。
+- **X-P4-TOOLS-6 已完成并经总控 mark done**：工具模块第一期总体验收通过，确认 Tool Registry、Local Runner、artifact 管理、profile-extract / business-aggregate 标准包、Admin Import、Data Management 和 ToolsWorkbench 已形成闭环；临时 workspace `ws_tools_import_1783176743243` 覆盖 import dry-run、confirm import、auditId、batch、dataVersion、qualityReport 和 Data Management 读回。
 - 应用侧数据准入按项目级放行口径；taxonomy gate 未变。
 
 关键决策（A-P3-DB-6 三轮返工）：
@@ -35,7 +38,7 @@
 下一步：
 
 - P3-DB-MGMT 当前全组已完成；后续若新增数据管理增强，需另开任务卡。
-- App 后续可优先承接：后端数据包列表接口、临时 workspace 清理策略、更细粒度 admin 权限 / token 获取方式、真实用户授权数据包模板。
+- App 后续可优先承接：临时 workspace / tool-run 清理策略、更细粒度 admin 权限 / token 获取方式、真实平台解析器和真实用户授权数据包模板。
 
 阻塞：
 
@@ -48,6 +51,7 @@
 - `channel_entity` 投影表更新需手动重跑 `sync:channel-entities`；自动触发待 X 拍板。
 - `/channels`（P0 mock）和 `/channels/entities`（P2 投影）并存；迁移策略需 X 冻结。
 - smoke 测试产生的临时 workspace（`ws_drop_test_*` / `ws_review_delete_version_*` / `ws_smoke_*`）目录未被清理，待手工或后续脚本清理。
+- P4 工具 smoke 也会产生临时 workspace 与 `data/local/tool-runs/` staging 目录，清理策略尚未自动化。
 
 验证：
 
@@ -58,7 +62,6 @@
   - `apps/server npm run smoke:admin-database` 通过 37/37（空库状态）。
   - `apps/server npm run smoke:admin-import` 通过 52/52（空库 → demo 导入 → douyin-bi 导入；覆盖缺失/错误 confirmText）。
   - `apps/server npm run smoke:admin-dangerous` 通过 55/55（含临时 workspace 真实 drop view / drop table / truncate non-existent / drop non-existent / delete version / rebuild 闭环）。
-  - `docs/p3-db-mgmt-api-contract.md` 已更新，明确 import confirmText 为 `IMPORT ${packageType}`。
 - A-P3-DB-MGMT-3 验证（2026-07-04）：
   - `apps/server npm run typecheck` 通过。
   - `apps/server npm run schema:check` 通过（Valid true，0 missing / 0 extra，1 applied / 0 pending / 0 failed）。
@@ -72,6 +75,20 @@
   - `apps/server npm run smoke:admin-summary` 通过，`allOk: true`。
   - empty suite：database 43/43，import dry-run 32/32，dangerous 56/56。
   - imported suite：import 52/52，database imported 49/49，dangerous 56/56。
+- A-P4-TOOLS-1 验证（2026-07-04）：
+  - `apps/server npm run typecheck` 通过。
+  - `apps/server npm run smoke:tools` 通过 27/27（工具列表、定义、dry-run、执行、运行查询、artifact 列表、JSON/Markdown artifact 读取、非法 toolId 404、路径遍历 400、运行列表、跨 workspace 不能读取 run / artifact）。
+  - `apps/server npm run smoke -- --json` 通过 24/24，无回归。
+- A-P4-TOOLS-4 验证（2026-07-04，总控复核后）：
+  - `apps/server npm run typecheck` 通过。
+  - `apps/server npm run smoke:tools-import` 通过 33/33。
+  - `apps/server npm run smoke:tools` 通过 27/27。
+- X-P4-TOOLS-6 总体验收（2026-07-04）：
+  - `apps/server npm run typecheck` 通过。
+  - `apps/server npm run smoke:tools` 通过 27/27。
+  - `apps/server npm run smoke:tools-import` 通过 33/33；临时 workspace `ws_tools_import_1783176743243` 覆盖临时 workspace 初始化、data_source seed、样例包 staging、profile-extract / business-aggregate dry-run、跨 workspace 拦截、错误 confirmText、无 admin token、正式导入、Data Management 版本 / 质量报告 / batch 查询。
+  - `apps/web npm run lint`、`npm run build`、`npm run smoke` 通过。
+  - `VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Tools Workbench"` 通过。
 - ws_demo 当前状态（A-P3-DB-MGMT-1 smoke 执行后）：已导入 demo + douyin-bi，business rows > 0；A-P3-DB-MGMT-3 wrapper 使用独立临时 workspace，不污染 `ws_demo`。
 
 ---
@@ -121,8 +138,6 @@
 - **Hono 路由注册顺序决定匹配优先级**：`api.route("/channels/entities", ...)` 必须在 `api.route("/channels", ...)` 之前注册，否则 `/:channelId` 会错误匹配 `entities` 路径。教训：通用路由（含 `:param`）始终放在具体路由之后注册。
 - **data_source INSERT OR IGNORE 不更新已有行**：种子脚本用 `INSERT OR IGNORE` 注册 source 时，已存在的 stub 行不会被更新为 active。改为 `INSERT OR REPLACE` 后正确覆盖。注意：REPLACE 会重置 created_at；如需保留原时间戳，应改用 `UPDATE ... SET`。
 - **路由层错误用 warnings 判 not-found**：A-P3-DB-6 第二轮返工暴露。`impactDeleteVersion` 对真实业务版本返回 `warnings: ["contains user_authorized douyin_* data"]`，路由曾用 `warnings.length > 0` 直接 404，导致 dry-run 找到 692 行但正式删除返回 404。教训：impact 报告中 warnings 是数据特征描述，存在性必须用 `affectedRows === 0` 或独立的 `notFound` 标记判断。
-- **DROP TABLE 对 view 报 SQLite 错误**：`DROP TABLE IF EXISTS <view_name>` 会让 SQLite 返回"use DROP VIEW"错误。修复：先 `isTable()` 判断类型再发对应 DDL。
-- **fresh workspace 缺表导致 500**：新 workspace 首次访问时，业务表（douyin_* / batch / idempotency_key）都还不存在。`SELECT COUNT(*) FROM batch` 会让 `db.prepare().get()` 抛 ERR_SQLITE_ERROR。修复：所有新 workspace 上下文都用 `isTable()` 守卫 + try-catch；workspace middleware 自动 mkdir + 调一次 sample 触发文件创建。
-- **rebuild dry-run 漏算 PROTECTED 表行数**：`impactRebuild` 累加行数时跳过 PROTECTED_TABLES，但 executeRebuild 会删除整个 db 文件（含保护表），影响范围失真。修复：累加所有表，在 warnings 显式列出"will also destroy N rows in protected system tables: ..."。
-- **migration 文件系统表 bootstrap**：迁移 runner 在 `schema_migration` 表不存在时需要 bootstrap 创建该表，再读已应用版本列表。V001 是特例 — 创建 schema_migration + db_admin_audit + data_import_job 三张表本身。
-- **write 工具超大文档 < 2000 字符/段限制**：本 session 多次触发。变通：先 Write < 200 行骨架，再 Edit 多次追加段落。
+- **工具模块运行目录、workspace 与 DB 隔离**：A-P4-TOOLS-1 把工具运行输出限定在 `data/local/tool-runs/<runId>/`，只写文件系统，不写入业务表；失败运行仍保留 `run_manifest.json` + `quality_report.json` + errors。总控复核时补强 run / artifact 查询的 `workspaceId` 校验，避免跨 workspace 读取运行记录或产物。
+- **Hono 子路由含参与具体路由顺序同样重要**：`tools.get("/:toolId")` 若放在 `tools.get("/runs")` 之前，`/runs` 会被 `/:toolId` 吃掉。教训：子路由内同样遵循“具体路由在前，通用参数路由在后”。
+- **artifact 路径遍历防御在路由层之外也需做**：虽然 Hono 对未编码的 `../` 路径直接 404，但编码后的 `%2F..` 会进入 handler，因此 `isSafeArtifactId` 必须显式拒绝 `..` / `//` / 绝对路径。

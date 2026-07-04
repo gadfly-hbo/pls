@@ -116,3 +116,41 @@ test('Data Management Workbench - Real Backend Smoke Test', async ({ page }) => 
   await page.waitForTimeout(500);
   expect(errors).toHaveLength(0);
 });
+
+test('Tools Workbench - Real Backend Smoke Test', async ({ page }) => {
+  test.skip(process.env.VITE_USE_MOCK !== 'false', 'Skipping real backend test because VITE_USE_MOCK is not false');
+
+  const errors: string[] = [];
+  page.on('pageerror', err => errors.push(err.message));
+  page.on('console', msg => {
+    if (msg.type() === 'error' && !msg.text().includes('favicon.ico')) {
+      errors.push(msg.text());
+    }
+  });
+
+  await page.goto('/');
+  await expect(page.getByText('PLS 工作台')).toBeVisible();
+
+  // Navigate to Tools Workbench
+  await page.click('button[title="工具工作台"]');
+  await expect(page.locator('.page-header__title').first()).toHaveText('本地工具工作台', { timeout: 10000 });
+
+  // Wait a bit to ensure API calls complete and no errors are thrown
+  await page.waitForTimeout(1000);
+  
+  // Verify real tool list is loaded
+  await expect(page.locator('text=Sample Profile Extract').first()).toBeVisible();
+
+  // Select tool
+  await page.locator('.entity-list-item__name', { hasText: 'Sample Profile Extract' }).first().click();
+
+  // Provide input path for dry run
+  await page.fill('input[placeholder="输入本地文件或目录绝对路径"]', '/tmp/mock-input.csv');
+
+  // Dry run
+  await page.click('button:has-text("校验配置 (Dry Run)")');
+  await expect(page.locator('text=配置校验通过')).toBeVisible({ timeout: 10000 });
+
+  // Verify that there are no console/runtime errors captured
+  expect(errors).toHaveLength(0);
+});

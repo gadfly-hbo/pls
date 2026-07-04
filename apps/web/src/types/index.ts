@@ -362,3 +362,39 @@ export interface DbOperationExecuteResult {
   warnings?: string[];
   status?: string;
 }
+
+export interface ToolDefinition {
+  toolId: string;
+  name: string;
+  category: 'profile_extract' | 'business_aggregate' | 'format_convert';
+  version: string;
+  riskLevel: 'L1' | 'L2' | 'L3';
+  inputFormats: string[];
+  outputFormats: string[];
+  parameterSchema: Record<string, any>;
+  packageType?: string;
+  description?: string;
+}
+
+export interface ToolArtifact {
+  artifactId: string;
+  name: string;
+  type: string;
+  path: string;
+}
+
+export interface ToolRun {
+  runId: string;
+  toolId: string;
+  workspaceId: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+  startedAt: string;
+  finishedAt?: string | null;
+  inputPath: string;
+  outputDir: string;
+  parameters: Record<string, any>;
+  artifacts: ToolArtifact[];
+  warnings: string[];
+  errors: string[];
+  qualityReport?: any;
+}

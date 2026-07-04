@@ -79,14 +79,15 @@ export default function Overview({ goToView }: OverviewProps) {
   const fwHealth = pendingDecisions.length > 0 ? 'warning' : (decisions.length === 0 ? 'neutral' : 'success');
 
   return (
-    <div className="workbench-shell" style={{ overflow: 'hidden' }}>
+    <div className="overview-workbench">
       <div className="page-header">
-        <h1 className="page-header__title">PLS 业务总览</h1>
+        <div className="page-header__info">
+          <h1 className="page-header__title">PLS 业务总览</h1>
+        </div>
         <p className="page-header__subtitle">快速查看数据可用性、业务模块状态及推荐的下一步行动</p>
       </div>
 
-      <div className="match-workbench__scroll" style={{ overflowY: 'auto', flex: 1 }}>
-        <div style={{ padding: '0 var(--page-padding) 40px', display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1400, margin: '0 auto' }}>
+      <div className="overview-workbench__body">
           
           {/* Top Status */}
           <div className="panel">
@@ -369,8 +370,6 @@ export default function Overview({ goToView }: OverviewProps) {
 
             </div>
           </div>
-
-        </div>
       </div>
     </div>
   );

@@ -18,6 +18,7 @@ import channelEntities from "./routes/channel-entities.js";
 import newProducts from "./routes/new-products.js";
 import flywheel from "./routes/flywheel.js";
 import adminDatabase from "./routes/admin-database.js";
+import tools from "./routes/tools.js";
 
 const app = new Hono();
 
@@ -29,6 +30,7 @@ const api = new Hono();
 api.use("*", requestId);
 api.use("*", auth);
 api.use("*", workspace);
+api.route("/tools", tools);
 api.route("/products", products);
 api.route("/channels/entities", channelEntities);
 api.route("/channels", channels);

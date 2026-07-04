@@ -79,13 +79,14 @@
 为避免“半盲开发”与基于猜想的错误联调，凡涉及前后端对接、真实 API 接入或 E2E Mock 开发时，必须遵守以下铁律：
 
 1. **先查契约，再写代码**：严禁直接利用前端旧 Mock 数据结构凭空推导真实后端的接口形态。在编写 Adapter 或对接逻辑前，必须先通过工具强制读取后端的真实路由定义文件（如 `apps/server/src/routes/` 下的文件）及对应 Schema 声明。
-2. **强制沙盘推演**：涉及前后端联调、真实 API 接入、危险操作或 E2E Mock 时，在代码实现前必须先列出完整的端到端请求期望（包含 HTTP Method、精准 URL 路径、鉴权与防重放 Headers、确切的 Body 参数结构及确认文本格式），确保对齐后再动工；纯样式、文案、局部无接口 bugfix 不强制输出完整推演。
-3. **Adapter 层强隔离**：面对前后端字段定义分歧（如后端的 `truncatable` 对应前端的 `isClearable`，或需要通过嵌套对象推导平铺状态时），禁止将后端响应或原生错误直接透传给 UI 组件，必须在接口请求层提供严格的属性映射清洗。
+2. **强制沙盘推演与 Header 对齐**：涉及前后端联调、真实 API 接入、危险操作或 E2E Mock 时，在代码实现前必须先列出完整的端到端请求期望（包含 HTTP Method、精准 URL 路径、鉴权与防重放 Headers、确切 Body 结构）。特别注意后端中间件严格要求的 Header：如受控写入 / 正式执行接口中后端要求的 `Idempotency-Key`、权限要求的 `X-PLS-Admin-Token` / `Authorization: Bearer ...`，以及正确的上下文 `X-PLS-Workspace`（严禁误写为 `-Id`）。确保对齐后再动工；纯样式、文案、局部无接口 bugfix 不强制输出完整推演。
+3. **Adapter 层强隔离（防解包崩溃）**：面对前后端字段定义分歧（如后端的 `truncatable` 对应前端的 `isClearable`，或需要通过嵌套对象推导平铺状态时），禁止将后端响应或原生错误直接透传给 UI 组件，必须在接口请求层提供严格的属性映射清洗。特别注意：Hono 后端通过统一响应返回 `data` 包装对象（如 `ok(c, { tools: [] })` 的 HTTP 响应为 `{ code, requestId, generatedAt, data: { tools: [] } }`），前端 Adapter 必须按真实层级精准解包，严禁靠猜测使用 `.items`。
 4. **Mock 与真实形态同构**：任何针对前端测试、本地开发的 Mock 数据或 Playwright E2E 路由拦截响应，其数据层级、属性命名、类型形态必须与真实后端返回保持同构；确需差异时，必须在测试或任务说明中显式标注差异原因、适用范围和不覆盖的真实行为，避免脱节的“自欺欺人”测试。
 5. **本地 Mock 与 E2E 拦截防坑纪律（USE_MOCK 陷阱）**：
    - **拦截盲区**：前端代码库中的 `USE_MOCK=true` 机制（如 `api.ts`）会直接在代码层短路并返回数据，**不发起真实网络请求**。这会导致 Playwright 的 `page.route` 拦截失效。若需通过 `page.route` 验证真实 contract 或拦截真实请求，必须显式使用 `VITE_USE_MOCK=false` 或绕开本地 Mock 短路；否则测试只能验证 Local Mock 兜底路径。
    - **路由匹配陷阱**：在编写 Playwright `page.route` 匹配规则时，严禁将 HTTP Method 当作 URL Path 进行匹配（例如，拦截 `DELETE /api/versions/1` 时不能写成 `**/versions/*/delete*`）。必须根据真实发出的精确 URL 进行 glob 匹配。
    - **Mock 演进同步**：修改后端契约，或修改用于代表真实契约 / 默认本地体验的前端拦截响应时，必须同步更新 `api.ts` 中的本地 `USE_MOCK` 实现。仅用于单个测试场景的临时拦截可不更新 `api.ts`，但必须在测试或任务说明中标明其适用范围，防止本地无后端的体验出现“Mock 漂移”导致的验证阻断。
+   - **Real API 冒烟测试数据隔离**：在编写定向 `VITE_USE_MOCK=false` 的 Playwright E2E 冒烟测试（如 `smoke-real.spec.ts`）时，严禁将断言或交互写死为前端本地的 Mock 数据（例如 Mock 工具名“生意参谋人群提取”）。必须使用后端真实注册的基础数据（如“Sample Profile Extract”），防止因数据上下文错配导致真实测试全盘失败。
 ---
 
 ## 六、当前产品目标

@@ -65,6 +65,26 @@ const SOURCES = [
     description: "Reserved for A-P2-10 operation flywheel closed loop. No backing tables yet.",
     config: JSON.stringify({ dependsOn: "A-P2-10" }),
   },
+  {
+    sourceId: "profile_extract",
+    sourceKind: "profile_extract",
+    displayName: "画像提取工具输出",
+    adapter: "profile_extract",
+    schemaPrefix: null,
+    status: "active",
+    description: "A-P4-TOOLS-4: profile-extract tool packages imported via /tools/runs/:runId/import.",
+    config: JSON.stringify({ importType: "profile-extract", targetTable: "channel_profile" }),
+  },
+  {
+    sourceId: "business_aggregate",
+    sourceKind: "business_aggregate",
+    displayName: "业务明细聚合工具输出",
+    adapter: "business_aggregate",
+    schemaPrefix: null,
+    status: "active",
+    description: "A-P4-TOOLS-4: business-aggregate tool packages imported via /tools/runs/:runId/import.",
+    config: JSON.stringify({ importType: "business-aggregate", targetTables: ["sku", "channel_profile", "wide_table_row"] }),
+  },
 ];
 
 const stmt = db.prepare(`INSERT OR REPLACE INTO data_source

@@ -1,0 +1,26 @@
+{
+  "packageType": "profile-extract",
+  "sourceBatchId": "batch_profile_extract_mock_20260704",
+  "dataVersion": "v_profile_extract_mock_20260704",
+  "generatedAt": "2026-07-04T00:00:01Z",
+  "sourceType": "mock_sample",
+  "source": "mock_profile_extract_sample",
+  "platform": "mock_platform",
+  "timeWindows": ["2026-06-01/2026-06-30"],
+  "sources": [
+    {
+      "sourceId": "mock_profile_source_001",
+      "inputFormat": "template",
+      "inputPathPolicy": "user_specified_only",
+      "sha256": null,
+      "rowsRead": 2,
+      "notes": "Template sample only; no real platform file was read."
+    }
+  ],
+  "entityCounts": {
+    "extractedProfiles": 1,
+    "aggregateProfileRows": 2,
+    "unmappedFields": 1,
+    "fieldDictionaryRows": 3
+  }
+}

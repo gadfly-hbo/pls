@@ -1,0 +1,38 @@
+{
+  "packageType": "business-aggregate",
+  "packageVersion": "1.0.0",
+  "runId": "tool_run_business_aggregate_mock_20260704",
+  "toolId": "business-aggregate-sample",
+  "workspaceId": "ws_tools_sample",
+  "status": "succeeded",
+  "startedAt": "2026-07-04T00:00:00Z",
+  "finishedAt": "2026-07-04T00:00:01Z",
+  "outputDir": "data/templates/business-aggregate/sample_package",
+  "parameters": {
+    "mode": "mock_sample",
+    "inputPolicy": "offline_export_only"
+  },
+  "artifacts": [
+    "source_manifest.json",
+    "product_master.jsonl",
+    "channel_entity.jsonl",
+    "product_aggregate.jsonl",
+    "channel_aggregate.jsonl",
+    "sku_channel_wide_table.jsonl",
+    "field_mapping.csv",
+    "unmapped_fields.csv",
+    "quality_report.json",
+    "report.md"
+  ],
+  "importAdapter": {
+    "packageType": "business-aggregate",
+    "sourceBatchId": "batch_business_aggregate_mock_20260704",
+    "dataVersion": "v_business_aggregate_mock_20260704",
+    "targetTables": ["sku", "channel_profile", "wide_table_row", "batch"],
+    "pendingSchemaObjects": ["product_master", "channel_entity"],
+    "confirmText": "IMPORT TOOL RUN tool_run_business_aggregate_mock_20260704",
+    "idempotencyScope": ["workspaceId", "packageType", "sourceBatchId", "dataVersion"]
+  },
+  "warnings": ["ProductMaster and ChannelEntity physical tables need X approval before direct DB writes."],
+  "errors": []
+}

@@ -2,10 +2,12 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-04（X-P3-OVERVIEW-2 顶层总览总体验收通过）
+最近更新：2026-07-04（X-P4-TOOLS-6 工具模块第一期总体验收通过）
 
 进度：
 
+- `X-P4-TOOLS-6` 已完成并通过总控验收：工具工作台与后端 Tools API、标准数据包、Admin Import 和 Data Management 形成第一期闭环。总体验收复验 `apps/web npm run lint`、`npm run build`、`npm run smoke` 通过，`VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Tools Workbench"` 通过；正式导入闭环由后端 `smoke:tools-import` 在临时 workspace `ws_tools_import_1783176743243` 覆盖，未在 `ws_demo` 上执行破坏性导入。
+- `V-P4-TOOLS-5` (Tools 模块前端) 已由 X 总控二次验收通过并回流：修复了真实 API 联调阶段发现的各类契约解包、Header（Idempotency-Key / X-PLS-Workspace 等）问题，以及在 `ToolsWorkbench.tsx` 中的状态校验兼容问题。拆分并扩充了 Playwright Smoke 测试，现在 `smoke-real.spec.ts` 能够完整执行真实工具（Sample Profile Extract）加载、执行、产物预览及 Dry-run 验证的全流程，而 `tools-workbench.spec.ts` 独立维持对 Mock 分支的验证。消除所有 unused 变量警告，并落实 `AGENTS.md` 前后端对接与 E2E 测试防坑铁律的沉淀。
 - `V-P3-UI-QUALITY-1` 已完成：重构 `App.tsx` 为统一 AppShell（品牌、导航、workspace badge、主题切换），桌面导航支持 flex-wrap，768px 以下切换 hamburger 展开面板，390px 隐藏 env-badge 防止文字重叠。重写 `index.css` 为统一 Design Token 结构（`--header-height`, `--page-padding`, `--sidebar-width` 等布局 token），合并为 1024/768/390 三档断点。
 - `V-P3-UI-QUALITY-2` 已完成：`MatchCoreWorkbench` 采用 WorkbenchShell 模式（toolbar + segmented-control + sidebar/detail 双栏），收敛内联样式为 CSS class（`match-entity-item`, `driver-card`, `section-divider` 等），空状态增加引导文案。
 - `V-P3-UI-QUALITY-3` 已完成：`AccountProfileWorkbench` 和 `Dashboard` 统一为 `workbench-sidebar` + `workbench-detail` 布局，表格包裹 `data-table-wrapper`，空状态引导、metric-grid 密度一致。
@@ -75,6 +77,7 @@
 - **数据管理红线**：P3-DB-MGMT 后 `DataManagementWorkbench` 已允许通过受控 Admin API 执行数据库运维操作，但仍禁止前端直接访问 SQLite 文件、通用 SQL console、单元格级在线编辑和绕过 confirmText / admin token / Idempotency-Key / audit 的写操作。
 - **Playwright 严格模式导致的导航选择器冲突**：在 V-P3-OVERVIEW-1 中引入总览页面时，页面内展示的模块名称（如“数据管理”、“人货匹配核心工作台”）与左侧/顶部导航菜单的文本完全一致，这导致原先通过 `getByText('数据管理', { exact: true })` 实现的 E2E 测试因为匹配到两个元素而触发 strict mode violation 失败。今后凡涉及应用级全局导航或公共操作的 E2E 定位，应优先使用带有结构语义的 locator（如 `locator('button.app-nav__item', { hasText: '...' })`），以提升测试面对内容变更时的鲁棒性。
 - **Playwright 本地端口复用注意**：`apps/web/playwright.config.ts` 使用固定端口 5175 且 `reuseExistingServer: false`。真实 API 模式下多个 Playwright 命令并行运行时，可能出现 `Port 5175 is already in use` 的 dev server 日志；即使测试复用已启动服务通过，收尾和 CI 复验仍应优先串行执行真实 API Playwright 命令，避免端口竞争造成误判。
+- **Real API E2E 与 Mock 数据的污染隔离**：在编写定向 `VITE_USE_MOCK=false` 的 Playwright E2E 冒烟测试时，切记不可在断言和定位器中混杂仅前端本地存在的 Mock 数据（如“生意参谋人群提取”）。在 V-P4-TOOLS-5 返修中，正是因为隔离不彻底导致 Real 验证被强行失败。以后所有涉及后端的 real 验证，必须仅针对真实后端注册的数据（如 “Sample Profile Extract”）或使用动态断言进行操作。
 
 ---
 

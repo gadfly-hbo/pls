@@ -129,10 +129,19 @@ export default function AccountProfileWorkbench() {
   );
 
   return (
-    <div className="dashboard-grid">
-      
-      {/* Sidebar: Entity List */}
-      <div className="workbench-sidebar">
+    <div className="account-workbench">
+      <div className="page-header">
+        <div className="page-header__info">
+          <h2 className="page-header__title">实体与账号画像</h2>
+          <div style={{ color: 'var(--muted-foreground)', fontSize: 13 }}>
+            选择店铺、账号或门店，查看画像分析与匹配建议
+          </div>
+        </div>
+      </div>
+
+      <div className="account-workbench__body dashboard-grid">
+        {/* Sidebar: Entity List */}
+        <div className="workbench-sidebar">
         <h2 className="workbench-sidebar__title">实体列表</h2>
         <div className="workbench-sidebar__search">
           <input 
@@ -185,10 +194,10 @@ export default function AccountProfileWorkbench() {
             ))
           )}
         </div>
-      </div>
+        </div>
 
-      {/* Main Content: Details and Profile */}
-      <div className="workbench-detail">
+        {/* Main Content: Details and Profile */}
+        <div className="workbench-detail">
         {error ? (
           <div className="alert-banner alert-banner--warning">⚠️ {error}</div>
         ) : !selectedAccountId ? (
@@ -439,6 +448,7 @@ export default function AccountProfileWorkbench() {
             )}
           </>
         ) : null}
+        </div>
       </div>
     </div>
   );

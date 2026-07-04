@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-04（X-P3-OVERVIEW-2 顶层总览模块总体验收通过，docs/wiki.html v0.48）
+最近更新：2026-07-04（X-P4-TOOLS-6 与 /learn 规则复核收尾，docs/wiki.html v0.54）
 
 进度：
 
@@ -85,10 +85,18 @@
 - 已完成 X-P3-UI-QUALITY-5 前端 UI 总体验收，`docs/p3-ui-quality-acceptance.md` 已更新为最终版；`docs/wiki.html` 已升级到 v0.45，并将 X-P3-UI-QUALITY-5 标记为 done。前端 lint / build / smoke、真实后端数据管理定向 Playwright、多宽度截图和 DOM 溢出检查均通过；MatchCoreWorkbench 空列表右侧状态已修复并复验通过。当前真实 API 人货匹配详情链路仍因 `ws_demo` 空业务数据未覆盖，列为剩余风险。
 - 已完成 X-P3-OVERVIEW-0 顶层总览模块方案冻结，新增 `docs/p3-overview-module-plan.md`；`docs/wiki.html` 已升级到 v0.47，并将 X-P3-OVERVIEW-0 标记为 done。冻结总览为 PLS 顶层一级模块和默认首页，导航顺序为“总览 -> 实体与账号画像 -> 人货匹配 -> 新品预测 -> 经营飞轮 -> 数据管理”；第一版总览只消费现有前端 adapter，不伪造预测总数、商品总数或业务数据。
 - 已完成 X-P3-OVERVIEW-2 顶层总览模块总体验收；`docs/wiki.html` 已升级到 v0.48，并将 X-P3-OVERVIEW-2 标记为 done。总控复核并小修 `Overview.tsx` 的类型、数据标识、真实空业务库判断、匹配 Cell 指标、最近动态完整性和动态列表 key，新增 `apps/web/e2e/overview.spec.ts` 覆盖 1440 / 1024 / 768 / 390 宽度总览 smoke。
+- 已完成 X-P4-TOOLS-0 工具模块方案冻结与任务拆卡，新增 `docs/tools-module-design.md`；`docs/wiki.html` 已升级到 v0.49，并发布 A-P4-TOOLS-1、D-P4-TOOLS-2、D-P4-TOOLS-3、A-P4-TOOLS-4、V-P4-TOOLS-5、X-P4-TOOLS-6。工具模块定位为本地数据加工工作台，处理三方画像文件与业务 SQL 导出明细，输出 profile-extract / business-aggregate 标准数据包，再通过数据管理模块完成 dry run、导入、版本、质量报告和审计。
+- 已完成 A-P4-TOOLS-1 总控复核；`docs/wiki.html` 已升级到 v0.50，并将 A-P4-TOOLS-1 标记为 done。后端已新增 Tool Registry、Local Runner、tools route、运行记录和 artifact 查询 API；总控补强 workspace 隔离，确认跨 workspace 不能读取 run 或 artifact；复验 server typecheck、smoke:tools 27/27 和通用 smoke 24/24 通过。
+- 已完成 D-P4-TOOLS-2 / D-P4-TOOLS-3 总控复核；`docs/wiki.html` 已升级到 v0.51，并将两卡标记为 done。新增 `data/templates/profile-extract/` 与 `data/templates/business-aggregate/`，均包含 README、sample_package 和 validator；两类样例包均为 `mock_sample`，不伪装真实业务数据，不新增 taxonomy tagId 或 DB schema。复验 profile-extract validator 与 business-aggregate validator 均通过。
+- 已完成 A-P4-TOOLS-4 总控复核；`docs/wiki.html` 已升级到 v0.52，并将 A-P4-TOOLS-4 标记为 done。profile-extract / business-aggregate 已接入 tools import dry-run、confirm import、batch、data_import_job、db_admin_audit 和 Data Management 查询闭环；总控补强跨 workspace import 隔离；复验 server typecheck、smoke:tools-import 33/33 和 smoke:tools 27/27 通过。
+- 已完成 V-P4-TOOLS-5 总控复核；`docs/wiki.html` 已升级到 v0.53，并将 V-P4-TOOLS-5 标记为 done。ToolsWorkbench 已接入工具目录、运行配置、dry-run、运行详情、artifact 预览、import dry-run 和确认导入 UI；总控复核真实 API adapter 的 `data.tools` / `data.runs` / `data.run` 解包、artifact content、admin token、`Idempotency-Key` 和 workspace header。
+- 已完成 X-P4-TOOLS-6 工具模块第一期总体验收；`docs/wiki.html` 已升级到 v0.54，并将 X-P4-TOOLS-6 标记为 done。临时 workspace `ws_tools_import_1783176743243` 验证 profile-extract 与 business-aggregate import dry-run、confirm import、auditId、batch、dataVersion、qualityReport 和 Data Management 读回；验收确认工具模块不提供任意 shell / 任意 SQL，不绕过 Admin API、confirmText、Idempotency-Key、admin token 或 `db_admin_audit`。
+- 本 session 按 `/learn` 沉淀复核 SOP 复核并最小修订 `AGENTS.md` §五：将 `Idempotency-Key` 要求收窄为受控写入 / 正式执行接口中后端要求的场景，并明确 Hono 统一响应 HTTP 层级为 `{ code, requestId, generatedAt, data: ... }`，避免把工具页真实联调经验过度泛化为错误全局规则。
 
 下一步：
 
-- 以 `docs/wiki.html` v0.48 为当前任务状态真源；P2 主线、P2-UI、P3-DB、P3-DB-MGMT、P3-UI-QUALITY 与 P3-OVERVIEW 全组已完成。
+- 以 `docs/wiki.html` v0.54 为当前任务状态真源；P2 主线、P2-UI、P3-DB、P3-DB-MGMT、P3-UI-QUALITY、P3-OVERVIEW 与 P4-TOOLS 第一期均已完成。
+- P4-TOOLS 后续增强需另开新卡，优先考虑真实平台解析器 / SQL 导出解析器、tool-run 清理策略、admin token 获取方式和 `product_master` / `channel_entity` 物理表拍板。
 - 若后续继续增强总览，应另开新卡，优先考虑后端聚合 Overview API、预测列表读取 API、真实业务数据前置状态说明和模块级“最近更新时间”。
 - UI 总体验收已通过；若后续要求真实人货匹配详情链路演示，需要先通过受控导入 / 同步生成 channel entities 与 match 数据；当前 `ws_demo` 的 `/api/v0/channels/entities` 与 `/api/v0/matches/heatmap` 返回空数组。
 - 下一步如继续增强数据管理，应另开新卡，优先考虑后端数据包列表接口、临时 workspace 清理策略、admin token 获取方式和真实用户授权数据包模板。
@@ -114,6 +122,7 @@
 - 当前真实前端匹配 smoke 需要 channel entity 与 match heatmap 数据前置；是否通过重放 demo / douyin-bi 并执行 sync / match 生成来恢复演示数据，需单独确认。
 - 正式 fit formula、商品主数据字段和真实行动反馈字段仍待用户后续提供或冻结。
 - `data_source` 当前以 `source_id` 单列为主键；若后续支持多 workspace 复用同名 sourceId，需评估是否迁移为 `(workspace_id, source_id)` 复合主键。
+- P4 工具模块 smoke 会产生临时 workspace 和 `data/local/tool-runs` staging 目录；自动清理策略尚未冻结，继续按受控临时 workspace 和 audit 可追溯口径处理。
 
 验证：
 
@@ -138,7 +147,9 @@
 - 项目级提示词维护验证：只读复核 `AGENTS.md` 相关段落；`docs/wiki.html` prompt 结构检查通过（8 条 prompt、`src-*` 引用无缺失、`learn-review` 存在、changelog `current: true` 唯一）。
 - X-P3-OVERVIEW-0 验证：只读复核 `apps/web/src/App.tsx`、`apps/web/src/services/api.ts`、`apps/web/src/types/index.ts`，新增 `docs/p3-overview-module-plan.md`；检查 `docs/wiki.html` v0.47、X-P3-OVERVIEW-0 done、changelog `current: true` 唯一。本卡未改前端代码，未运行前端 lint / build / smoke。
 - X-P3-OVERVIEW-2 验证通过：`apps/web npm run lint`、`npm run build`、`npm run smoke`；`VITE_USE_MOCK=false npx playwright test e2e/overview.spec.ts`；`VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Data Management Workbench - Real Backend Smoke Test"`。完整真实人货匹配 smoke 仍因当前 `ws_demo` 缺少 channel entities / match heatmap 业务数据超时，按既有风险记录，不作为本卡阻塞。
-- 本 session 收尾复验通过：`apps/web npm run lint`、`npm run build`、`npm run smoke`；`VITE_USE_MOCK=false npx playwright test e2e/overview.spec.ts`；`VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Data Management Workbench - Real Backend Smoke Test"`。`docs/wiki.html` 检查无 `todo` / `doing` 任务卡，当前版本为 v0.48。
+- X-P3-OVERVIEW-2 收尾复验通过：`apps/web npm run lint`、`npm run build`、`npm run smoke`；`VITE_USE_MOCK=false npx playwright test e2e/overview.spec.ts`；`VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Data Management Workbench - Real Backend Smoke Test"`。`docs/wiki.html` 当时检查无 `todo` / `doing` 任务卡，版本为 v0.48。
+- X-P4-TOOLS-6 验证通过：`apps/server npm run typecheck`、`smoke:tools` 27/27、`smoke:tools-import` 33/33、profile-extract / business-aggregate validator、`apps/web npm run lint`、`npm run build`、`npm run smoke`、`VITE_USE_MOCK=false` Tools Workbench 定向 smoke 均通过；临时 workspace `ws_tools_import_1783176743243` 完成工具包导入闭环读回。
+- 本次 `/learn` 规则复核为文档规则修改，未运行代码测试；已只读复核 `AGENTS.md` §五、`docs/wiki.html` changelog v0.54 与 `docs/notes-infra.md` 当前状态，并复读修改后的相关段落。
 
 ---
 

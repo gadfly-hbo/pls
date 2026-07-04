@@ -1014,6 +1014,198 @@ export const api = {
       return Promise.reject(new Error('Confirmation text does not match.'));
     }
     return { code: 'ok', data: { success: true, status: 'success', auditId: 'mock_audit_123', afterSnapshot: { mock: 'snapshot' } } as DbOperationExecuteResult };
+  },
+
+  // ----------------------------------------------------
+  // Tools Module API
+  // ----------------------------------------------------
+  getTools: async () => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<{ tools: import('../types').ToolDefinition[] }>('/tools');
+      return { code: 'ok', data: { items: res.data.tools } };
+    }
+    return {
+      code: 'ok',
+      data: {
+        items: [
+          {
+            toolId: 'extract-sycm-member',
+            name: '生意参谋人群提取',
+            category: 'profile_extract',
+            version: '1.0.0',
+            riskLevel: 'L2',
+            inputFormats: ['.csv', '.xlsx'],
+            outputFormats: ['package'],
+            parameterSchema: { type: 'object', properties: { platform: { type: 'string' } } },
+            packageType: 'profile-extract',
+            description: '从生意参谋导出的交易人群报表中提取核心画像和标签'
+          } as import('../types').ToolDefinition,
+          {
+            toolId: 'aggregate-order-detail',
+            name: '订单明细聚合',
+            category: 'business_aggregate',
+            version: '1.0.0',
+            riskLevel: 'L2',
+            inputFormats: ['.csv'],
+            outputFormats: ['package'],
+            parameterSchema: { type: 'object', properties: {} },
+            packageType: 'business-aggregate',
+            description: '将原始订单明细数据聚合为 sku/channel 粒度的表现指标'
+          } as import('../types').ToolDefinition
+        ]
+      }
+    };
+  },
+
+  getToolRuns: async () => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<{ runs: import('../types').ToolRun[] }>('/tools/runs');
+      return { code: 'ok', data: { items: res.data.runs } };
+    }
+    return {
+      code: 'ok',
+      data: {
+        items: []
+      }
+    };
+  },
+
+  getToolRun: async (runId: string) => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<{ run: import('../types').ToolRun }>(`/tools/runs/${runId}`);
+      return { code: 'ok', data: res.data.run };
+    }
+    return {
+      code: 'ok',
+      data: {
+        runId,
+        toolId: 'extract-sycm-member',
+        workspaceId: 'ws_demo',
+        status: 'succeeded',
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        inputPath: '/mock/path/input.csv',
+        outputDir: '/mock/path/output',
+        parameters: {},
+        artifacts: [
+          { artifactId: 'a1', name: 'report.md', type: 'markdown', path: '/mock/path/output/report.md' },
+          { artifactId: 'a2', name: 'quality_report.json', type: 'json', path: '/mock/path/output/quality_report.json' }
+        ],
+        warnings: [],
+        errors: [],
+        qualityReport: { generatedAt: new Date().toISOString(), records: 100 }
+      } as import('../types').ToolRun
+    };
+  },
+
+  getToolArtifactContent: async (runId: string, artifactId: string) => {
+    if (!USE_MOCK) {
+      const res = await fetch(`/api/v0/tools/runs/${runId}/artifacts/${artifactId}`, {
+        headers: { 
+          'X-PLS-Workspace': 'ws_demo',
+          'Authorization': 'Bearer pls-p0-demo-token'
+        }
+      });
+      if (!res.ok) throw new Error('Failed to fetch artifact');
+      return res.text();
+    }
+    return Promise.resolve("Mock artifact content for " + artifactId);
+  },
+
+  executeToolRunDryRun: async (toolId: string, payload: any) => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<any>('/tools/runs/dry-run', {
+        method: 'POST',
+        body: JSON.stringify({ toolId, ...payload })
+      });
+      return {
+        code: 'ok',
+        data: {
+          isValid: res.data.status === 'planned' && (!res.data.errors || res.data.errors.length === 0),
+          warnings: res.data.warnings || [],
+          errors: res.data.errors || []
+        }
+      };
+    }
+    return {
+      code: 'ok',
+      data: {
+        isValid: true,
+        warnings: ['Mock: File path will be resolved locally'],
+        errors: []
+      }
+    };
+  },
+
+  executeToolRun: async (toolId: string, payload: any) => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<{ run: import('../types').ToolRun }>('/tools/runs', {
+        method: 'POST',
+        body: JSON.stringify({ toolId, ...payload })
+      });
+      return { code: 'ok', data: res.data.run };
+    }
+    return {
+      code: 'ok',
+      data: {
+        runId: `run_${Date.now()}`,
+        toolId,
+        workspaceId: 'ws_demo',
+        status: 'succeeded',
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        inputPath: payload.inputPath,
+        outputDir: payload.outputDir,
+        parameters: payload.parameters,
+        artifacts: [
+          { artifactId: 'a1', name: 'report.md', type: 'markdown', path: 'report.md' },
+          { artifactId: 'a2', name: 'extracted_profiles.jsonl', type: 'jsonl', path: 'extracted_profiles.jsonl' }
+        ],
+        warnings: [],
+        errors: [],
+        qualityReport: { generatedAt: new Date().toISOString(), records: 1500 }
+      } as import('../types').ToolRun
+    };
+  },
+
+  importToolRunDryRun: async (runId: string) => {
+    if (!USE_MOCK) return fetchApi<DbOperationDryRunResult>(`/tools/runs/${runId}/import-dry-run`, { method: 'POST' });
+    return {
+      code: 'ok',
+      data: {
+        affectedTables: ['channel_profile'],
+        affectedRows: 1500,
+        hasUserAuthorized: true,
+        hasAuditHistory: true,
+        warnings: ['This will overwrite existing data for the same time window.'],
+        requiredConfirmText: `IMPORT TOOL RUN ${runId}`,
+        qualityReport: { source: 'extract-sycm-member', validRows: 1500 }
+      } as DbOperationDryRunResult
+    };
+  },
+
+  importToolRun: async (runId: string, confirmText: string) => {
+    if (!USE_MOCK) return fetchApi<DbOperationExecuteResult>(`/tools/runs/${runId}/import`, {
+      method: 'POST',
+      headers: { 
+        'X-PLS-Admin-Token': 'pls-admin-token',
+        'Idempotency-Key': `import_tool_${runId}_${Date.now()}`
+      },
+      body: JSON.stringify({ confirmText })
+    });
+    
+    if (confirmText !== `IMPORT TOOL RUN ${runId}`) {
+      throw new Error('Confirmation text does not match.');
+    }
+    
+    return {
+      code: 'ok',
+      data: {
+        success: true,
+        auditId: `audit_${Date.now()}`,
+        status: 'success'
+      } as DbOperationExecuteResult
+    };
   }
 };
 

@@ -197,11 +197,117 @@ export const actionFeedbackStubAdapter: DataSourceAdapter = {
   getQualityReport: () => null,
 };
 
+// ---------------------------------------------------------------------------
+// A-P4-TOOLS-4: Tool package adapters.
+// profile_extract and business_aggregate imports are recorded in data_import_job
+// and batch. Versions are derived from data_import_job; quality reports are read
+// from the same row.
+// ---------------------------------------------------------------------------
+
+function importTypeForSourceKind(sourceKind: string): string {
+  return sourceKind.replace(/_/g, "-");
+}
+
+function listImportJobVersions(
+  db: DatabaseSync,
+  wsId: string,
+  sourceId: string,
+  importType: string
+): DataSourceVersions {
+  const rows = db
+    .prepare(
+      `SELECT DISTINCT data_version, source, source_type, finished_at
+       FROM data_import_job
+       WHERE workspace_id = ? AND import_type = ? AND status = 'succeeded'
+       ORDER BY finished_at DESC, data_version DESC`
+    )
+    .all(wsId, importType) as Array<{
+      data_version: string;
+      source: string;
+      source_type: string;
+      finished_at: string;
+    }>;
+
+  if (rows.length === 0) {
+    return { sourceId, versions: [], latestDataVersion: null };
+  }
+
+  const latestDataVersion: string = rows[0]!.data_version;
+  const versions: DataVersionSummary[] = rows.map((r) => ({
+    sourceBatchId: r.source,
+    dataVersion: r.data_version,
+    generatedAt: r.finished_at,
+    timeWindow: null,
+    isLatest: r.data_version === latestDataVersion,
+    rowCount: 0,
+    entityCounts: {},
+  }));
+
+  return { sourceId, versions, latestDataVersion };
+}
+
+function getImportJobQualityReport(
+  db: DatabaseSync,
+  wsId: string,
+  _sourceId: string,
+  importType: string,
+  dataVersion: string
+): QualityReportSummary | null {
+  const job = db
+    .prepare(
+      `SELECT source, source_type, quality_report, row_count
+       FROM data_import_job
+       WHERE workspace_id = ? AND import_type = ? AND data_version = ? AND status = 'succeeded'
+       ORDER BY finished_at DESC LIMIT 1`
+    )
+    .get(wsId, importType, dataVersion) as
+    | { source?: string; source_type?: string; quality_report?: string; row_count?: number }
+    | undefined;
+  if (!job) return null;
+
+  let qr: Record<string, unknown> = {};
+  try {
+    qr = job.quality_report ? JSON.parse(job.quality_report) : {};
+  } catch {
+    qr = {};
+  }
+
+  return {
+    sourceBatchId: (qr.sourceBatchId as string) ?? job.source ?? "",
+    dataVersion,
+    qualityFlags: (qr.qualityFlags as string[]) ?? [],
+    coverage: (qr.coverage as Record<string, unknown>) ?? {},
+    objectCounts: (qr.objectCounts as Record<string, number>) ??
+      (qr.rowCounts as Record<string, number>) ?? {},
+    totalRows: (qr.totalRows as number) ?? job.row_count ?? 0,
+    admissionPolicy: (qr.admissionPolicy as string) ?? null,
+    notes: Array.isArray(qr.notes) ? (qr.notes as string[]) : [],
+  };
+}
+
+export const profileExtractAdapter: DataSourceAdapter = {
+  sourceKind: "profile_extract",
+  listVersions: (db, wsId, sourceId) =>
+    listImportJobVersions(db, wsId, sourceId, "profile-extract"),
+  getQualityReport: (db, wsId, sourceId, dataVersion) =>
+    getImportJobQualityReport(db, wsId, sourceId, "profile-extract", dataVersion),
+};
+
+export const businessAggregateAdapter: DataSourceAdapter = {
+  sourceKind: "business_aggregate",
+  listVersions: (db, wsId, sourceId) =>
+    listImportJobVersions(db, wsId, sourceId, "business-aggregate"),
+  getQualityReport: (db, wsId, sourceId, dataVersion) =>
+    getImportJobQualityReport(db, wsId, sourceId, "business-aggregate", dataVersion),
+};
+
 export const ADAPTERS: Record<string, DataSourceAdapter> = {
   douyin_bi: douyinBiAdapter,
   product_master: productMasterStubAdapter,
   channel_profile: channelProfileStubAdapter,
   action_feedback: actionFeedbackStubAdapter,
+  profile_extract: profileExtractAdapter,
+  business_aggregate: businessAggregateAdapter,
 };
 
 export function adapterFor(sourceKind: string): DataSourceAdapter | undefined {

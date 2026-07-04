@@ -1,0 +1,45 @@
+{
+  "packageType": "business-aggregate",
+  "sourceBatchId": "batch_business_aggregate_mock_20260704",
+  "dataVersion": "v_business_aggregate_mock_20260704",
+  "generatedAt": "2026-07-04T00:00:01Z",
+  "source": "mock_business_aggregate_sample",
+  "sourceType": "mock_sample",
+  "workspaceId": "ws_tools_sample",
+  "timeWindows": ["2026-06-01/2026-06-30"],
+  "inputSources": [
+    {
+      "sourceId": "mock_order_export_001",
+      "inputClass": "order_detail",
+      "inputFormat": "template",
+      "inputPathPolicy": "user_specified_offline_export_only",
+      "rowsRead": 10,
+      "sha256": null
+    },
+    {
+      "sourceId": "mock_product_export_001",
+      "inputClass": "product_detail",
+      "inputFormat": "template",
+      "inputPathPolicy": "user_specified_offline_export_only",
+      "rowsRead": 1,
+      "sha256": null
+    },
+    {
+      "sourceId": "mock_channel_export_001",
+      "inputClass": "channel_detail",
+      "inputFormat": "template",
+      "inputPathPolicy": "user_specified_offline_export_only",
+      "rowsRead": 1,
+      "sha256": null
+    }
+  ],
+  "entityCounts": {
+    "productMaster": 1,
+    "channelEntity": 1,
+    "productAggregate": 1,
+    "channelAggregate": 1,
+    "skuChannelWideTable": 1,
+    "fieldMapping": 5,
+    "unmappedFields": 1
+  }
+}

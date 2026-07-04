@@ -1,0 +1,6 @@
+mappingRuleId,inputClass,sourceObject,sourceField,sourceValuePattern,targetObject,targetField,mappedTagId,confidence,usage,requiredFor,unmappedReason,recommendedHandling,owner,version
+business_product_key_v1,product_detail,product_export,sku_code,*,ProductMaster,skuId,,1,identifier,product_master,,,D,1.0.0
+business_channel_key_v1,channel_detail,channel_export,channel_code,*,ChannelEntity,channelId,,1,identifier,channel_entity,,,D,1.0.0
+business_order_metrics_v1,order_detail,order_export,paid_amount_and_quantity,*,SkuChannelWideTable,metrics,,0.9,calculation_metric,sku_channel_wide_table,,,D,1.0.0
+business_age_profile_v1,profile_export,profile_export,audience_age_band,25-34,ProfileTagScore,tagId,demo.age_25_34,0.75,calculation_metric,product_aggregate,,,D,1.0.0
+business_channel_touchpoint_v1,channel_detail,channel_export,platform_type,shelf_ecommerce,ProfileTagScore,tagId,channel.shelf_ecommerce,0.95,calculation_metric,channel_aggregate,,,D,1.0.0

@@ -70,10 +70,19 @@ export default function Dashboard({ currentSku, setCurrentSku, prediction, setPr
     : 0;
 
   return (
-    <div className="predict-workbench">
+    <div className="prediction-workbench">
+      <div className="page-header">
+        <div className="page-header__info">
+          <h2 className="page-header__title">新品预测工作台</h2>
+          <div style={{ color: 'var(--muted-foreground)', fontSize: 13 }}>
+            录入新品基础信息，预测潜客画像并衔接人货匹配
+          </div>
+        </div>
+      </div>
 
-      {/* Left: Compact Input Form */}
-      <div className="predict-form">
+      <div className="prediction-workbench__body predict-workbench">
+        {/* Left: Compact Input Form */}
+        <div className="predict-form">
         <h3 className="predict-form__title">录入新品</h3>
         <p className="predict-form__desc">提供基础信息，预测商品潜客画像及渠道匹配。</p>
         <form onSubmit={handleSubmit}>
@@ -116,10 +125,10 @@ export default function Dashboard({ currentSku, setCurrentSku, prediction, setPr
             {loading ? '预测中...' : '开始预测画像'}
           </button>
         </form>
-      </div>
+        </div>
 
-      {/* Right: Prediction Results */}
-      <div className="predict-result">
+        {/* Right: Prediction Results */}
+        <div className="predict-result">
         {!prediction ? (
           <div className="empty-state" style={{ minHeight: 300 }}>
             <div className="empty-state__icon">🔮</div>
@@ -235,6 +244,7 @@ export default function Dashboard({ currentSku, setCurrentSku, prediction, setPr
             </div>
           </>
         )}
+        </div>
       </div>
     </div>
   );

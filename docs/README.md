@@ -23,6 +23,7 @@
 | [ui-flow.md](ui-flow.md) | V | 新品画像工作台、渠道匹配热力图、页面流转 |
 | [decision-output.md](decision-output.md) | V | 运营建议话术、归因解释、风险预警和导出边界 |
 | [p0-acceptance-report.md](p0-acceptance-report.md) | X 总控 | P0-B 端到端验收、红线检查、指标、风险缺口与 P0-C 任务拆解 |
+| [tools-module-design.md](tools-module-design.md) | X 总控 | 本地工具模块方案、数据包契约、API 草案和任务拆分 |
 
 ---
 

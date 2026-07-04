@@ -3083,6 +3083,334 @@ Handoff：
 - 复核 AppShell 默认首页和导航顺序正确：总览 -> 实体与账号画像 -> 人货匹配核心工作台 -> 新品预测工作台 -> 经营飞轮 -> 数据管理。
 - 复验 apps/web npm run lint、npm run build、npm run smoke 通过；VITE_USE_MOCK=false npx playwright test e2e/overview.spec.ts 通过；VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Data Management Workbench - Real Backend Smoke Test" 通过。
 - 完整真实人货匹配 smoke 仍因当前 ws_demo 缺少 channel entities / match heatmap 业务数据超时，不作为本卡阻塞，后续演示需先受控导入 / 同步。`
+  },
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-04 21:28",
+    title: "X-P4-TOOLS-0：工具模块方案冻结与任务拆卡",
+    brief: `目标：冻结 PLS 工具模块的产品定位、模块边界、数据包契约、API 草案和第一期任务拆分，为处理本地三方画像文件与业务 SQL 导出明细建立正式专题。
+
+背景：
+- 用户要求新增“工具”模块，用于处理本地画像数据、三方平台下载的人群画像数据，以及业务 SQL 库导出的订单明细、商品明细。
+- 第一类工具类似 pi-xanthil 本地提取工具：从 HTML、CSV、XLSX 等文件提取画像、指标和报告。
+- 第二类工具把订单、商品、渠道明细加工成商品聚合表、渠道聚合表和宽表。
+- 当前项目已有 data management、admin import、batch、dataVersion、qualityReport 和 audit 基础，应复用现有体系。
+
+范围：
+1. 输出 docs/tools-module-design.md，冻结工具模块定位、目标、非目标和验收标准。
+2. 冻结五个 deep modules：Tool Registry、Local Runner、Package Builder、Import Adapter、Tools Workbench UI。
+3. 冻结两类标准数据包：profile-extract 与 business-aggregate。
+4. 明确工具模块与数据管理模块关系：工具负责本地提取加工，数据管理负责导入、版本、质量和审计。
+5. 拆分 A/D/V/X 后续任务卡，并发布到 docs/wiki.html。
+6. 更新 docs/README.md 文档索引。
+
+非目标：
+- 不实现工具 runner。
+- 不改后端 API、DB schema 或前端页面。
+- 不直接读取或导入新的真实业务文件。
+- 不新增依赖。
+
+验收：
+- docs/tools-module-design.md 可作为后续执行真源。
+- docs/wiki.html 中 P4-TOOLS 任务卡完整发布。
+- 任务卡明确输入输出、允许改动范围、验证方式和回流格式。
+
+总控归档：
+- 新增 docs/tools-module-design.md，冻结本地工具模块方案、profile-extract / business-aggregate 数据包契约、API 草案和第一期验收标准。
+- 更新 docs/README.md 文档索引。
+- 在 docs/wiki.html 发布 A-P4-TOOLS-1、D-P4-TOOLS-2、D-P4-TOOLS-3、A-P4-TOOLS-4、V-P4-TOOLS-5、X-P4-TOOLS-6 六张后续任务卡。
+- 本卡未改后端 API、DB schema、前端业务代码或真实数据文件。`
+  },
+  {
+    dom: "A",
+    status: "done",
+    created: "2026-07-04 21:29",
+    title: "A-P4-TOOLS-1：工具注册表与本地 Runner API",
+    brief: `目标：实现工具模块后端基础能力，提供受控 Tool Registry、Local Runner、运行记录和 artifact 查询 API。
+
+前置：
+- X-P4-TOOLS-0 已冻结 docs/tools-module-design.md。
+- 先读取 docs/tools-module-design.md、apps/server/src/index.ts、apps/server/src/routes/admin-database.ts、apps/server/src/lib/import-packages.ts 和现有 middleware。
+
+范围：
+1. 新增或扩展后端工具模块文件，定义 ToolDefinition、ToolRun、ToolArtifact、ToolRunStatus 类型。
+2. 建立 Tool Registry，第一期至少注册一个安全样例工具；真实执行命令必须来自注册表，不允许任意 shell。
+3. 提供 API 草案中的只读与执行入口：
+   - GET /api/v0/tools
+   - GET /api/v0/tools/:toolId
+   - POST /api/v0/tools/runs/dry-run
+   - POST /api/v0/tools/runs
+   - GET /api/v0/tools/runs
+   - GET /api/v0/tools/runs/:runId
+   - GET /api/v0/tools/runs/:runId/artifacts
+   - GET /api/v0/tools/runs/:runId/artifacts/:artifactId
+4. 工具运行输出统一写入 data/local/tool-runs/<runId>/，包含 run_manifest.json、quality_report.json 和 artifacts。
+5. workspace 隔离、路径约束和错误处理显式化；失败运行必须保留 errors 和 audit 摘要。
+6. 更新必要的 route 注册和最小 smoke。
+
+红线：
+- 不提供任意 SQL console。
+- 不允许前端传任意命令。
+- 不自动安装依赖。
+- 不执行未注册工具。
+- 不把本地原始文件发送给 LLM 或第三方 API。
+- 不写入业务表；本卡只做本地运行和 artifact 管理。
+
+验证：
+- apps/server npm run typecheck。
+- 新增或更新 server smoke，覆盖工具列表、dry-run、run、artifact 查询、非法 toolId、非法路径。
+- smoke 不能依赖 ws_demo 业务数据；如需要写运行目录，使用 data/local/tool-runs 或临时目录。
+
+回流格式：
+- 说明新增 / 修改的后端文件。
+- 说明 API method、path、headers、body 和错误码。
+- 附验证命令结果。
+- 明确 runner 仍未接入 profile-extract / business-aggregate 的部分和风险。
+
+总控复核：
+- 复核新增 Tool Registry、Local Runner、tools route、smoke:tools 和 route 注册，确认第一期只注册 L1 样例工具 sample-profile-extract，不执行任意 shell，不写入业务表，输出限定在 data/local/tool-runs/<runId>/。
+- 总控发现并修复 workspace 隔离缺口：GET /tools/runs、GET /tools/runs/:runId、artifact list/read 现在均按 X-PLS-Workspace 过滤或校验，其他 workspace 不能读取运行记录或 artifact。
+- 总控加固 runId 与 artifact 路径校验，并修正 package.json 中 smoke:tools 脚本格式。
+- smoke:tools 已从 23 项扩展到 27 项，新增跨 workspace 不能读 run、不能列 artifact、不能读 artifact、运行列表不泄漏的断言。
+- 复验 apps/server npm run typecheck 通过；apps/server npm run smoke:tools 27/27 通过；apps/server npm run smoke -- --json 24/24 通过。
+- 剩余风险：sample-profile-extract 仍只是样例工具；真实 profile-extract / business-aggregate validator、模板与 Admin Import 接入等待 D-P4-TOOLS-2、D-P4-TOOLS-3 和 A-P4-TOOLS-4。`
+  },
+  {
+    dom: "D",
+    status: "done",
+    created: "2026-07-04 21:30",
+    title: "D-P4-TOOLS-2：profile-extract 数据包与画像提取样例工具",
+    brief: `目标：冻结并实现 profile-extract 数据包模板、字段映射、质量报告和 validator，为三方平台画像 HTML/CSV/XLSX 提取工具提供标准输出。
+
+前置：
+- X-P4-TOOLS-0 已冻结 docs/tools-module-design.md。
+- 先读取 docs/tools-module-design.md、docs/profile-taxonomy-v0.md、data/templates/real-sample-ingestion/、data/templates/douyin-account-product-mapping/ 和 docs/notes-data.md。
+
+范围：
+1. 新增 data/templates/profile-extract/ 模板目录。
+2. 定义 profile_extract_package 文件结构：
+   - run_manifest.json
+   - source_manifest.json
+   - extracted_profiles.jsonl
+   - aggregate_profile.csv
+   - aggregate_profile.jsonl
+   - field_dictionary.csv
+   - unmapped_fields.csv
+   - quality_report.json
+   - report.md
+3. 定义 ProfileTagScore、AggregateProfile、字段映射和质量报告契约。
+4. 新增 validator，校验必填字段、tagId 白名单、source/timeWindow/sampleSize、unmapped_fields 和 manifest 计数。
+5. 提供一个最小样例包，不编造真实业务结论；可使用模板占位或明确标记 mock/sample。
+6. 给 A-P4-TOOLS-4 明确可被 import adapter 消费的 manifest 字段。
+
+红线：
+- 不新增 taxonomy tagId。
+- 无法映射的三方字段必须进入 unmapped_fields，不得强行映射。
+- 不读取用户未指定的本地文件。
+- 不把个人级明细默认聚合成虚构标签；字段来源和置信度必须保留。
+
+验证：
+- 运行新增 validator。
+- 如引用 tagId，必须校验均存在于 docs/profile-taxonomy-v0.md。
+- 文档和模板结构检查通过。
+
+回流格式：
+- 说明模板目录和文件结构。
+- 说明 profile-extract 与现有 real-sample-ingestion / douyin mapping 模板的关系。
+- 附 validator 命令结果。
+- 明确哪些平台解析器尚未实现。
+
+总控复核：
+- 复核 data/templates/profile-extract/ 已包含 README、sample_package 和 validate-profile-extract-package.mjs。
+- 样例包覆盖 run_manifest.json、source_manifest.json、extracted_profiles.jsonl、aggregate_profile.csv/jsonl、field_dictionary.csv、unmapped_fields.csv、quality_report.json、report.md，且明确标记 mock_sample，不伪装真实平台画像结论。
+- validator 已覆盖 required files、manifest 计数、tagId 白名单、source/timeWindow/sampleSize、unmapped fields、quality report consistency。
+- 复验 node data/templates/profile-extract/scripts/validate-profile-extract-package.mjs data/templates/profile-extract/sample_package 通过。
+- 本卡未新增 taxonomy tagId，未读取用户未指定本地文件，未实现具体平台解析器。`
+  },
+  {
+    dom: "D",
+    status: "done",
+    created: "2026-07-04 21:31",
+    title: "D-P4-TOOLS-3：business-aggregate 数据包与明细聚合契约",
+    brief: `目标：冻结并实现 business-aggregate 数据包模板、字段映射、聚合口径和 validator，把业务 SQL 导出的订单、商品、渠道明细加工为 PLS 可消费的聚合数据。
+
+前置：
+- X-P4-TOOLS-0 已冻结 docs/tools-module-design.md。
+- 先读取 docs/tools-module-design.md、docs/data-spec.md、docs/p2-2-product-channel-schema.md、docs/profile-taxonomy-v0.md、apps/server/src/db/schema.ts 和 docs/notes-data.md。
+
+范围：
+1. 新增 data/templates/business-aggregate/ 模板目录。
+2. 定义 business_aggregate_package 文件结构：
+   - run_manifest.json
+   - source_manifest.json
+   - product_master.jsonl
+   - channel_entity.jsonl
+   - product_aggregate.jsonl
+   - channel_aggregate.jsonl
+   - sku_channel_wide_table.jsonl
+   - field_mapping.csv
+   - unmapped_fields.csv
+   - quality_report.json
+   - report.md
+3. 冻结订单明细、商品明细、渠道明细的输入字段分类和映射模板。
+4. 冻结聚合粒度：
+   - product_aggregate：productId/skuId + timeWindow + dataVersion
+   - channel_aggregate：channelId + timeWindow + dataVersion
+   - sku_channel_wide_table：skuId + channelId + timeWindow
+5. 定义质量规则：缺少主键、时间窗口缺失、渠道不可识别、商品不可识别、金额/数量异常、画像映射低覆盖、tagId 未批准。
+6. 新增 validator，校验 manifest、引用完整性、upsert key、行数、tagId 白名单和 quality report。
+
+红线：
+- 不连接生产 SQL 库；第一期只处理离线导出文件或模板。
+- 不捏造订单、商品、渠道、会员、标签或枚举值。
+- 不新增物理 DB schema；若发现必须新增 product_master 表或扩展 channel_entity，回流给 X 总控拍板。
+- 不把字段差异直接透传给 UI，后续 adapter 必须做清洗映射。
+
+验证：
+- 运行新增 validator。
+- 模板样例不能伪装为真实业务数据。
+- 显式 tagId 引用必须在 taxonomy 内。
+
+回流格式：
+- 说明 business-aggregate 包契约和聚合口径。
+- 说明哪些字段进入现有 sku/channel_profile/wide_table_row，哪些等待 product_master/channel_entity 后续 schema。
+- 附 validator 命令结果。
+- 明确需要 X 总控拍板的 schema 问题。
+
+总控复核：
+- 复核 data/templates/business-aggregate/ 已包含 README、sample_package 和 validate-business-aggregate-package.mjs。
+- 样例包覆盖 run_manifest.json、source_manifest.json、product_master.jsonl、channel_entity.jsonl、product_aggregate.jsonl、channel_aggregate.jsonl、sku_channel_wide_table.jsonl、field_mapping.csv、unmapped_fields.csv、quality_report.json、report.md，且明确标记 mock_sample。
+- validator 已覆盖 required files、manifest counts、row counts、reference integrity、upsert key uniqueness、tagId whitelist、quality rules 和 quality report consistency。
+- 聚合口径已冻结：product_aggregate = productId/skuId + timeWindow + dataVersion；channel_aggregate = channelId + timeWindow + dataVersion；sku_channel_wide_table = skuId + channelId + timeWindow。
+- 复验 node data/templates/business-aggregate/scripts/validate-business-aggregate-package.mjs data/templates/business-aggregate/sample_package 通过。
+- 本卡未连接生产 SQL，未新增 DB schema；ProductMaster / ChannelEntity 是否成为物理 SQLite 顶层表仍需 X 总控后续单独拍板。`
+  },
+  {
+    dom: "A",
+    status: "done",
+    created: "2026-07-04 21:32",
+    title: "A-P4-TOOLS-4：工具数据包接入 Admin Import 与 Data Management",
+    brief: `目标：把 profile-extract 和 business-aggregate 工具输出包接入现有 Admin Import / Data Management 闭环，支持 dry run、正式导入、版本、质量报告和审计。
+
+前置：
+- A-P4-TOOLS-1 提供工具运行和 artifact 记录。
+- D-P4-TOOLS-2 提供 profile-extract 包契约和 validator。
+- D-P4-TOOLS-3 提供 business-aggregate 包契约和 validator。
+- 先读取 docs/tools-module-design.md、apps/server/src/lib/import-packages.ts、apps/server/src/routes/admin-database.ts、apps/server/src/routes/data-management.ts、apps/server/src/services/data-source-registry.ts 和 apps/server/src/db/schema.ts。
+
+范围：
+1. 在 import package registry 中新增 package type：profile-extract、business-aggregate。
+2. dry-run 返回统一 OperationImpact：affectedTables、affectedRows、sourceType、dataVersion、containsUserAuthorized、warnings、requiredConfirmText。
+3. profile-extract 第一阶段写入 channel_profile、batch、data_import_job、db_admin_audit。
+4. business-aggregate 第一阶段写入 sku、channel_profile、wide_table_row、batch、data_import_job、db_admin_audit。
+5. Data Management 能查询新增 batch、dataVersion、qualityReport。
+6. 如 adapterFor 需要新增 sourceKind，必须明确 adapter 命名和版本口径。
+7. smoke 使用临时 workspace，不污染 ws_demo。
+
+红线：
+- 不绕过 Admin API、confirmText、Idempotency-Key、admin token 或 audit。
+- 不在本卡新增任意 SQL console。
+- 不吞 validator 错误；结构错误必须 dry-run 失败或 warning 明确。
+- 不自动导入用户未确认的本地工具输出。
+
+验证：
+- apps/server npm run typecheck。
+- 新增或更新 smoke，覆盖 profile-extract dry-run/import、business-aggregate dry-run/import、版本查询、质量报告查询、错误 confirmText。
+- smoke 必须使用临时 workspace wrapper，符合 A-P3-DB-MGMT-3 隔离约定。
+
+回流格式：
+- 说明新增 package type 和落库表。
+- 说明 method/path/headers/body/confirmText。
+- 附验证命令结果。
+- 明确未覆盖的 product_master/channel_entity schema 风险。
+
+总控复核：
+- 复核 apps/server/src/lib/import-tool-packages.ts、tools import routes、data-source-registry adapters、seed-data-sources 和 smoke-tools-import，确认 profile-extract / business-aggregate 已接入工具 run -> import dry-run -> confirm import -> data_import_job / batch / db_admin_audit -> Data Management 查询闭环。
+- profile-extract 第一阶段写入 channel_profile、batch、data_import_job、db_admin_audit；business-aggregate 第一阶段写入 sku、channel_profile、wide_table_row、batch、data_import_job、db_admin_audit；未新增 ProductMaster / ChannelEntity 物理表。
+- 总控发现并修复跨 workspace import 隔离缺口：import-dry-run / import 现在会校验 run_manifest.workspaceId 属于当前 X-PLS-Workspace，import-tool-packages 也复用安全 runId 校验。
+- smoke-tools-import 已扩展到 33 项，新增跨 workspace import dry-run 和 import 拒绝断言；staged sample run 会写入当前临时 workspaceId。
+- 复验 apps/server npm run typecheck 通过；apps/server npm run smoke:tools-import 33/33 通过；apps/server npm run smoke:tools 27/27 通过。
+- 剩余风险：product_master / channel_entity 物理表仍需后续 X schema 冻结；smoke 产生的临时 tool-runs 与 workspace 目录未自动清理；真实平台 parser / SQL connector 接入后需重新用真实工具输出验证。`
+  },
+  {
+    dom: "V",
+    status: "done",
+    created: "2026-07-04 21:33",
+    title: "V-P4-TOOLS-5：工具工作台前端",
+    brief: `目标：新增 PLS 顶层“工具”模块前端工作台，让用户可以选择本地工具、配置输入输出、执行提取/聚合、查看产物并触发导入 dry run。
+
+前置：
+- X-P4-TOOLS-0 已冻结工具模块方案。
+- A-P4-TOOLS-1 提供 tools/runs API。
+- A-P4-TOOLS-4 提供 import dry-run / import 能力后再接入导入动作；若未完成，本卡先做只读和执行闭环并显式禁用导入按钮。
+- 先读取 docs/tools-module-design.md、apps/web/src/App.tsx、apps/web/src/services/api.ts、apps/web/src/index.css 和现有 DataManagementWorkbench / Overview 页面。
+
+范围：
+1. 新增顶层导航“工具”，位置建议在“数据管理”前或后，由当前 AppShell 顺序保持清晰。
+2. 新增 ToolsWorkbench 页面。
+3. 左侧工具目录：画像提取、明细聚合、格式转换、最近运行。
+4. 主区执行配置：工具说明、输入文件/目录路径、输出目录、参数表单、dry run、开始执行。
+5. 结果区展示：运行状态、warnings/errors、qualityReport、artifact 列表、Markdown 预览、表格/JSON 预览。
+6. 支持 import dry run 和确认导入 UI；正式导入必须展示影响范围、warnings、confirmText、admin token 和 auditId。
+7. Mock 与真实 API 形态同构；如后端未完成正式 import，不得用 mock 假装真实导入成功。
+
+红线：
+- 不使用 landing page 或 hero，第一屏必须是可操作工作台。
+- 不直接访问本地文件系统，路径选择按浏览器能力和后端契约处理。
+- 不隐藏 L2/L3 风险等级、输入路径、输出路径和写入 workspace 影响。
+- 移动端和窄屏不得出现路径、按钮、表格或弹窗重叠。
+- 不改变现有数据管理、总览、人货匹配等模块业务状态机。
+
+验证：
+- apps/web npm run lint。
+- apps/web npm run build。
+- apps/web npm run smoke。
+- Playwright 覆盖工具列表、选择工具、dry run、run、artifact 展示、错误状态、窄屏无横向溢出。
+- 若接入真实 API，VITE_USE_MOCK=false 定向 smoke；正式导入要使用临时 workspace 或拦截破坏性请求。
+
+回流格式：
+- 说明新增 / 修改前端文件。
+- 说明 UI 状态机和 API adapter 映射。
+- 附验证命令结果和截图 / DOM 检查结论。
+- 明确后端未完成时禁用的功能和风险。`
+  },
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-04 21:34",
+    title: "X-P4-TOOLS-6：工具模块第一期总体验收",
+    brief: `目标：总控验收工具模块第一期，确认本地工具执行、数据包生成、导入 dry run、临时 workspace 导入和前端工作台形成可追溯闭环。
+
+前置：
+- A-P4-TOOLS-1、D-P4-TOOLS-2、D-P4-TOOLS-3、A-P4-TOOLS-4、V-P4-TOOLS-5 均完成并回流。
+
+范围：
+1. 复核 docs/tools-module-design.md 是否被实际实现遵守。
+2. 复核后端 tools API、Tool Registry、Local Runner、artifact 管理和错误处理。
+3. 复核 profile-extract 与 business-aggregate 数据包 validator 和样例包。
+4. 复核 Admin Import / Data Management 对新增 package type 的 dry run、导入、版本和质量报告。
+5. 复核 ToolsWorkbench 前端，包括工具目录、执行配置、运行结果、artifact 预览和导入 dry run。
+6. 使用临时 workspace 验证至少一个 profile-extract 或 business-aggregate 包可导入并能在数据管理中看到 batch、dataVersion、qualityReport。
+7. 输出验收结论，并更新 docs/wiki.html、docs/notes-data.md、docs/notes-app.md、docs/notes-viz.md 和必要的 changelog。
+
+红线：
+- 不用 mock-only 结果替代真实临时 workspace 验收。
+- 不执行未确认的 ws_demo 破坏性正式操作。
+- 不接受任意命令执行、任意 SQL 或绕过 Admin API 的导入路径。
+- 不接受没有 qualityReport、source_manifest 或 audit 的入库。
+
+验收：
+- apps/server typecheck 和相关 smoke 通过。
+- apps/web lint、build、smoke 和工具页 Playwright 通过。
+- 临时 workspace 导入闭环通过。
+- 数据管理模块能查询工具导入的 batch、dataVersion、qualityReport。
+- 明确剩余风险：例如未接入具体平台解析器、product_master 物理表尚未冻结、浏览器本地文件选择限制等。
+
+回流格式：
+- 给出通过 / 暂缓通过结论。
+- 说明验证命令、临时 workspace、导入包和关键结果。
+- 标记 wiki 任务状态并归档风险。`
   }
 ];
 
@@ -3090,9 +3418,81 @@ const HOTFIX = [];
 
 const CHANGELOG = [
   {
-    ver: "0.48",
+    ver: "0.54",
     date: "2026-07-04",
     current: true,
+    title: "X-P4-TOOLS-6 工具模块第一期总体验收通过",
+    items: [
+      "X-P4-TOOLS-6 经总控验收标记 done，工具模块第一期形成 Tool Registry、Local Runner、标准数据包、Admin Import、Data Management 和 ToolsWorkbench 的可追溯闭环",
+      "临时 workspace ws_tools_import_1783176743243 完成 profile-extract 与 business-aggregate import dry-run、confirm import、auditId、batch、dataVersion、qualityReport 和 Data Management 读回验证",
+      "复核确认工具模块不提供任意 shell / 任意 SQL，不绕过 Admin API、confirmText、Idempotency-Key、admin token 或 db_admin_audit；未对 ws_demo 执行破坏性正式导入",
+      "复核验证：server typecheck 通过，smoke:tools 27/27 通过，smoke:tools-import 33/33 通过，两类模板 validator 通过，web lint/build/smoke 通过，VITE_USE_MOCK=false Tools Workbench 定向 smoke 通过"
+    ]
+  },
+  {
+    ver: "0.53",
+    date: "2026-07-04",
+    current: false,
+    title: "V-P4-TOOLS-5 工具工作台前端验收通过",
+    items: [
+      "V-P4-TOOLS-5 经总控复核标记 done，前端已新增工具工作台导航、工具目录、运行配置、dry-run、运行详情、artifact 预览、import dry-run 和确认导入 UI",
+      "总控复核确认 Tools API adapter 已对齐真实后端 data.tools、data.runs、data.run、artifact 原始内容和 import 所需 X-PLS-Admin-Token / Idempotency-Key / confirmText contract",
+      "真实 API 定向 smoke 覆盖 Sample Profile Extract 列表加载和 dry-run 成功状态；正式导入未在 ws_demo 上执行",
+      "复核验证：apps/web lint 0 warning 通过，build 通过，mock smoke 8 passed / 3 skipped，VITE_USE_MOCK=false Tools Workbench 定向 smoke 通过"
+    ]
+  },
+  {
+    ver: "0.52",
+    date: "2026-07-04",
+    current: false,
+    title: "A-P4-TOOLS-4 工具包导入闭环验收通过",
+    items: [
+      "A-P4-TOOLS-4 经总控复核标记 done，profile-extract / business-aggregate 已接入 tools import dry-run、confirm import、batch、data_import_job、db_admin_audit 和 Data Management 查询闭环",
+      "总控修复工具包 import 跨 workspace 隔离缺口，import-dry-run / import 均校验 run_manifest.workspaceId 属于当前 X-PLS-Workspace",
+      "profile-extract 第一阶段写入 channel_profile；business-aggregate 第一阶段写入 sku、channel_profile、wide_table_row；ProductMaster / ChannelEntity 物理表暂不写入",
+      "复核验证：apps/server typecheck 通过，smoke:tools-import 33/33 通过，smoke:tools 27/27 通过"
+    ]
+  },
+  {
+    ver: "0.51",
+    date: "2026-07-04",
+    current: false,
+    title: "D-P4-TOOLS-2/3 工具数据包模板验收通过",
+    items: [
+      "D-P4-TOOLS-2 经总控复核标记 done，新增 profile-extract 标准包模板、sample package 和 validator",
+      "D-P4-TOOLS-3 经总控复核标记 done，新增 business-aggregate 标准包模板、sample package 和 validator",
+      "两类样例包均明确为 mock_sample，不伪装真实平台画像、订单、商品或渠道数据；未新增 taxonomy tagId 或 DB schema",
+      "复核验证：profile-extract validator 通过，business-aggregate validator 通过；ProductMaster / ChannelEntity 物理表仍需后续 X 拍板"
+    ]
+  },
+  {
+    ver: "0.50",
+    date: "2026-07-04",
+    current: false,
+    title: "A-P4-TOOLS-1 工具注册表与本地 Runner API 验收通过",
+    items: [
+      "A-P4-TOOLS-1 经总控复核标记 done，后端已新增 Tool Registry、Local Runner、tools route、运行记录和 artifact 查询 API",
+      "总控修复工具运行记录 workspace 隔离缺口，GET /tools/runs、run detail 和 artifact 读取均按 X-PLS-Workspace 校验",
+      "smoke:tools 从 23 项扩展到 27 项，新增跨 workspace 运行记录和 artifact 不泄漏断言",
+      "复核验证：apps/server typecheck 通过，smoke:tools 27/27 通过，通用 smoke --json 24/24 通过"
+    ]
+  },
+  {
+    ver: "0.49",
+    date: "2026-07-04",
+    current: false,
+    title: "P4 工具模块方案冻结与任务拆卡",
+    items: [
+      "新增 docs/tools-module-design.md，冻结本地工具模块定位、Tool Registry、Local Runner、Package Builder、Import Adapter 和 Tools Workbench UI",
+      "发布 P4-TOOLS 任务卡，覆盖后端工具 runner、profile-extract 包、business-aggregate 包、Admin Import 接入、前端工具工作台和总体验收",
+      "确认工具模块负责本地提取加工，数据管理模块负责导入、版本、质量报告和审计；写入前必须经过 dry run、confirmText、Idempotency-Key 和 audit",
+      "更新 docs/README.md 文档索引；本轮未改后端 API、DB schema、前端业务代码或真实数据文件"
+    ]
+  },
+  {
+    ver: "0.48",
+    date: "2026-07-04",
+    current: false,
     title: "X-P3-OVERVIEW-2 顶层总览总体验收通过",
     items: [
       "X-P3-OVERVIEW-2 经总控验收标记 done，PLS 顶层总览成为默认首页并通过 mock 与真实 API 空业务库验证",

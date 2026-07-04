@@ -1,0 +1,29 @@
+{
+  "packageType": "profile-extract",
+  "sourceBatchId": "batch_profile_extract_mock_20260704",
+  "dataVersion": "v_profile_extract_mock_20260704",
+  "generatedAt": "2026-07-04T00:00:01Z",
+  "source": "mock_profile_extract_sample",
+  "sourceType": "mock_sample",
+  "timeWindows": ["2026-06-01/2026-06-30"],
+  "rowCounts": {
+    "extractedProfiles": 1,
+    "aggregateProfileCsvRows": 2,
+    "aggregateProfileJsonlRows": 2,
+    "fieldDictionaryRows": 3,
+    "unmappedFieldRows": 1
+  },
+  "profileCount": 1,
+  "aggregateProfileRowCount": 2,
+  "fieldDictionaryRowCount": 3,
+  "unmappedFieldCount": 1,
+  "mappingCoverageRate": 0.67,
+  "lowConfidenceMappingCount": 0,
+  "minSampleSize": 100,
+  "avgSampleSize": 100,
+  "qualityFlags": ["mock_sample"],
+  "blockingIssues": [],
+  "warnings": ["Template sample only; no platform parser is implemented in this task."],
+  "shareable": true,
+  "admissionPolicy": "user_authorized_full_passthrough"
+}

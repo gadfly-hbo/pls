@@ -2,12 +2,16 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-03（X-P3-DB-8 SQLite 重构总体验收与 ws_demo 受控清库完成）
+最近更新：2026-07-04（X-P4-TOOLS-6 工具模块第一期总体验收通过）
 
 进度：
 
 - P3-DB 任务链已完成并通过总控复核：`X-P3-DB-0`、`D-P3-DB-1`、`A-P3-DB-2/3/4/6`、`V-P3-DB-5/7`、`X-P3-DB-8` 均为 done。
 - `ws_demo` 已按用户确认执行受控 rebuild，重放口径为选 A：不重放 `data/demo`，不重放 `data/p1/douyin-bi`，保留空的新 schema 库。
+- D-P4-TOOLS-2 已新增 `data/templates/profile-extract/`，冻结 `profile-extract` 数据包结构、sample package、README 和 validator。
+- D-P4-TOOLS-3 已新增 `data/templates/business-aggregate/`，冻结 `business-aggregate` 数据包结构、sample package、README 和 validator。
+- X-P4-TOOLS-6 已完成并通过总控验收：临时 workspace `ws_tools_import_1783176743243` 完成 `profile-extract` 与 `business-aggregate` 工具包 import dry-run、confirm import、batch、dataVersion、qualityReport 和 Data Management 读回验证；未对 `ws_demo` 执行破坏性正式导入。
+- 两个 P4 工具模板样例均标记为 `mock_sample`；未读取用户未指定的本地文件，未连接生产 SQL，未新增 taxonomy tagId 或 DB schema。
 - 清库前 dry-run 影响范围：5707 行，其中包含 2503 行 protected system table 历史和 `douyin_*` user_authorized 数据。
 - rebuild 通过 Admin API `POST /api/v0/admin/database/rebuild` 执行，confirmText 为 `RESET ws_demo`；未手工删除主库，未绕过 `db_admin_audit`。
 - rebuild 快照路径：`data/workspaces/ws_demo/db.sqlite.snapshot.1783093107898`，大小 11M，SHA-256 为 `e644be67c3c4d310406664f42216de36b9abaf885c1eb689c0f7eb73864a71c3`。
@@ -22,6 +26,7 @@
 - 如需恢复旧状态，必须基于快照文件制定明确恢复流程，不应直接覆盖当前主库。
 - 若重放数据，优先从 `data/demo/` 或 `data/p1/douyin-bi/` 的仓库真源执行；本地临时 `v2_20260704_xp1f6` 不在仓库完整真源内，只保留在快照中。
 - `smoke:admin-dangerous` 需要后续改造，避免继续假设主库存在 `v1_20260703` 数据；真实 delete-version 覆盖应继续使用临时 workspace。
+- P4 工具模块第一期已验收通过；后续数据域重点是接入真实平台解析器 / SQL 导出解析器、设计 tool-run 清理策略，以及在 X 拍板后决定 `product_master` / `channel_entity` 是否成为物理顶层表。
 
 阻塞：
 
@@ -33,6 +38,8 @@
 - 是否重放 `data/demo/` 或 `data/p1/douyin-bi/` 由后续任务另行确认；本次明确不重放。
 - 旧运行时历史仅在快照中，是否需要迁移或导出为长期审计档案尚未决定。
 - API smoke 中依赖主库历史数据的断言需要拆分为空库 smoke 与带 fixture smoke。
+- `ProductMaster` / `ChannelEntity` 是否成为物理 SQLite 顶层表，仍需 X 总控拍板；D-P4-TOOLS-3 只冻结包契约和 adapter 输入。
+- 三方平台 HTML/CSV/XLSX 画像解析器、业务 SQL 导出解析器尚未实现；当前 sample package 仍为 `mock_sample`。
 
 验证：
 
@@ -44,6 +51,14 @@
 - `apps/web npm run smoke` 通过。
 - `apps/web VITE_USE_MOCK=false npx playwright test e2e/data-management.spec.ts --project=chromium` 通过。
 - `apps/server npm run smoke:admin-dangerous` 有 3 个旧断言失败：脚本假设 `ws_demo` 存在 `v1_20260703` 数据；本次空库验收目标下该断言不适用，脚本中的临时 workspace 危险操作闭环仍通过。
+- `node data/templates/profile-extract/scripts/validate-profile-extract-package.mjs data/templates/profile-extract/sample_package` 通过。
+- `node data/templates/business-aggregate/scripts/validate-business-aggregate-package.mjs data/templates/business-aggregate/sample_package` 通过。
+- 本次 data 域收尾复验（2026-07-04）：上述两个 D-P4-TOOLS validator 均重新运行通过，0 warnings。
+- X-P4-TOOLS-6 总体验收（2026-07-04）：
+  - `apps/server npm run typecheck` 通过。
+  - `apps/server npm run smoke:tools` 通过 27/27。
+  - `apps/server npm run smoke:tools-import` 通过 33/33；临时 workspace 为 `ws_tools_import_1783176743243`，覆盖 profile-extract / business-aggregate dry-run、confirm import、Data Management versions、quality reports 和 import batches。
+  - `apps/web npm run lint`、`npm run build`、`npm run smoke` 通过；`VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Tools Workbench"` 通过。
 
 ---
 
@@ -145,3 +160,26 @@
 - `audit_event`、`task`、`idempotency_key`、`decision_record`、`action_record`、`feedback_record`、`strategy_review`、`schema_migration`、`db_admin_audit`、`data_import_job` 属运行时 / 系统历史；清库后不可从数据包自动恢复。
 - 本轮只读盘点期间出现并行库变动，新增 P3 system tables：`schema_migration`、`db_admin_audit`、`data_import_job`。D 域未执行写库命令；后续清库验收以收尾复核后的文档状态为准。
 - 校验方式：只读 `sqlite_master` 和行数统计；未执行 `DROP`、`DELETE`、`UPDATE`、`INSERT`、`VACUUM`、migration 或任何写入命令。
+
+## D-P4-TOOLS-2 沉淀
+
+- 模板目录固定为 `data/templates/profile-extract/`。
+- 标准包目录结构为 `run_manifest.json`、`source_manifest.json`、`extracted_profiles.jsonl`、`aggregate_profile.csv`、`aggregate_profile.jsonl`、`field_dictionary.csv`、`unmapped_fields.csv`、`quality_report.json`、`report.md`。
+- `ProfileTagScore` 必须包含 `tagId`、`score`、`sourceField`、`sourceValue`、`confidence`、`mappingRuleId`；`AggregateProfile` 必须保留 `profileId`、`platform`、`source`、`timeWindow`、`sampleSize`、`tags`、`unmappedFields`、`qualityFlags`。
+- `run_manifest.json.importAdapter` 给 A-P4-TOOLS-4 明确 `packageType`、`sourceBatchId`、`dataVersion`、`targetTables`、`confirmText`、`idempotencyScope`；第一阶段目标表为 `channel_profile`，后续可接 `channel_entity`。
+- 样例包位于 `data/templates/profile-extract/sample_package/`，只作为 `mock_sample` contract 示例，不代表真实平台画像结论。
+- validator 校验必填文件、manifest 计数、`tagId` 白名单、`source/timeWindow/sampleSize`、unmapped fields、CSV/JSONL 行数和 quality report 一致性。
+- 校验命令：`node data/templates/profile-extract/scripts/validate-profile-extract-package.mjs data/templates/profile-extract/sample_package`。
+- 尚未实现生意参谋、天猫、抖音、小红书、CSV、XLSX、HTML 等具体平台解析器。
+
+## D-P4-TOOLS-3 沉淀
+
+- 模板目录固定为 `data/templates/business-aggregate/`。
+- 标准包目录结构为 `run_manifest.json`、`source_manifest.json`、`product_master.jsonl`、`channel_entity.jsonl`、`product_aggregate.jsonl`、`channel_aggregate.jsonl`、`sku_channel_wide_table.jsonl`、`field_mapping.csv`、`unmapped_fields.csv`、`quality_report.json`、`report.md`。
+- 冻结聚合粒度：`product_aggregate = productId/skuId + timeWindow + dataVersion`，`channel_aggregate = channelId + timeWindow + dataVersion`，`sku_channel_wide_table = skuId + channelId + timeWindow`。
+- 第一阶段可进入现有 `sku`、`channel_profile`、`wide_table_row`、`batch`；`ProductMaster` 和 `ChannelEntity` 完整物理表仍需 X 总控拍板。
+- 质量规则覆盖 `missing_primary_key`、`missing_time_window`、`unrecognized_channel`、`unrecognized_product`、`invalid_amount_or_quantity`、`low_profile_mapping_coverage`、`unapproved_tag_id`。
+- 样例包位于 `data/templates/business-aggregate/sample_package/`，只作为 `mock_sample` contract 示例，不伪装成真实订单、商品或渠道数据。
+- validator 校验必填文件、manifest/quality row counts、引用完整性、upsert key 唯一性、`tagId` 白名单、质量规则完整性。
+- 校验命令：`node data/templates/business-aggregate/scripts/validate-business-aggregate-package.mjs data/templates/business-aggregate/sample_package`。
+- 尚未实现生产 SQL 连接、离线导出解析器、A 域 import adapter、DB migration 或 UI 工具工作台。

@@ -1,0 +1,4 @@
+sourceObject,sourceField,sourceType,targetObject,targetField,usage,required,mappingRuleId,notes
+profile_source,audience_age_band,mock_sample,ProfileTagScore,tagId,calculation_metric,true,profile_extract_age_25_34_v1,Template mapping to existing taxonomy only
+profile_source,touchpoint_preference,mock_sample,ProfileTagScore,tagId,calculation_metric,true,profile_extract_touchpoint_short_video_v1,Template mapping to existing taxonomy only
+profile_source,platform_black_box_segment,mock_sample,AggregateProfile.unmappedFields,sourceField,mapping_meta,false,,Unmapped opaque third-party segment

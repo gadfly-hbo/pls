@@ -1,0 +1,36 @@
+{
+  "packageType": "business-aggregate",
+  "sourceBatchId": "batch_business_aggregate_mock_20260704",
+  "dataVersion": "v_business_aggregate_mock_20260704",
+  "generatedAt": "2026-07-04T00:00:01Z",
+  "source": "mock_business_aggregate_sample",
+  "sourceType": "mock_sample",
+  "timeWindows": ["2026-06-01/2026-06-30"],
+  "rowCounts": {
+    "productMaster": 1,
+    "channelEntity": 1,
+    "productAggregate": 1,
+    "channelAggregate": 1,
+    "skuChannelWideTable": 1,
+    "fieldMapping": 5,
+    "unmappedFields": 1
+  },
+  "qualityRuleCounts": {
+    "missing_primary_key": 0,
+    "missing_time_window": 0,
+    "unrecognized_channel": 0,
+    "unrecognized_product": 0,
+    "invalid_amount_or_quantity": 0,
+    "low_profile_mapping_coverage": 0,
+    "unapproved_tag_id": 0
+  },
+  "mappingCoverageRate": 0.83,
+  "profileCoverageRate": 0.75,
+  "minSampleSize": 10,
+  "avgSampleSize": 10,
+  "qualityFlags": ["mock_sample"],
+  "blockingIssues": [],
+  "warnings": ["Template sample only; no SQL connector or parser is implemented in this task.", "ProductMaster and ChannelEntity physical tables require X approval before direct DB writes."],
+  "shareable": true,
+  "admissionPolicy": "user_authorized_full_passthrough"
+}
