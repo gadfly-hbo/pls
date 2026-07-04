@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-04（X-P3-UI-QUALITY-5 前端 UI 总体验收通过，docs/p3-ui-quality-acceptance.md 已更新为最终版）
+最近更新：2026-07-04（X-P3-OVERVIEW-2 顶层总览模块总体验收通过，docs/wiki.html v0.48）
 
 进度：
 
@@ -83,10 +83,13 @@
 - 已完成 X-P3-UI-QUALITY-0，产出 `docs/p3-ui-quality-plan.md`；`docs/wiki.html` 已升级到 v0.42，并将 X-P3-UI-QUALITY-0 标记为 done。冻结 PLS 前端 UI 质量专项的 AppShell、组件 contract、响应式断点、五类空状态和页面族改造顺序；本卡未改前端业务代码、API / Mock / DB / 模型 contract。
 - 已完成 V-P3-UI-QUALITY-1 至 V-P3-UI-QUALITY-4 总控复核；`docs/wiki.html` 已升级到 v0.43，并将四张 V 域 UI 质量重构卡标记为 done。覆盖 AppShell、全局 Design Tokens、人货匹配、实体画像、新品预测、经营飞轮和数据管理复杂页面；总控修复真实后端数据管理 smoke 的 `ws_demo` strict mode selector。
 - 已完成 X-P3-UI-QUALITY-5 前端 UI 总体验收，`docs/p3-ui-quality-acceptance.md` 已更新为最终版；`docs/wiki.html` 已升级到 v0.45，并将 X-P3-UI-QUALITY-5 标记为 done。前端 lint / build / smoke、真实后端数据管理定向 Playwright、多宽度截图和 DOM 溢出检查均通过；MatchCoreWorkbench 空列表右侧状态已修复并复验通过。当前真实 API 人货匹配详情链路仍因 `ws_demo` 空业务数据未覆盖，列为剩余风险。
+- 已完成 X-P3-OVERVIEW-0 顶层总览模块方案冻结，新增 `docs/p3-overview-module-plan.md`；`docs/wiki.html` 已升级到 v0.47，并将 X-P3-OVERVIEW-0 标记为 done。冻结总览为 PLS 顶层一级模块和默认首页，导航顺序为“总览 -> 实体与账号画像 -> 人货匹配 -> 新品预测 -> 经营飞轮 -> 数据管理”；第一版总览只消费现有前端 adapter，不伪造预测总数、商品总数或业务数据。
+- 已完成 X-P3-OVERVIEW-2 顶层总览模块总体验收；`docs/wiki.html` 已升级到 v0.48，并将 X-P3-OVERVIEW-2 标记为 done。总控复核并小修 `Overview.tsx` 的类型、数据标识、真实空业务库判断、匹配 Cell 指标、最近动态完整性和动态列表 key，新增 `apps/web/e2e/overview.spec.ts` 覆盖 1440 / 1024 / 768 / 390 宽度总览 smoke。
 
 下一步：
 
-- 以 `docs/wiki.html` v0.45 为当前任务状态真源；P2 主线、P2-UI、P3-DB、P3-DB-MGMT 与 P3-UI-QUALITY 全组已完成。
+- 以 `docs/wiki.html` v0.48 为当前任务状态真源；P2 主线、P2-UI、P3-DB、P3-DB-MGMT、P3-UI-QUALITY 与 P3-OVERVIEW 全组已完成。
+- 若后续继续增强总览，应另开新卡，优先考虑后端聚合 Overview API、预测列表读取 API、真实业务数据前置状态说明和模块级“最近更新时间”。
 - UI 总体验收已通过；若后续要求真实人货匹配详情链路演示，需要先通过受控导入 / 同步生成 channel entities 与 match 数据；当前 `ws_demo` 的 `/api/v0/channels/entities` 与 `/api/v0/matches/heatmap` 返回空数组。
 - 下一步如继续增强数据管理，应另开新卡，优先考虑后端数据包列表接口、临时 workspace 清理策略、admin token 获取方式和真实用户授权数据包模板。
 - 若需要恢复业务演示或 smoke 数据，需单独确认重放口径后通过受控导入路径重放 `data/demo`、`data/p1/douyin-bi` 或新的用户授权数据包；不得手工覆盖 SQLite 主库绕过 audit。
@@ -133,6 +136,9 @@
 - A-P3-DB-MGMT-3 验证依据：A 域回流记录显示 `apps/server npm run typecheck`、`schema:check`、`smoke:admin-empty` 131/131、`smoke:admin-imported` 157/157、`smoke:admin-summary` allOk=true 通过；X 总控复核了 wrapper 临时 workspace、RESULT / summary 输出、README 前置假设和 delete-version confirmText 顺序后标记 done。
 - X-P3-DB-MGMT-4 验证通过：`apps/server npm run typecheck`、`npm run schema:check`、`npm run smoke:admin-summary`；`apps/web npm run lint`、`npm run build`、`npm run smoke`；`VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Data Management Workbench - Real Backend Smoke Test"`；`VITE_USE_MOCK=false npx playwright test e2e/data-management.spec.ts`。`smoke:admin-summary` 输出 `allOk: true`，empty suite 43/43 + 32/32 + 56/56，imported suite 52/52 + 49/49 + 56/56。
 - 项目级提示词维护验证：只读复核 `AGENTS.md` 相关段落；`docs/wiki.html` prompt 结构检查通过（8 条 prompt、`src-*` 引用无缺失、`learn-review` 存在、changelog `current: true` 唯一）。
+- X-P3-OVERVIEW-0 验证：只读复核 `apps/web/src/App.tsx`、`apps/web/src/services/api.ts`、`apps/web/src/types/index.ts`，新增 `docs/p3-overview-module-plan.md`；检查 `docs/wiki.html` v0.47、X-P3-OVERVIEW-0 done、changelog `current: true` 唯一。本卡未改前端代码，未运行前端 lint / build / smoke。
+- X-P3-OVERVIEW-2 验证通过：`apps/web npm run lint`、`npm run build`、`npm run smoke`；`VITE_USE_MOCK=false npx playwright test e2e/overview.spec.ts`；`VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Data Management Workbench - Real Backend Smoke Test"`。完整真实人货匹配 smoke 仍因当前 `ws_demo` 缺少 channel entities / match heatmap 业务数据超时，按既有风险记录，不作为本卡阻塞。
+- 本 session 收尾复验通过：`apps/web npm run lint`、`npm run build`、`npm run smoke`；`VITE_USE_MOCK=false npx playwright test e2e/overview.spec.ts`；`VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Data Management Workbench - Real Backend Smoke Test"`。`docs/wiki.html` 检查无 `todo` / `doing` 任务卡，当前版本为 v0.48。
 
 ---
 

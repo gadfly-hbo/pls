@@ -19,7 +19,11 @@ test('End-to-End Smoke Test for PLS', async ({ page }) => {
   // 1. Landing page is now Account Workbench (first module)
   await page.goto('/');
   await expect(page.getByText('PLS 工作台')).toBeVisible();
-  // Default view: 实体与账号画像
+  // Default view: 业务总览
+  await expect(page.getByText('快速查看数据可用性', { exact: false })).toBeVisible({ timeout: 10000 });
+  
+  // Navigate to Account Profile
+  await page.locator('button.app-nav__item', { hasText: '实体与账号画像' }).click();
   await expect(page.getByText('实体列表', { exact: true })).toBeVisible({ timeout: 10000 });
 
   // Verify native React dashboard F4 (analysis tab is default)

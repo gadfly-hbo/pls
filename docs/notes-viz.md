@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-04（X-P3-UI-QUALITY-5 前端 UI 总体验收通过，MatchCoreWorkbench 空状态已复验）
+最近更新：2026-07-04（X-P3-OVERVIEW-2 顶层总览总体验收通过）
 
 进度：
 
@@ -31,6 +31,9 @@
 - `V-P1-C2` (批量 SKU 对比视图) 已完成：在 Heatmap 增加了按 recommendation 筛选和点击表头按渠道对多个 SKU 排序的功能；为单元格增加了驱动因素的 Tooltip 摘要。为了优化展示，将所有匹配结果聚合到了前端的 Map 中，减少频繁加载。
 - `V-P1-C3` (P1 demo report 导出) 已完成：在 Heatmap 顶部增加了 CSV 导出功能，严格包含只属于 S4 派生的字段 (包含 matchScore, generatedAt, drivers, risks)，去除了原始数据源可能导致越权的内容。已增加 escapeCsvCell 函数处理边界字符。
 - `V-P1-C4` (真实后端端到端 Playwright smoke) 已完成：使用 Playwright 实现了端到端的验证 (`apps/web/e2e/smoke.spec.ts`)，覆盖了 Dashboard 的新建、生成预测、进入 Heatmap、点击抽屉、CSV 导出、断言 CSV 白名单及无抛出意外 Error 等核心体验。为保证稳定隔离，Playwright config 已调整为独立启动在 5175 端口的纯 Mock 环境 (`VITE_USE_MOCK=true npm run dev`)，不会与本机真实 5174 服务冲撞，且同时支持在 `VITE_USE_MOCK=false` 下验证真实后端。
+- `V-P3-OVERVIEW-1` (顶层业务总览工作台实现) 已完成：新增了 `Overview.tsx` 页面，集成了核心指标的展示、数据库空状态识别、健康度面板和推荐下一步导航，并已成功纳入 `App.tsx` 作为默认主页视图。
+- `X-P3-OVERVIEW-2` 总控验收已通过：总控小修 `Overview.tsx` 的 `goToView` 类型、数据标识口径、真实空业务库判断、匹配 Cell 数、最近导入任务 / 数据版本摘要和动态列表 fallback key；新增 `apps/web/e2e/overview.spec.ts` 覆盖 1440 / 1024 / 768 / 390 宽度下默认总览无 console/page error、无页面级横向溢出。复验 `apps/web npm run lint`、`npm run build`、`npm run smoke`、真实 API 总览多宽度 smoke 和真实后端数据管理定向 smoke 均通过。
+- 本 session 收尾复验通过：`apps/web npm run lint`、`npm run build`、`npm run smoke`；`VITE_USE_MOCK=false npx playwright test e2e/overview.spec.ts`；`VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Data Management Workbench - Real Backend Smoke Test"`。
 - `V-P1-E4` (账号画像基准与款账号对比视图) 已完成：使用纯 React 组件和安全聚合数据源（Mock 或 A-P1-E3 派生后端响应），彻底迁移了抖音 dashboard 核心体验，不再使用 iframe 粗暴嵌套 HTML。针对后端 M-P1-E2 的强类型契约（如 `AccountFitDriver` 和 `AccountFitAdjustmentAdvice`），在前端做了显式的 View Model 扁平化映射生成视图所需基准和对比数据，遵循完全无 `any` 约束。
 - `V-P1-F4` / `V-P1-F5` (UI 体验升级与中文化) 已完成：
   1. 执行了 `product-ui-redesign` 流程，通过 `index.css` 提供一致的 Design Tokens，将页面全面翻新为现代化的卡片化视觉效果（优质留白、阴影、层级）。
@@ -40,7 +43,7 @@
 
 下一步：
 
-- 以 `docs/wiki.html` v0.45 为当前 UI 专项任务状态真源；V-P3-UI-QUALITY-1 至 V-P3-UI-QUALITY-4 与 `X-P3-UI-QUALITY-5` 均已完成并通过 X 复核。
+- 以 `docs/wiki.html` v0.48 为当前 UI 专项任务状态真源；V-P3-UI-QUALITY-1 至 V-P3-UI-QUALITY-4、X-P3-UI-QUALITY-5 与 P3-OVERVIEW 全组均已完成并通过 X 复核。
 - MatchCoreWorkbench 空列表时右侧 InspectorPane 状态语义已关闭：无匹配记录时展示“当前无匹配数据”，仅列表有数据但未选中时提示选择左侧项目。
 - P3-DB-MGMT 前端闭环已通过总控验收；后续增强需另开卡。
 - 若后端新增数据包列表接口，前端应移除固定 `demo` / `douyin-bi` 枚举，改为消费后端受支持数据包列表。
@@ -70,6 +73,8 @@
 - **以实体为视角的双轨视图**：为适应 P2 阶段需求，账号画像由单一的“比对模式”升级为“实体优先”模式。通过划分“画像分析”与“决策诊断”两个 Tab，前者展示本实体的 Benchmark 和基盘特征，后者可自由挂载不同的 SKU 进行针对性投流或货品铺发测试，兼顾业务的纵览与深钻。
 - **决策飞轮边界与人工审核机制**：在引入 `FlywheelWorkbench` 时，严守了“不自动执行策略”红线。尽管工具串联了从匹配诊断到后续决策流转（如“铺货”或“调价”）的动作记录与归因反馈环节，但在 P2 及可见阶段，所有的行动执行仍依赖业务人员在外部系统或人工完成；前端看板仅用于跟踪、状态校验及记录复盘偏差。
 - **数据管理红线**：P3-DB-MGMT 后 `DataManagementWorkbench` 已允许通过受控 Admin API 执行数据库运维操作，但仍禁止前端直接访问 SQLite 文件、通用 SQL console、单元格级在线编辑和绕过 confirmText / admin token / Idempotency-Key / audit 的写操作。
+- **Playwright 严格模式导致的导航选择器冲突**：在 V-P3-OVERVIEW-1 中引入总览页面时，页面内展示的模块名称（如“数据管理”、“人货匹配核心工作台”）与左侧/顶部导航菜单的文本完全一致，这导致原先通过 `getByText('数据管理', { exact: true })` 实现的 E2E 测试因为匹配到两个元素而触发 strict mode violation 失败。今后凡涉及应用级全局导航或公共操作的 E2E 定位，应优先使用带有结构语义的 locator（如 `locator('button.app-nav__item', { hasText: '...' })`），以提升测试面对内容变更时的鲁棒性。
+- **Playwright 本地端口复用注意**：`apps/web/playwright.config.ts` 使用固定端口 5175 且 `reuseExistingServer: false`。真实 API 模式下多个 Playwright 命令并行运行时，可能出现 `Port 5175 is already in use` 的 dev server 日志；即使测试复用已启动服务通过，收尾和 CI 复验仍应优先串行执行真实 API Playwright 命令，避免端口竞争造成误判。
 
 ---
 

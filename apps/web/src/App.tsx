@@ -5,10 +5,12 @@ import MatchCoreWorkbench from './pages/MatchCoreWorkbench';
 import AccountProfileWorkbench from './pages/AccountProfileWorkbench';
 import FlywheelWorkbench from './pages/FlywheelWorkbench';
 import DataManagementWorkbench from './pages/DataManagementWorkbench';
+import Overview from './pages/Overview';
 
-type ViewId = 'account-workbench' | 'match-core' | 'dashboard' | 'flywheel' | 'data-management';
+type ViewId = 'overview' | 'account-workbench' | 'match-core' | 'dashboard' | 'flywheel' | 'data-management';
 
 const NAV_ITEMS: { id: ViewId; label: string }[] = [
+  { id: 'overview', label: '总览' },
   { id: 'account-workbench', label: '实体与账号画像' },
   { id: 'match-core', label: '人货匹配核心工作台' },
   { id: 'dashboard', label: '新品预测工作台' },
@@ -17,7 +19,7 @@ const NAV_ITEMS: { id: ViewId; label: string }[] = [
 ];
 
 function App() {
-  const [currentView, setCurrentView] = useState<ViewId>('account-workbench');
+  const [currentView, setCurrentView] = useState<ViewId>('overview');
   const [currentSku, setCurrentSku] = useState<SKU | null>(null);
   const [prediction, setPrediction] = useState<ProductProfile | null>(null);
   const [flywheelDecisionId, setFlywheelDecisionId] = useState<string | undefined>();
@@ -99,6 +101,9 @@ function App() {
       )}
 
       <main className="app-main">
+        {currentView === 'overview' && (
+          <Overview goToView={navigateTo} />
+        )}
         {currentView === 'account-workbench' && (
           <AccountProfileWorkbench />
         )}

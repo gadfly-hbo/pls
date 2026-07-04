@@ -24,7 +24,7 @@ test('End-to-End Real Backend Smoke Test', async ({ page }) => {
   await expect(page.getByText('PLS 工作台')).toBeVisible();
 
   // Go to Account Workbench
-  const accountComparisonNav = page.getByText('实体与账号画像', { exact: true });
+  const accountComparisonNav = page.locator('button.app-nav__item', { hasText: '实体与账号画像' });
   await accountComparisonNav.click();
   await expect(page.getByText('实体列表', { exact: true })).toBeVisible({ timeout: 10000 });
 
@@ -61,8 +61,8 @@ test('End-to-End Real Backend Smoke Test', async ({ page }) => {
   const acCsvContent = fs.readFileSync(acPath, 'utf-8');
   expect(acCsvContent).toContain('skuId,accountId,fitScore,fitConfidence,qualityFlags,generatedAt,advice');
 
-  // Go to Match Core Workbench
-  const matchCoreNav = page.getByText('人货匹配核心工作台', { exact: true });
+  // 2. Go to Match Core Workbench
+  const matchCoreNav = page.locator('button.app-nav__item', { hasText: '人货匹配核心工作台' });
   await matchCoreNav.click();
   await expect(page.getByText('人货匹配决策工作台')).toBeVisible({ timeout: 10000 });
 
@@ -100,7 +100,8 @@ test('Data Management Workbench - Real Backend Smoke Test', async ({ page }) => 
   await page.goto('/');
   await expect(page.getByText('PLS 工作台')).toBeVisible();
 
-  await page.getByText('数据管理', { exact: true }).click();
+  // Go to Data Management
+  await page.locator('button.app-nav__item', { hasText: '数据管理' }).click();
   await expect(page.getByText('数据库总览')).toBeVisible({ timeout: 10000 });
   await expect(page.getByRole('main').getByText('ws_demo', { exact: false })).toBeVisible();
 

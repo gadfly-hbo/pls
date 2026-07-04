@@ -15,7 +15,7 @@ test('Data Management Workbench - Real API Smoke', async ({ page }) => {
   await page.goto('/');
 
   // Click on '数据管理'
-  await page.getByText('数据管理', { exact: true }).click();
+  await page.locator('button.app-nav__item', { hasText: '数据管理' }).click();
 
   // Overview tab asserts
   await expect(page.getByText('数据库总览')).toBeVisible();

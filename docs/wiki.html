@@ -516,7 +516,7 @@ agy
 </div>
 
 <script>
-const VERSION = "0.45";
+const VERSION = "0.48";
 
 const DOMAINS = {
   X: { name: "总控", agent: "主控 Agent", color: "var(--x)" },
@@ -2963,6 +2963,126 @@ Handoff：
 - 复验 apps/web npm run lint、npm run build、npm run smoke 通过；VITE_USE_MOCK=false 数据管理真实后端定向 Playwright 通过。
 - 复验 1440 与 390 宽度人货匹配真实空数据状态，通过 DOM 检查，无页面级横向溢出、无 console/page error。
 - X-P3-UI-QUALITY-5 标记 done；真实 API 人货匹配详情链路仍因当前 ws_demo 空业务数据未覆盖，后续如需演示需另行确认受控导入 / 同步。`
+  },
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-04 18:30",
+    title: "X-P3-OVERVIEW-0：PLS 顶层总览模块方案冻结",
+    brief: `目标：冻结 PLS 顶层总览模块的信息架构、数据来源、导航位置和验收口径，为 V 域实现提供清晰边界。
+
+背景：
+- 当前 PLS 顶部导航直接进入实体与账号画像，缺少跨模块的业务总览。
+- 用户确认需要设计一个总览模块，并要求总控先进行 wiki 任务拆卡，不直接执行前端实现。
+- 总览不是数据管理页里的“总览”Tab，而是 PLS 顶层一级模块和默认首页。
+
+范围：
+1. 冻结总览模块定位：业务状态摘要、数据可用性、模块健康、推荐下一步和一级模块入口。
+2. 明确总览可消费的现有前端 API：DbOverview、channel entities、matches heatmap、predictions、decisions、data versions、import jobs、audit events。
+3. 明确不得新增或伪造未冻结业务字段；若现有 API 缺少聚合指标，V 域先用已有列表接口在前端计算。
+4. 明确空库 / demo / smoke / 用户授权数据四类状态展示口径。
+5. 明确总览默认首页与 AppShell 导航顺序：总览 -> 实体与账号画像 -> 人货匹配 -> 新品预测 -> 经营飞轮 -> 数据管理。
+6. 输出总览信息架构与验收标准，可写入本任务归档或单独新增 docs/p3-overview-module-plan.md。
+
+非目标：
+- 不改 apps/web 前端代码。
+- 不改 A/M/D API contract、DB schema、模型 contract 或数据准入口径。
+- 不新增依赖。
+- 不为总览编造 mock 业务数据、标签、ID 或默认值。
+
+验收：
+- V-P3-OVERVIEW-1 可基于冻结口径直接实现，不需要自行解释总览数据语义。
+- 明确哪些指标来自现有 API，哪些暂不展示或标记为“暂无数据”。
+- 明确真实 ws_demo 当前空业务数据时的首页文案和下一步动作。
+- 明确总览响应式验收宽度：1440、1024、768、390。
+
+总控归档：
+- 新增 docs/p3-overview-module-plan.md，冻结 PLS 顶层总览模块的信息架构、数据来源、导航位置、空状态和验收口径。
+- 只读复核 apps/web/src/App.tsx、apps/web/src/services/api.ts、apps/web/src/types/index.ts，确认当前默认首页为 account-workbench，且没有预测列表读取 API。
+- 冻结总览导航顺序：总览 -> 实体与账号画像 -> 人货匹配 -> 新品预测 -> 经营飞轮 -> 数据管理。
+- 冻结总览第一版只消费现有 adapter；缺少的预测总数和商品总数不得伪造成确定指标。
+- 本卡未改 apps/web 代码、未改 API / DB / 模型 contract，未运行前端 lint / build / smoke；后续 V-P3-OVERVIEW-1 实现卡必须补齐验证。`
+  },
+  {
+    dom: "V",
+    status: "done",
+    created: "2026-07-04 18:31",
+    title: "V-P3-OVERVIEW-1：顶层业务总览工作台实现",
+    brief: `目标：实现 PLS 顶层总览模块，作为应用默认首页，帮助用户快速判断数据是否可用、业务模块是否有结果、下一步应进入哪个工作台。
+
+前置：
+- X-P3-OVERVIEW-0 已冻结总览模块方案和验收口径。
+- P3 UI Quality 组件系统已完成，优先复用 page-header、metric-grid、metric-card、panel、status-badge、empty-state 等现有样式。
+
+范围：
+1. 新增 apps/web/src/pages/Overview.tsx。
+2. 修改 apps/web/src/App.tsx：新增 overview view，将默认 currentView 改为 overview，并把“总览”放到导航第一项。
+3. 顶部状态区展示 workspace、databaseStatus、schemaVersion、migrationStatus、lastImportTime 和数据标识。
+4. 关键指标区展示可由现有 API 得到或计算的指标：渠道实体数、匹配行数、经营决策数、数据版本数、导入任务数、操作日志数；缺少 prediction 列表 API 时不得伪造预测数。
+5. 模块健康区覆盖数据管理、渠道人群、人货匹配、新品预测、经营飞轮，展示 success / warning / danger / neutral 状态和入口按钮。
+6. 推荐下一步区根据状态给出可执行入口：空库去数据管理导入；有实体无匹配去人货匹配；有匹配无决策去创建经营决策；有待复盘决策去经营飞轮。
+7. 最近动态区展示最近导入任务、数据版本、操作日志和经营决策摘要，不展示原始 payload。
+8. 空库状态必须清楚说明当前 workspace 无业务数据，并引导去数据管理；不得继续显示“请选择左侧项目”等不适用文案。
+
+红线：
+- 不修改后端 API、DB schema、migration、Admin API 安全约束或模型 contract。
+- 不新增依赖。
+- 不伪造业务数据、标签、ID、商品、账号或匹配结果。
+- 不把总览做成营销 landing page、hero 或静态截图入口。
+- 不改变现有五个模块的业务状态机和 API 请求语义。
+
+验证：
+- apps/web npm run lint。
+- apps/web npm run build。
+- apps/web npm run smoke。
+- VITE_USE_MOCK=false 数据管理或总览定向 Playwright smoke；真实 ws_demo 空业务数据时不得出现 console/page error。
+- 截图检查 1440、1024、768、390 宽度下：导航、指标卡、推荐下一步、模块入口、最近动态无重叠、无页面级横向溢出。
+
+回流格式：
+- 说明新增 / 修改的前端文件。
+- 说明总览每个指标的数据来源和缺失处理。
+- 附验证命令结果和截图检查结论。
+- 明确真实 API 未覆盖路径和剩余风险。`
+  },
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-04 18:32",
+    title: "X-P3-OVERVIEW-2：总览模块总体验收",
+    brief: `目标：总控验收 PLS 顶层总览模块，确认它能作为默认首页承接数据状态、业务状态、模块入口和下一步动作。
+
+前置：
+- X-P3-OVERVIEW-0 已冻结方案。
+- V-P3-OVERVIEW-1 已完成并回流。
+
+范围：
+1. 复核 Overview 是否遵守 X-P3-OVERVIEW-0 的信息架构和数据来源边界。
+2. 复核 AppShell 默认首页和导航顺序是否正确。
+3. 覆盖 mock/demo 与真实 API 空业务库两类状态；真实 ws_demo 当前 /api/v0/channels/entities 与 /api/v0/matches/heatmap 为空时，总览必须给出正确空库或待导入引导。
+4. 复核指标计算是否只来自现有 API，不伪造预测、匹配、账号或商品数据。
+5. 复核模块入口跳转：实体与账号画像、人货匹配、新品预测、经营飞轮、数据管理。
+6. 运行前端 lint、build、smoke 和必要的真实 API Playwright。
+7. 输出验收结论，并按结果更新 docs/wiki.html、docs/notes-infra.md、docs/notes-viz.md。
+
+红线：
+- 不以 mock-only 截图替代真实空库状态验收。
+- 不接受总览指标与模块实际数据明显不一致。
+- 不接受 390px 下卡片、按钮、导航或长 ID 重叠。
+- 不在验收中执行未确认的 ws_demo 破坏性正式操作。
+
+验收：
+- apps/web lint / build / smoke 通过。
+- 真实 API 空业务库状态下总览可加载，无 console/page error。
+- 1440、1024、768、390 宽度截图或 DOM 检查通过。
+- 明确剩余风险：例如缺少后端聚合 overview API、预测列表 API 或真实业务数据导致的指标空缺。
+
+总控验收归档：
+- 验收结论为通过，PLS 顶层总览可作为默认首页承接数据状态、业务模块状态、入口导航和下一步动作。
+- 总控小修 apps/web/src/pages/Overview.tsx：移除 goToView any，修正用户授权 / mock / smoke / e2e / 未标记数据标识，补齐真实空业务库判断，增加匹配 Cell 数，补齐最近导入任务与数据版本摘要，并为最近动态列表补稳定 fallback key。
+- 新增 apps/web/e2e/overview.spec.ts，覆盖 1440、1024、768、390 宽度下总览默认加载、关键区域可见、无 console/page error、无页面级横向溢出。
+- 复核 AppShell 默认首页和导航顺序正确：总览 -> 实体与账号画像 -> 人货匹配核心工作台 -> 新品预测工作台 -> 经营飞轮 -> 数据管理。
+- 复验 apps/web npm run lint、npm run build、npm run smoke 通过；VITE_USE_MOCK=false npx playwright test e2e/overview.spec.ts 通过；VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Data Management Workbench - Real Backend Smoke Test" 通过。
+- 完整真实人货匹配 smoke 仍因当前 ws_demo 缺少 channel entities / match heatmap 业务数据超时，不作为本卡阻塞，后续演示需先受控导入 / 同步。`
   }
 ];
 
@@ -2970,9 +3090,45 @@ const HOTFIX = [];
 
 const CHANGELOG = [
   {
-    ver: "0.45",
+    ver: "0.48",
     date: "2026-07-04",
     current: true,
+    title: "X-P3-OVERVIEW-2 顶层总览总体验收通过",
+    items: [
+      "X-P3-OVERVIEW-2 经总控验收标记 done，PLS 顶层总览成为默认首页并通过 mock 与真实 API 空业务库验证",
+      "总控修复 Overview 的 goToView any、数据标识口径、真实空业务库判断、最近动态缺项和空 key console error",
+      "新增 apps/web/e2e/overview.spec.ts，覆盖 1440、1024、768、390 宽度下总览无页面级横向溢出和无 console/page error",
+      "复核验证：apps/web lint、build、smoke 通过；真实 API overview 多宽度 smoke 和真实后端数据管理定向 smoke 通过"
+    ]
+  },
+  {
+    ver: "0.47",
+    date: "2026-07-04",
+    current: false,
+    title: "X-P3-OVERVIEW-0 顶层总览方案冻结",
+    items: [
+      "X-P3-OVERVIEW-0 经总控执行并标记 done，新增 docs/p3-overview-module-plan.md",
+      "冻结 PLS 顶层总览模块为默认首页，导航顺序为总览、实体与账号画像、人货匹配、新品预测、经营飞轮、数据管理",
+      "明确总览第一版只消费现有前端 adapter；预测总数和商品总数因缺少可靠列表 API 不作为确定指标展示",
+      "真实 ws_demo 空业务数据状态、demo / smoke / 用户授权数据状态和 1440 / 1024 / 768 / 390 响应式宽度纳入后续 V / X 验收"
+    ]
+  },
+  {
+    ver: "0.46",
+    date: "2026-07-04",
+    current: false,
+    title: "P3 顶层总览模块任务拆卡",
+    items: [
+      "新增 X-P3-OVERVIEW-0、V-P3-OVERVIEW-1、X-P3-OVERVIEW-2 任务卡，覆盖总览方案冻结、前端实现和总体验收",
+      "确认总览是 PLS 顶层一级模块和默认首页，不是数据管理页内的总览 Tab",
+      "冻结实现边界：优先复用现有 API 和 P3 UI Quality 组件系统，不新增依赖、不改后端契约、不伪造业务数据",
+      "真实 ws_demo 空业务数据状态必须作为验收场景，总览需引导用户进入数据管理或后续模块"
+    ]
+  },
+  {
+    ver: "0.45",
+    date: "2026-07-04",
+    current: false,
     title: "X-P3-UI-QUALITY-5 前端 UI 总体验收通过",
     items: [
       "更新 docs/p3-ui-quality-acceptance.md，记录 PLS 前端 UI 质量总体验收结论为通过",
