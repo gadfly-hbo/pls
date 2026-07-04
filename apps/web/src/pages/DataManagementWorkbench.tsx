@@ -1,8 +1,38 @@
 import { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import type { DbOverview, DbTableInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbSchemaInfo, DbSampleInfo, DbOperationDryRunResult, DbOperationExecuteResult } from '../types';
+import databaseReadme from '../../../../docs/pls-sqlite-readme.md?raw';
 
-type TabType = 'overview' | 'tables' | 'imports' | 'versions' | 'schema' | 'audits' | 'dangerous';
+type TabType = 'overview' | 'tables' | 'imports' | 'versions' | 'schema' | 'audits' | 'dangerous' | 'readme';
+const LOCAL_ADMIN_TOKEN = 'pls-admin-token';
+
+function getOperationTitle(type: string): string {
+  switch (type) {
+    case 'IMPORT':
+      return '导入数据包';
+    case 'CLEAR_TABLE':
+      return '清空表';
+    case 'DROP_TABLE':
+      return '删除表';
+    case 'DELETE_VERSION':
+      return '删除数据版本';
+    case 'APPLY_MIGRATIONS':
+      return '应用迁移';
+    case 'RESET':
+      return '重建数据库';
+    default:
+      return type;
+  }
+}
+
+function getQualityReportSummary(report: unknown): string {
+  if (!report || typeof report !== 'object') return '无';
+  const fields = report as Record<string, unknown>;
+  const batchId = typeof fields.batchId === 'string' ? fields.batchId : '';
+  const dataVersion = typeof fields.dataVersion === 'string' ? fields.dataVersion : '';
+  const generatedAt = typeof fields.generatedAt === 'string' ? fields.generatedAt : '';
+  return [batchId, dataVersion, generatedAt].filter(Boolean).join(' · ') || '已生成';
+}
 
 export default function DataManagementWorkbench() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -27,7 +57,6 @@ export default function DataManagementWorkbench() {
   const [opTarget, setOpTarget] = useState<string>('');
   const [opDryRun, setOpDryRun] = useState<DbOperationDryRunResult | null>(null);
   const [opConfirmText, setOpConfirmText] = useState('');
-  const [opAdminToken, setOpAdminToken] = useState('pls-admin-token');
   const [opError, setOpError] = useState<string | null>(null);
   const [opExecuting, setOpExecuting] = useState(false);
   const [opExecuteResult, setOpExecuteResult] = useState<DbOperationExecuteResult | null>(null);
@@ -68,6 +97,8 @@ export default function DataManagementWorkbench() {
       } else if (tab === 'audits') {
         const res = await api.getDbAuditEvents();
         setAudits(res.data.items);
+      } else if (tab === 'readme' || tab === 'dangerous') {
+        return;
       }
     } catch (e) {
       console.error('Failed to load DB admin data:', e);
@@ -102,7 +133,7 @@ export default function DataManagementWorkbench() {
     setOpModalOpen(true);
     setOpExecuting(true);
     try {
-      const res = await api.dryRunDbOperation(type, target, opAdminToken);
+      const res = await api.dryRunDbOperation(type, target, LOCAL_ADMIN_TOKEN);
       setOpDryRun(res.data);
     } catch (e: any) {
       setOpError('Dry run failed: ' + e.message);
@@ -115,7 +146,7 @@ export default function DataManagementWorkbench() {
     setOpError(null);
     setOpExecuting(true);
     try {
-      const res = await api.executeDbOperation(opType, opTarget, opConfirmText, opAdminToken);
+      const res = await api.executeDbOperation(opType, opTarget, opConfirmText, LOCAL_ADMIN_TOKEN);
       setOpExecuteResult(res.data);
       loadData(activeTab);
     } catch (e: any) {
@@ -133,6 +164,7 @@ export default function DataManagementWorkbench() {
     { key: 'schema', label: 'Schema' },
     { key: 'audits', label: '操作日志' },
     { key: 'dangerous', label: '危险操作' },
+    { key: 'readme', label: 'README' },
   ];
 
   return (
@@ -507,15 +539,27 @@ export default function DataManagementWorkbench() {
           </div>
         )}
 
+        {activeTab === 'readme' && (
+          <div className="panel database-readme">
+            <h3 className="panel__title">SQLite 库表 README</h3>
+            <pre className="database-readme__content">{databaseReadme}</pre>
+          </div>
+        )}
+
       </div>
 
       {opModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div style={{ background: 'var(--bg)', padding: 24, borderRadius: 8, width: 500, maxWidth: '90vw' }}>
-            <h3 style={{ color: 'var(--danger)', marginTop: 0 }}>危险操作: {opType}</h3>
-            <p style={{ fontWeight: 500 }}>目标: {opTarget}</p>
+        <div className="operation-modal">
+          <div className="operation-modal__dialog">
+            <div className="operation-modal__header">
+              <div>
+                <h3 className="operation-modal__title">{getOperationTitle(opType)}</h3>
+                <div className="operation-modal__target">目标: {opTarget}</div>
+              </div>
+              <button className="btn" onClick={() => setOpModalOpen(false)}>关闭</button>
+            </div>
             {opExecuteResult ? (
-              <div style={{ marginBottom: 16 }}>
+              <div>
                 <div className={`alert-banner alert-banner--${opExecuteResult.status === 'success' || opExecuteResult.success ? 'success' : 'danger'}`}>
                   <div className="alert-banner__content">
                     <strong>执行结果:</strong> {opExecuteResult.status || (opExecuteResult.success ? 'success' : 'failed')}
@@ -546,13 +590,27 @@ export default function DataManagementWorkbench() {
               <>
                 {opExecuting && !opDryRun ? <div style={{ marginBottom: 16 }}>加载影响分析中...</div> : null}
                 {opDryRun && (
-                  <div style={{ marginBottom: 16, padding: 12, background: 'var(--panel)', borderRadius: 4 }}>
-                    <p style={{ margin: '4px 0' }}><strong>影响表:</strong> {opDryRun.affectedTables?.join(', ') || '无'}</p>
-                    <p style={{ margin: '4px 0' }}><strong>影响行数:</strong> {opDryRun.affectedRows}</p>
-                    <p style={{ margin: '4px 0', color: opDryRun.hasUserAuthorized ? 'var(--danger)' : 'inherit' }}>
-                      <strong>是否包含用户授权数据:</strong> {opDryRun.hasUserAuthorized ? '是 (高危)' : '否'}
-                    </p>
-                    <p style={{ margin: '4px 0' }}><strong>是否包含审计/历史:</strong> {opDryRun.hasAuditHistory ? '是' : '否'}</p>
+                  <div className="operation-modal__impact">
+                    <div className="operation-modal__impact-grid">
+                      <div>
+                        <span className="operation-modal__label">影响行数</span>
+                        <strong>{opDryRun.affectedRows}</strong>
+                      </div>
+                      <div>
+                        <span className="operation-modal__label">用户授权数据</span>
+                        <strong className={opDryRun.hasUserAuthorized ? 'operation-modal__danger' : ''}>
+                          {opDryRun.hasUserAuthorized ? '包含' : '不包含'}
+                        </strong>
+                      </div>
+                      <div>
+                        <span className="operation-modal__label">审计/历史</span>
+                        <strong>{opDryRun.hasAuditHistory ? '包含' : '不包含'}</strong>
+                      </div>
+                    </div>
+                    <div className="operation-modal__tables">
+                      <span className="operation-modal__label">影响表</span>
+                      <span>{opDryRun.affectedTables?.join(', ') || '无'}</span>
+                    </div>
                     {opDryRun.warnings && opDryRun.warnings.length > 0 && (
                       <div style={{ margin: '8px 0 4px', color: 'var(--danger)' }}>
                         <strong>Warnings:</strong>
@@ -562,27 +620,17 @@ export default function DataManagementWorkbench() {
                       </div>
                     )}
                     {opDryRun.qualityReport && (
-                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-                        <p style={{ margin: '0 0 4px', fontWeight: 600 }}>质量报告:</p>
-                        <pre style={{ margin: 0, fontSize: 11, background: 'var(--bg)', padding: 8, borderRadius: 4, maxHeight: 150, overflow: 'auto' }}>
+                      <details className="operation-modal__quality">
+                        <summary>质量报告: {getQualityReportSummary(opDryRun.qualityReport)}</summary>
+                        <pre>
                           {JSON.stringify(opDryRun.qualityReport, null, 2)}
                         </pre>
-                      </div>
+                      </details>
                     )}
                   </div>
                 )}
                 {opError && <div style={{ color: 'var(--danger)', marginBottom: 16 }}>{opError}</div>}
-                
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Admin Token:</label>
-                  <input 
-                    type="password" 
-                    value={opAdminToken} 
-                    onChange={e => setOpAdminToken(e.target.value)} 
-                    style={{ width: '100%', padding: '8px', border: '1px solid var(--border)', borderRadius: 4, boxSizing: 'border-box' }}
-                  />
-                </div>
-                
+
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
                     请输入 <code>{opDryRun?.requiredConfirmText || '加载中...'}</code> 以确认执行:
