@@ -215,9 +215,9 @@ export default function MatchCoreWorkbench({ goToFlywheel }: { goToFlywheel?: (i
   return (
     <div className="match-workbench">
 
-      {/* Top Toolbar: Title + Mode Switcher + Object Selector */}
+      {/* Top Toolbar */}
       <div className="toolbar">
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>人货匹配决策工作台</h2>
+        <h2 className="toolbar__label" style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>人货匹配决策工作台</h2>
 
         <div className="segmented-control">
           <button
@@ -238,7 +238,7 @@ export default function MatchCoreWorkbench({ goToFlywheel }: { goToFlywheel?: (i
 
         <select
           className="form-control"
-          style={{ width: 'auto', flex: '0 1 200px' }}
+          style={{ width: 'auto', maxWidth: 200, flex: '0 1 180px' }}
           value={selectedPrimaryId}
           onChange={e => setSelectedPrimaryId(e.target.value)}
         >
@@ -269,7 +269,7 @@ export default function MatchCoreWorkbench({ goToFlywheel }: { goToFlywheel?: (i
             <div className="match-list-container__filters">
               <select
                 className="form-control"
-                style={{ width: 130, padding: '4px 8px', fontSize: 13 }}
+                style={{ width: 120, padding: '4px 8px', fontSize: 12 }}
                 value={filterRec}
                 onChange={e => setFilterRec(e.target.value)}
               >
@@ -281,7 +281,7 @@ export default function MatchCoreWorkbench({ goToFlywheel }: { goToFlywheel?: (i
               </select>
               <select
                 className="form-control"
-                style={{ width: 120, padding: '4px 8px', fontSize: 13 }}
+                style={{ width: 110, padding: '4px 8px', fontSize: 12 }}
                 value={sortField}
                 onChange={(e) => {
                   const nextSort = e.target.value;
@@ -298,6 +298,7 @@ export default function MatchCoreWorkbench({ goToFlywheel }: { goToFlywheel?: (i
                 <div className="empty-state">
                   <div className="empty-state__icon">📋</div>
                   <div className="empty-state__title">暂无匹配记录</div>
+                  <div>请选择商品或实体后查看匹配结果</div>
                 </div>
               ) : (
                 listItems.map(item => {
@@ -310,12 +311,12 @@ export default function MatchCoreWorkbench({ goToFlywheel }: { goToFlywheel?: (i
                     >
                       <div className="flex-between" style={{ marginBottom: 4 }}>
                         <span className="entity-list-item__name">{item.name}</span>
-                        <span className={meta.cls} style={{ fontWeight: 600, fontSize: 15 }}>
+                        <span className={meta.cls} style={{ fontWeight: 600, fontSize: 14 }}>
                           {(item.score * 100).toFixed(0)}分
                         </span>
                       </div>
                       <div className="flex-between" style={{ fontSize: 12 }}>
-                        <span style={{ color: 'var(--muted-foreground)' }}>
+                        <span className="match-entity-item__confidence">
                           置信度: {(item.confidence * 100).toFixed(0)}%
                         </span>
                         <span className={`status-badge ${getRecBadgeClass(item.rec)}`}>
@@ -332,11 +333,20 @@ export default function MatchCoreWorkbench({ goToFlywheel }: { goToFlywheel?: (i
 
         {/* Right Column: Match Detail (Explainable AI) */}
         <div className="match-workbench__right">
-          {!selectedSecondaryId ? (
+          {listItems.length === 0 ? (
+            <div className="match-workbench__right-empty">
+              <div className="empty-state">
+                <div className="empty-state__icon">📭</div>
+                <div className="empty-state__title">当前无匹配数据</div>
+                <div>由于无匹配记录，无法查看详细的诊断报告</div>
+              </div>
+            </div>
+          ) : !selectedSecondaryId ? (
             <div className="match-workbench__right-empty">
               <div className="empty-state">
                 <div className="empty-state__icon">🔍</div>
-                <div className="empty-state__title">请在左侧列表中选择一项查看详细的解释型匹配诊断</div>
+                <div className="empty-state__title">请在左侧列表中选择一项</div>
+                <div>查看详细的解释型匹配诊断报告</div>
               </div>
             </div>
           ) : detailLoading ? (
@@ -356,9 +366,9 @@ export default function MatchCoreWorkbench({ goToFlywheel }: { goToFlywheel?: (i
             <div className="match-workbench__right-content">
               
               {/* Report Header + Actions */}
-              <div className="flex-between" style={{ flexWrap: 'wrap', gap: 12 }}>
-                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>匹配决策解释报告</h3>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <div className="flex-between" style={{ flexWrap: 'wrap', gap: 10 }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>匹配决策解释报告</h3>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button className="btn btn-primary" onClick={async () => {
                     try {
                       const res = await api.createDecision({
@@ -388,19 +398,19 @@ export default function MatchCoreWorkbench({ goToFlywheel }: { goToFlywheel?: (i
 
               {/* Decision Recommendation + Score Metrics */}
               <div className="metric-grid">
-                <div className="metric-card metric-card--compact" style={{ borderLeft: `3px solid` }}>
+                <div className="metric-card metric-card--compact" style={{ borderLeft: '3px solid' }}>
                   <div className="metric-title">决策建议 (解释型)</div>
-                  <div className={`metric-value ${getRecMeta(matchDetail.recommendation).cls}`} style={{ fontSize: 20 }}>
+                  <div className={`metric-value ${getRecMeta(matchDetail.recommendation).cls}`} style={{ fontSize: 18 }}>
                     {getRecMeta(matchDetail.recommendation).label}
                   </div>
-                  <div className="metric-sub" style={{ marginTop: 8 }}>基于 PLS 数据对象与规则推演</div>
+                  <div className="metric-sub" style={{ marginTop: 6 }}>基于 PLS 数据对象与规则推演</div>
                 </div>
                 <div className="metric-card metric-card--compact">
                   <div className="metric-title">综合匹配得分</div>
                   <div className="metric-value">
-                    {(safeScore(matchDetail.matchScore) * 100).toFixed(1)} <span style={{ fontSize: 14, fontWeight: 'normal' }}>分</span>
+                    {(safeScore(matchDetail.matchScore) * 100).toFixed(1)} <span style={{ fontSize: 13, fontWeight: 'normal' }}>分</span>
                   </div>
-                  <div className="metric-sub" style={{ marginTop: 8 }}>
+                  <div className="metric-sub" style={{ marginTop: 6 }}>
                     <span>算法置信度</span>
                     <span style={{ fontWeight: 600 }}>{(safeScore(matchDetail.matchConfidence) * 100).toFixed(1)}%</span>
                   </div>
@@ -410,10 +420,12 @@ export default function MatchCoreWorkbench({ goToFlywheel }: { goToFlywheel?: (i
               {/* Positive Drivers */}
               <div className="section-divider">
                 <h4 className="section-divider__heading section-divider__heading--success">
-                  <span style={{ fontSize: 16 }}>✓</span> 相似/强契合标签 (Positive Drivers)
+                  <span>✓</span> 相似/强契合标签 (Positive Drivers)
                 </h4>
                 {matchDetail.positiveDrivers.length === 0 ? (
-                  <div style={{ color: 'var(--muted-foreground)', fontSize: 13 }}>未发现显著的强契合特征</div>
+                  <div className="empty-state" style={{ padding: '16px 12px' }}>
+                    <div className="empty-state__title">未发现显著的强契合特征</div>
+                  </div>
                 ) : (
                   <div className="driver-grid">
                     {matchDetail.positiveDrivers.map(d => (
@@ -431,10 +443,12 @@ export default function MatchCoreWorkbench({ goToFlywheel }: { goToFlywheel?: (i
               {/* Negative Drivers */}
               <div className="section-divider">
                 <h4 className="section-divider__heading section-divider__heading--danger">
-                  <span style={{ fontSize: 16 }}>✗</span> 冲突/分歧标签 (Negative Drivers)
+                  <span>✗</span> 冲突/分歧标签 (Negative Drivers)
                 </h4>
                 {matchDetail.negativeDrivers.length === 0 ? (
-                  <div style={{ color: 'var(--muted-foreground)', fontSize: 13 }}>未发现显著的人货分歧</div>
+                  <div className="empty-state" style={{ padding: '16px 12px' }}>
+                    <div className="empty-state__title">未发现显著的人货分歧</div>
+                  </div>
                 ) : (
                   <div className="driver-grid">
                     {matchDetail.negativeDrivers.map(d => (
@@ -450,10 +464,12 @@ export default function MatchCoreWorkbench({ goToFlywheel }: { goToFlywheel?: (i
               {/* Risks */}
               <div className="section-divider">
                 <h4 className="section-divider__heading section-divider__heading--warning">
-                  <span style={{ fontSize: 16 }}>⚠️</span> 业务风险提示 (Risks & Missing Tags)
+                  <span>⚠️</span> 业务风险提示 (Risks & Missing Tags)
                 </h4>
                 {matchDetail.risks.length === 0 ? (
-                  <div style={{ color: 'var(--muted-foreground)', fontSize: 13 }}>当前匹配无明显已知风险或严重标签缺失</div>
+                  <div className="empty-state" style={{ padding: '16px 12px' }}>
+                    <div className="empty-state__title">当前匹配无明显已知风险或严重标签缺失</div>
+                  </div>
                 ) : (
                   <ul className="risk-list">
                     {matchDetail.risks.map((r, i) => (

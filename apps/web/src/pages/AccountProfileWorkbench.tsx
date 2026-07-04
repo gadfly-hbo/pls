@@ -153,6 +153,7 @@ export default function AccountProfileWorkbench() {
             <div className="empty-state">
               <div className="empty-state__icon">🔍</div>
               <div className="empty-state__title">暂无匹配的实体</div>
+              <div>请前往数据管理导入实体数据</div>
             </div>
           ) : (
             Object.entries(groupedAccounts).map(([platform, accs]) => (
@@ -191,9 +192,10 @@ export default function AccountProfileWorkbench() {
         {error ? (
           <div className="alert-banner alert-banner--warning">⚠️ {error}</div>
         ) : !selectedAccountId ? (
-          <div className="empty-state">
+          <div className="empty-state" style={{ minHeight: 200 }}>
             <div className="empty-state__icon">👈</div>
             <div className="empty-state__title">请在左侧选择一个店铺或账号</div>
+            <div>选择后可查看画像分析和号货匹配决策</div>
           </div>
         ) : detailLoading && !accountProfile ? (
           <div className="empty-state">
@@ -297,7 +299,8 @@ export default function AccountProfileWorkbench() {
                   {accountProfile.coreTags.length === 0 ? (
                     <div className="empty-state">
                       <div className="empty-state__icon">📊</div>
-                      <div className="empty-state__title">暂无核心画像数据 (Unmapped / Empty)</div>
+                      <div className="empty-state__title">暂无核心画像数据</div>
+                      <div>可能是 Unmapped 或数据尚未导入</div>
                     </div>
                   ) : (
                     <div className="tag-grid">
@@ -310,15 +313,15 @@ export default function AccountProfileWorkbench() {
                     </div>
                   )}
                   
-                  <div style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-                    <div className="panel__title" style={{ fontSize: 14 }}>触点与互动偏好</div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                    <div className="panel__title" style={{ fontSize: 13 }}>触点与互动偏好</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       {accountProfile.interactionPreference.length > 0 ? (
                         accountProfile.interactionPreference.map(pref => (
-                          <span key={pref} className="tag" style={{ background: 'var(--background)' }}>{pref}</span>
+                          <span key={pref} className="tag" style={{ background: 'var(--background)', margin: 0 }}>{pref}</span>
                         ))
                       ) : (
-                        <span style={{ color: 'var(--muted-foreground)', fontSize: 14 }}>暂无明显偏好数据</span>
+                        <span className="empty-state" style={{ padding: '10px 16px', fontSize: 13 }}>暂无明显偏好数据</span>
                       )}
                     </div>
                   </div>
@@ -331,7 +334,7 @@ export default function AccountProfileWorkbench() {
                   <div className="toolbar__label">选择匹配目标商品 (SKU):</div>
                   <input 
                     className="form-control" 
-                    style={{ width: 200, flex: '0 1 200px' }}
+                    style={{ width: 180, flex: '0 1 180px' }}
                     value={skuId}
                     onChange={e => setSkuId(e.target.value)}
                     placeholder="输入 SKU ID"
@@ -348,17 +351,18 @@ export default function AccountProfileWorkbench() {
                     <div className="empty-state__title">分析计算中...</div>
                   </div>
                 ) : !matchResult ? (
-                  <div className="empty-state">
+                  <div className="empty-state" style={{ minHeight: 160 }}>
                     <div className="empty-state__icon">📋</div>
                     <div className="empty-state__title">输入商品ID并点击分析</div>
+                    <div>系统将计算号货匹配度并生成诊断报告</div>
                   </div>
                 ) : (
                   <>
                     <div className="metric-grid">
                       <div className="metric-card" style={{ background: 'var(--background)' }}>
                         <div className="metric-title">号货匹配综合得分 <span>ⓘ</span></div>
-                        <div className="metric-value" style={{ color: 'var(--primary)', fontSize: 32 }}>
-                          {(matchResult.fitScore * 100).toFixed(0)} <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--muted-foreground)' }}>分</span>
+                        <div className="metric-value" style={{ color: 'var(--primary)' }}>
+                          {(matchResult.fitScore * 100).toFixed(0)} <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--muted-foreground)' }}>分</span>
                         </div>
                         <div className="metric-sub">
                           <span>算法置信度</span>
@@ -369,14 +373,14 @@ export default function AccountProfileWorkbench() {
 
                     <div className="panel">
                       <h3 className="panel__title">匹配维度对比</h3>
-                      <div style={{ overflowX: 'auto' }}>
+                      <div className="data-table-wrapper">
                         <table className="data-table">
                           <thead>
                             <tr>
                               <th>匹配维度</th>
                               <th>当前实体特征</th>
                               <th>商品目标人群特征</th>
-                              <th style={{ width: 100 }}>对齐状态</th>
+                              <th style={{ width: 90 }}>对齐状态</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -405,13 +409,13 @@ export default function AccountProfileWorkbench() {
                           <div className="empty-state__title">当前匹配度极高，暂无优化建议。</div>
                         </div>
                       ) : (
-                        <div style={{ overflowX: 'auto' }}>
+                        <div className="data-table-wrapper">
                           <table className="data-table">
                             <thead>
                               <tr>
-                                <th style={{ width: 200 }}>优化项目</th>
+                                <th style={{ width: 180 }}>优化项目</th>
                                 <th>行动建议</th>
-                                <th style={{ width: 120 }}>状态</th>
+                                <th style={{ width: 100 }}>状态</th>
                               </tr>
                             </thead>
                             <tbody>

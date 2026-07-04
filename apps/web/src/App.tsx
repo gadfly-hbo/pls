@@ -6,16 +6,30 @@ import AccountProfileWorkbench from './pages/AccountProfileWorkbench';
 import FlywheelWorkbench from './pages/FlywheelWorkbench';
 import DataManagementWorkbench from './pages/DataManagementWorkbench';
 
+type ViewId = 'account-workbench' | 'match-core' | 'dashboard' | 'flywheel' | 'data-management';
+
+const NAV_ITEMS: { id: ViewId; label: string }[] = [
+  { id: 'account-workbench', label: '实体与账号画像' },
+  { id: 'match-core', label: '人货匹配核心工作台' },
+  { id: 'dashboard', label: '新品预测工作台' },
+  { id: 'flywheel', label: '经营飞轮' },
+  { id: 'data-management', label: '数据管理' },
+];
+
 function App() {
-  const [currentView, setCurrentView] = useState<'dashboard' | 'match-core' | 'account-workbench' | 'flywheel' | 'data-management'>('account-workbench');
+  const [currentView, setCurrentView] = useState<ViewId>('account-workbench');
   const [currentSku, setCurrentSku] = useState<SKU | null>(null);
   const [prediction, setPrediction] = useState<ProductProfile | null>(null);
   const [flywheelDecisionId, setFlywheelDecisionId] = useState<string | undefined>();
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    const isDark = document.documentElement.classList.contains('dark');
-    setTheme(isDark ? 'dark' : 'light');
+    const saved = localStorage.getItem('pls-theme');
+    if (saved === 'dark' || (!saved && document.documentElement.classList.contains('dark'))) {
+      setTheme('dark');
+      document.documentElement.classList.add('dark');
+    }
   }, []);
 
   const toggleTheme = () => {
@@ -29,54 +43,67 @@ function App() {
     localStorage.setItem('pls-theme', newTheme);
   };
 
+  const navigateTo = (view: ViewId) => {
+    setCurrentView(view);
+    setMobileMenuOpen(false);
+  };
+
   return (
-    <div className="layout">
-      <header className="header">
-        <div className="logo" style={{ fontSize: '18px', fontWeight: 'bold' }}>PLS 工作台</div>
-        <div className="header-nav">
-          <button 
-            className={currentView === 'account-workbench' ? 'active' : ''} 
-            onClick={() => setCurrentView('account-workbench')}
-          >
-            实体与账号画像
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="app-header__left">
+          <span className="app-header__brand">PLS 工作台</span>
+          <span className="app-header__env-badge">ws_demo</span>
+        </div>
+
+        {/* Desktop nav */}
+        <nav className="app-nav app-nav--desktop">
+          {NAV_ITEMS.map(item => (
+            <button
+              key={item.id}
+              className={`app-nav__item${currentView === item.id ? ' app-nav__item--active' : ''}`}
+              onClick={() => navigateTo(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="app-header__right">
+          <button className="app-header__theme-btn" onClick={toggleTheme} title="切换主题">
+            {theme === 'dark' ? '☀️' : '🌙'}
           </button>
-          <button 
-            className={currentView === 'match-core' ? 'active' : ''} 
-            onClick={() => setCurrentView('match-core')}
+          <button
+            className="app-header__hamburger"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="菜单"
           >
-            人货匹配核心工作台
-          </button>
-          <button 
-            className={currentView === 'dashboard' ? 'active' : ''} 
-            onClick={() => setCurrentView('dashboard')}
-          >
-            新品预测工作台
-          </button>
-          <button 
-            className={currentView === 'flywheel' ? 'active' : ''} 
-            onClick={() => setCurrentView('flywheel')}
-          >
-            经营飞轮
-          </button>
-          <button 
-            className={currentView === 'data-management' ? 'active' : ''} 
-            onClick={() => setCurrentView('data-management')}
-          >
-            数据管理
-          </button>
-          <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 8px', alignSelf: 'center' }} />
-          <button onClick={toggleTheme} title="切换主题">
-            {theme === 'dark' ? '☀️ 亮色' : '🌙 暗色'}
+            {mobileMenuOpen ? '✕' : '☰'}
           </button>
         </div>
       </header>
-      
-      <main className="content">
+
+      {/* Mobile nav overlay */}
+      {mobileMenuOpen && (
+        <nav className="app-nav app-nav--mobile">
+          {NAV_ITEMS.map(item => (
+            <button
+              key={item.id}
+              className={`app-nav__item${currentView === item.id ? ' app-nav__item--active' : ''}`}
+              onClick={() => navigateTo(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      )}
+
+      <main className="app-main">
         {currentView === 'account-workbench' && (
           <AccountProfileWorkbench />
         )}
         {currentView === 'match-core' && (
-          <MatchCoreWorkbench 
+          <MatchCoreWorkbench
             goToFlywheel={(decisionId) => {
               setFlywheelDecisionId(decisionId);
               setCurrentView('flywheel');
@@ -84,8 +111,8 @@ function App() {
           />
         )}
         {currentView === 'dashboard' && (
-          <Dashboard 
-            currentSku={currentSku} 
+          <Dashboard
+            currentSku={currentSku}
             setCurrentSku={setCurrentSku}
             prediction={prediction}
             setPrediction={setPrediction}

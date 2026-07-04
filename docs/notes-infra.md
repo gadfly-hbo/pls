@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-04（项目级提示词维护：AGENTS.md /learn 规则复核修正，wiki 常用 prompt 新增 /learn 沉淀复核 SOP）
+最近更新：2026-07-04（X-P3-UI-QUALITY-5 前端 UI 总体验收通过，docs/p3-ui-quality-acceptance.md 已更新为最终版）
 
 进度：
 
@@ -80,10 +80,14 @@
 - X-P3-DB-MGMT-4 验收中修复：`api.ts` 缺失 `DbOperationExecuteResult` import、Playwright import dry-run 拦截路径、真实数据列表空 id 导致 React duplicate key console error。
 - 已完成项目级提示词维护：复核 A/V agent 通过 `/learn` 写入 `AGENTS.md` 的经验规则，修正 Admin API 示例路径为 `/api/v0/admin/database/*`，明确 `USE_MOCK=true` 时 `page.route` 不会拦截真实请求，并收窄 Mock 同步规则只覆盖真实契约 / 默认本地体验。
 - 已在 `docs/wiki.html` 常用 prompts 新增 `PLS · /learn 沉淀复核 SOP`，用于复核其他 agent 学习后对 `AGENTS.md` 等项目级系统提示词的修改，要求识别冲突、过度泛化和路径 / API / Mock 表述不准，并只做最小文案修复。
+- 已完成 X-P3-UI-QUALITY-0，产出 `docs/p3-ui-quality-plan.md`；`docs/wiki.html` 已升级到 v0.42，并将 X-P3-UI-QUALITY-0 标记为 done。冻结 PLS 前端 UI 质量专项的 AppShell、组件 contract、响应式断点、五类空状态和页面族改造顺序；本卡未改前端业务代码、API / Mock / DB / 模型 contract。
+- 已完成 V-P3-UI-QUALITY-1 至 V-P3-UI-QUALITY-4 总控复核；`docs/wiki.html` 已升级到 v0.43，并将四张 V 域 UI 质量重构卡标记为 done。覆盖 AppShell、全局 Design Tokens、人货匹配、实体画像、新品预测、经营飞轮和数据管理复杂页面；总控修复真实后端数据管理 smoke 的 `ws_demo` strict mode selector。
+- 已完成 X-P3-UI-QUALITY-5 前端 UI 总体验收，`docs/p3-ui-quality-acceptance.md` 已更新为最终版；`docs/wiki.html` 已升级到 v0.45，并将 X-P3-UI-QUALITY-5 标记为 done。前端 lint / build / smoke、真实后端数据管理定向 Playwright、多宽度截图和 DOM 溢出检查均通过；MatchCoreWorkbench 空列表右侧状态已修复并复验通过。当前真实 API 人货匹配详情链路仍因 `ws_demo` 空业务数据未覆盖，列为剩余风险。
 
 下一步：
 
-- 以 `docs/wiki.html` v0.40 为当前任务状态真源；P2 主线、P2-UI、P3-DB 与 P3-DB-MGMT 全组已完成；常用 prompts 已包含 `/learn` 沉淀复核 SOP。
+- 以 `docs/wiki.html` v0.45 为当前任务状态真源；P2 主线、P2-UI、P3-DB、P3-DB-MGMT 与 P3-UI-QUALITY 全组已完成。
+- UI 总体验收已通过；若后续要求真实人货匹配详情链路演示，需要先通过受控导入 / 同步生成 channel entities 与 match 数据；当前 `ws_demo` 的 `/api/v0/channels/entities` 与 `/api/v0/matches/heatmap` 返回空数组。
 - 下一步如继续增强数据管理，应另开新卡，优先考虑后端数据包列表接口、临时 workspace 清理策略、admin token 获取方式和真实用户授权数据包模板。
 - 若需要恢复业务演示或 smoke 数据，需单独确认重放口径后通过受控导入路径重放 `data/demo`、`data/p1/douyin-bi` 或新的用户授权数据包；不得手工覆盖 SQLite 主库绕过 audit。
 - 其他后续增强仍需另开新卡：正式 fit formula、真实新品商品主数据接入、真实行动反馈字段和业务 demo 数据重放策略。
@@ -96,7 +100,7 @@
 - D-P1-A5 阻塞于 `data/local/raw_staging/<batchId>/` 真实样例输入缺失。
 - P1-E 的号货匹配度算法公式尚未冻结；M 域当前 `AccountFitAdapter` 只能作为 rule baseline 和 contract test，待用户提供算法后替换 implementation 并重跑 X 验收。
 - P2 / P3 当前仍缺正式 fit formula、真实新品主数据字段和真实行动反馈字段；相关实现只能保持 baseline / contract / 空库验证口径。
-- `ws_demo` 当前为空业务库；依赖历史商品、渠道、抖音 BI 或 demo 数据的业务 smoke / 页面流程需要先按后续任务重新导入数据。
+- 当前 `ws_demo` 有导入记录，但 `/api/v0/channels/entities` 与 `/api/v0/matches/heatmap` 返回空数组；依赖实体画像或人货匹配真实链路的业务 smoke / 页面流程需要先受控导入并同步 channel entities / match 数据。
 - P1-F 总体验收已通过；若后续新增页面重新以外链、iframe、静态 HTML 或截图承担主流程，需退回并重做产品化承接。
 - 旧归档文档中仍可能存在历史“红线/S0/S1”表述；当前执行入口以 `AGENTS.md`、`Orchestration.md`、`docs/data-safety-policy.md`、`docs/wiki.html` 当前任务卡和各域 notes 为准。
 - multipart `/batches` 幂等未纳入当前契约，未来若需要需设计文件摘要 + form fields hash。
@@ -104,6 +108,7 @@
 开放问题：
 
 - 抖音 BI `douyin_*` 数据当前投影到 `channel_entity`，不合并进通用 `channel_profile`；后续如需反向写入 `channel_profile` 需单独拍板。
+- 当前真实前端匹配 smoke 需要 channel entity 与 match heatmap 数据前置；是否通过重放 demo / douyin-bi 并执行 sync / match 生成来恢复演示数据，需单独确认。
 - 正式 fit formula、商品主数据字段和真实行动反馈字段仍待用户后续提供或冻结。
 - `data_source` 当前以 `source_id` 单列为主键；若后续支持多 workspace 复用同名 sourceId，需评估是否迁移为 `(workspace_id, source_id)` 复合主键。
 

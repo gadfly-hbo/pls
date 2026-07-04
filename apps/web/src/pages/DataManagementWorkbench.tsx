@@ -168,7 +168,7 @@ export default function DataManagementWorkbench() {
   ];
 
   return (
-    <div className="data-management-workbench">
+    <div className="data-management-workbench" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="page-header">
         <div className="page-header__info">
           <h2 className="page-header__title">数据管理</h2>
@@ -178,11 +178,11 @@ export default function DataManagementWorkbench() {
         </div>
       </div>
 
-      <div className="segmented-control" style={{ margin: '0 20px 20px', display: 'flex', gap: 8, overflowX: 'auto' }}>
+      <div className="segmented-control" style={{ display: 'flex', gap: 4, overflowX: 'auto', flexWrap: 'wrap' }}>
         {tabs.map(tab => (
           <button
             key={tab.key}
-            className={`btn ${activeTab === tab.key ? 'btn--primary' : ''}`}
+            className={`segmented-control__btn${activeTab === tab.key ? ' segmented-control__btn--active' : ''}`}
             onClick={() => setActiveTab(tab.key)}
           >
             {tab.label}
@@ -190,61 +190,61 @@ export default function DataManagementWorkbench() {
         ))}
       </div>
 
-      <div style={{ padding: '0 20px' }}>
-        {loading && <div style={{ marginBottom: 16 }}>正在加载...</div>}
+      <div>
+        {loading && <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--muted-foreground)' }}>正在加载...</div>}
 
         {!loading && activeTab === 'overview' && overview && (
           <div className="panel">
             <h3 className="panel__title">数据库总览</h3>
-            <div className="metric-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+            <div className="metric-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
               <div className="metric-card"><div className="metric-card__title">工作区</div><div className="metric-card__value">{overview.workspaceId}</div></div>
               <div className="metric-card"><div className="metric-card__title">状态</div><div className="metric-card__value">{overview.databaseStatus}</div></div>
               <div className="metric-card"><div className="metric-card__title">Schema 版本</div><div className="metric-card__value">{overview.schemaVersion}</div></div>
               <div className="metric-card">
                 <div className="metric-card__title">Migration 状态</div>
-                <div className="metric-card__value" style={{ fontSize: 16 }}>
+                <div className="metric-card__value" style={{ fontSize: 15 }}>
                   {overview.migrationStatus.applied} / {overview.migrationStatus.total} 
-                  {overview.migrationStatus.failed > 0 && <span style={{ color: 'var(--danger)', marginLeft: 8 }}>({overview.migrationStatus.failed} failed)</span>}
+                  {overview.migrationStatus.failed > 0 && <span style={{ color: 'var(--destructive)', marginLeft: 8 }}>({overview.migrationStatus.failed} failed)</span>}
                 </div>
               </div>
               <div className="metric-card"><div className="metric-card__title">表 / 视图数量</div><div className="metric-card__value">{overview.tableCount} / {overview.viewCount}</div></div>
               <div className="metric-card"><div className="metric-card__title">总行数</div><div className="metric-card__value">{overview.totalRows}</div></div>
             </div>
 
-            <h4 style={{ marginTop: 24, marginBottom: 12 }}>数据标识</h4>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <h4 style={{ marginTop: 20, marginBottom: 10, fontSize: 14 }}>数据标识</h4>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <span className={`status-badge ${overview.hasMockData ? 'status-badge--warning' : 'status-badge--neutral'}`}>Mock 数据: {overview.hasMockData ? '存在' : '无'}</span>
               <span className={`status-badge ${overview.hasSmokeData ? 'status-badge--warning' : 'status-badge--neutral'}`}>Smoke 数据: {overview.hasSmokeData ? '存在' : '无'}</span>
               <span className={`status-badge ${overview.hasE2eData ? 'status-badge--warning' : 'status-badge--neutral'}`}>E2E 数据: {overview.hasE2eData ? '存在' : '无'}</span>
               <span className={`status-badge ${overview.hasUserAuthorizedData ? 'status-badge--success' : 'status-badge--neutral'}`}>用户授权数据: {overview.hasUserAuthorizedData ? '存在' : '无'}</span>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20, marginTop: 24 }}>
-              <div className="panel" style={{ margin: 0, padding: 16 }}>
-                <h4 style={{ margin: '0 0 12px 0' }}>最近导入</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, marginTop: 20 }}>
+              <div className="panel" style={{ margin: 0, padding: 14 }}>
+                <h4 style={{ margin: '0 0 10px 0', fontSize: 14 }}>最近导入</h4>
                 {imports.length > 0 ? (
-                  <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13 }}>
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
                     {imports.slice(0, 3).map((imp, index) => (
                       <li key={imp.jobId || `recent-import-${index}`} style={{ marginBottom: 4 }}>
                         {new Date(imp.startedAt).toLocaleString()} - {imp.sourceType} 
-                        <span className={`status-badge status-badge--${imp.status === 'succeeded' ? 'success' : 'neutral'}`} style={{ marginLeft: 8 }}>{imp.status}</span>
+                        <span className={`status-badge status-badge--${imp.status === 'succeeded' ? 'success' : 'neutral'}`} style={{ marginLeft: 6 }}>{imp.status}</span>
                       </li>
                     ))}
                   </ul>
-                ) : <span style={{ fontSize: 13, color: 'var(--muted)' }}>暂无导入记录</span>}
+                ) : <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>暂无导入记录</span>}
               </div>
-              <div className="panel" style={{ margin: 0, padding: 16 }}>
-                <h4 style={{ margin: '0 0 12px 0' }}>最近危险操作</h4>
+              <div className="panel" style={{ margin: 0, padding: 14 }}>
+                <h4 style={{ margin: '0 0 10px 0', fontSize: 14 }}>最近危险操作</h4>
                 {audits.length > 0 ? (
-                  <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13 }}>
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
                     {audits.slice(0, 3).map((aud, index) => (
                       <li key={aud.eventId || `recent-audit-${index}`} style={{ marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {new Date(aud.createdAt).toLocaleString()} - <strong>{aud.operation}</strong> on {aud.target}
-                        <span className={`status-badge status-badge--${aud.status === 'success' ? 'success' : 'danger'}`} style={{ marginLeft: 8 }}>{aud.status}</span>
+                        <span className={`status-badge status-badge--${aud.status === 'success' ? 'success' : 'danger'}`} style={{ marginLeft: 6 }}>{aud.status}</span>
                       </li>
                     ))}
                   </ul>
-                ) : <span style={{ fontSize: 13, color: 'var(--muted)' }}>暂无危险操作记录</span>}
+                ) : <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>暂无危险操作记录</span>}
               </div>
             </div>
           </div>
@@ -253,29 +253,29 @@ export default function DataManagementWorkbench() {
         {!loading && activeTab === 'tables' && (
           <div className="panel">
             <h3 className="panel__title">库表明细</h3>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+            <div className="data-table-wrapper">
+              <table className="data-table">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ padding: '8px 4px' }}>表/视图名</th>
-                    <th style={{ padding: '8px 4px' }}>类型</th>
-                    <th style={{ padding: '8px 4px' }}>行数</th>
-                    <th style={{ padding: '8px 4px' }}>所属域</th>
-                    <th style={{ padding: '8px 4px' }}>系统表</th>
-                    <th style={{ padding: '8px 4px' }}>操作</th>
+                  <tr>
+                    <th>表/视图名</th>
+                    <th>类型</th>
+                    <th>行数</th>
+                    <th>所属域</th>
+                    <th>系统表</th>
+                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {tables.map(t => (
-                    <tr key={t.name} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '8px 4px', fontWeight: 500 }}>{t.name}</td>
-                      <td style={{ padding: '8px 4px' }}>{t.type}</td>
-                      <td style={{ padding: '8px 4px' }}>{t.rowCount}</td>
-                      <td style={{ padding: '8px 4px' }}>{t.domain}</td>
-                      <td style={{ padding: '8px 4px' }}>
+                    <tr key={t.name}>
+                      <td style={{ fontWeight: 500 }}>{t.name}</td>
+                      <td>{t.type}</td>
+                      <td>{t.rowCount}</td>
+                      <td>{t.domain}</td>
+                      <td>
                         {t.isSystem ? <span className="status-badge status-badge--warning">是</span> : <span className="status-badge status-badge--neutral">否</span>}
                       </td>
-                      <td style={{ padding: '8px 4px' }}>
+                      <td>
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           <button className="btn" onClick={() => viewTableDetails(t.name)}>详情</button>
                           {t.isClearable && <button className="btn btn--danger" onClick={() => handleStartOperation('CLEAR_TABLE', t.name)}>清空</button>}
@@ -289,27 +289,27 @@ export default function DataManagementWorkbench() {
             </div>
 
             {selectedTable && (
-              <div style={{ marginTop: 24, padding: 16, background: 'var(--bg)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <h4 style={{ margin: 0 }}>表详情: {selectedTable}</h4>
+              <div style={{ marginTop: 20, padding: 14, background: 'var(--background)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                <div className="flex-between" style={{ marginBottom: 10 }}>
+                  <h4 style={{ margin: 0, fontSize: 14 }}>表详情: {selectedTable}</h4>
                   <button className="btn" onClick={() => setSelectedTable(null)}>关闭</button>
                 </div>
                 
-                <h5 style={{ marginTop: 12, marginBottom: 8 }}>Schema</h5>
+                <h5 style={{ marginTop: 10, marginBottom: 6, fontSize: 13 }}>Schema</h5>
                 {tableSchema ? (
-                  <pre style={{ background: 'var(--panel)', padding: 12, borderRadius: 6, fontSize: 12, overflowX: 'auto', border: '1px solid var(--border)' }}>
+                  <pre style={{ background: 'var(--card)', padding: 10, borderRadius: 6, fontSize: 11, overflowX: 'auto', border: '1px solid var(--border)', margin: 0 }}>
                     {tableSchema.sql}
                   </pre>
-                ) : <div>加载 Schema 中...</div>}
+                ) : <div style={{ fontSize: 13 }}>加载 Schema 中...</div>}
 
-                <h5 style={{ marginTop: 16, marginBottom: 8 }}>前 50 行样例</h5>
+                <h5 style={{ marginTop: 14, marginBottom: 6, fontSize: 13 }}>前 50 行样例</h5>
                 {tableSample ? (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ borderCollapse: 'collapse', fontSize: 12, width: 'max-content' }}>
+                  <div className="data-table-wrapper">
+                    <table className="data-table" style={{ width: 'max-content' }}>
                       <thead>
                         <tr>
                           {tableSample.columns.map((c, i) => (
-                            <th key={i} style={{ border: '1px solid var(--border)', padding: '4px 8px', background: 'var(--panel)' }}>{c}</th>
+                            <th key={i}>{c}</th>
                           ))}
                         </tr>
                       </thead>
@@ -317,19 +317,19 @@ export default function DataManagementWorkbench() {
                         {tableSample.rows.map((row, rIdx) => (
                           <tr key={rIdx}>
                             {row.map((cell, cIdx) => (
-                              <td key={cIdx} style={{ border: '1px solid var(--border)', padding: '4px 8px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <td key={cIdx} style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {String(cell)}
                               </td>
                             ))}
                           </tr>
                         ))}
                         {tableSample.rows.length === 0 && (
-                          <tr><td colSpan={tableSample.columns.length} style={{ border: '1px solid var(--border)', padding: '8px', textAlign: 'center' }}>无数据</td></tr>
+                          <tr><td colSpan={tableSample.columns.length} style={{ textAlign: 'center' }}>无数据</td></tr>
                         )}
                       </tbody>
                     </table>
                   </div>
-                ) : <div>加载样例数据中...</div>}
+                ) : <div style={{ fontSize: 13 }}>加载样例数据中...</div>}
               </div>
             )}
           </div>
@@ -337,10 +337,10 @@ export default function DataManagementWorkbench() {
 
         {!loading && activeTab === 'imports' && (
           <div className="panel">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+            <div className="flex-between" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
               <h3 className="panel__title" style={{ margin: 0 }}>数据导入历史</h3>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <select id="importPackage" className="btn" style={{ background: 'var(--bg)', padding: '6px 12px', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <select id="importPackage" className="form-control" style={{ width: 'auto', fontSize: 13 }}>
                   <option value="douyin-bi">douyin-bi</option>
                   <option value="demo">demo</option>
                 </select>
@@ -350,30 +350,30 @@ export default function DataManagementWorkbench() {
                 }}>导入数据包</button>
               </div>
             </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+            <div className="data-table-wrapper">
+              <table className="data-table">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ padding: '8px 4px' }}>Job ID</th>
-                    <th style={{ padding: '8px 4px' }}>数据源类型</th>
-                    <th style={{ padding: '8px 4px' }}>状态</th>
-                    <th style={{ padding: '8px 4px' }}>行数 (成功/错误)</th>
-                    <th style={{ padding: '8px 4px' }}>开始时间</th>
+                  <tr>
+                    <th>Job ID</th>
+                    <th>数据源类型</th>
+                    <th>状态</th>
+                    <th>行数 (成功/错误)</th>
+                    <th>开始时间</th>
                   </tr>
                 </thead>
                 <tbody>
                   {imports.map((job, index) => (
-                    <tr key={job.jobId || `import-${index}`} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '8px 4px' }}>{job.jobId}</td>
-                      <td style={{ padding: '8px 4px' }}>{job.sourceType}</td>
-                      <td style={{ padding: '8px 4px' }}>
+                    <tr key={job.jobId || `import-${index}`}>
+                      <td>{job.jobId}</td>
+                      <td>{job.sourceType}</td>
+                      <td>
                         <span className={`status-badge ${job.status === 'succeeded' ? 'status-badge--success' : 'status-badge--neutral'}`}>{job.status}</span>
                       </td>
-                      <td style={{ padding: '8px 4px' }}>{job.rowCount} ({job.successCount} / {job.errorCount})</td>
-                      <td style={{ padding: '8px 4px' }}>{new Date(job.startedAt).toLocaleString()}</td>
+                      <td>{job.rowCount} ({job.successCount} / {job.errorCount})</td>
+                      <td>{new Date(job.startedAt).toLocaleString()}</td>
                     </tr>
                   ))}
-                  {imports.length === 0 && <tr><td colSpan={5} style={{ padding: 12, textAlign: 'center' }}>暂无导入记录</td></tr>}
+                  {imports.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center' }}>暂无导入记录</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -383,32 +383,32 @@ export default function DataManagementWorkbench() {
         {!loading && activeTab === 'versions' && (
           <div className="panel">
             <h3 className="panel__title">数据版本管理</h3>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+            <div className="data-table-wrapper">
+              <table className="data-table">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ padding: '8px 4px' }}>版本号</th>
-                    <th style={{ padding: '8px 4px' }}>来源</th>
-                    <th style={{ padding: '8px 4px' }}>类型</th>
-                    <th style={{ padding: '8px 4px' }}>导入行数</th>
-                    <th style={{ padding: '8px 4px' }}>创建时间</th>
-                    <th style={{ padding: '8px 4px' }}>操作</th>
+                  <tr>
+                    <th>版本号</th>
+                    <th>来源</th>
+                    <th>类型</th>
+                    <th>导入行数</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {versions.map((v, index) => (
-                    <tr key={v.dataVersion || `version-${index}`} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '8px 4px', fontWeight: 500 }}>{v.dataVersion}</td>
-                      <td style={{ padding: '8px 4px' }}>{v.source}</td>
-                      <td style={{ padding: '8px 4px' }}>{v.sourceType}</td>
-                      <td style={{ padding: '8px 4px' }}>{v.rowCount}</td>
-                      <td style={{ padding: '8px 4px' }}>{new Date(v.createdAt).toLocaleString()}</td>
-                      <td style={{ padding: '8px 4px' }}>
+                    <tr key={v.dataVersion || `version-${index}`}>
+                      <td style={{ fontWeight: 500 }}>{v.dataVersion}</td>
+                      <td>{v.source}</td>
+                      <td>{v.sourceType}</td>
+                      <td>{v.rowCount}</td>
+                      <td>{new Date(v.createdAt).toLocaleString()}</td>
+                      <td>
                         <button className="btn btn--danger" onClick={() => handleStartOperation('DELETE_VERSION', v.dataVersion)}>删除</button>
                       </td>
                     </tr>
                   ))}
-                  {versions.length === 0 && <tr><td colSpan={5} style={{ padding: 12, textAlign: 'center' }}>暂无数据版本</td></tr>}
+                  {versions.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center' }}>暂无数据版本</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -417,34 +417,34 @@ export default function DataManagementWorkbench() {
 
         {!loading && activeTab === 'schema' && (
           <div className="panel">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+            <div className="flex-between" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
               <h3 className="panel__title" style={{ margin: 0 }}>Schema 变更记录</h3>
               <button className="btn btn--primary" onClick={() => handleStartOperation('APPLY_MIGRATIONS', 'all')}>Apply Migrations</button>
             </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+            <div className="data-table-wrapper">
+              <table className="data-table">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ padding: '8px 4px' }}>版本</th>
-                    <th style={{ padding: '8px 4px' }}>迁移名称</th>
-                    <th style={{ padding: '8px 4px' }}>状态</th>
-                    <th style={{ padding: '8px 4px' }}>执行时间</th>
-                    <th style={{ padding: '8px 4px' }}>校验和</th>
+                  <tr>
+                    <th>版本</th>
+                    <th>迁移名称</th>
+                    <th>状态</th>
+                    <th>执行时间</th>
+                    <th>校验和</th>
                   </tr>
                 </thead>
                 <tbody>
                   {migrations.map((m, index) => (
-                    <tr key={m.version || `migration-${index}`} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '8px 4px', fontWeight: 500 }}>{m.version}</td>
-                      <td style={{ padding: '8px 4px' }}>{m.name}</td>
-                      <td style={{ padding: '8px 4px' }}>
+                    <tr key={m.version || `migration-${index}`}>
+                      <td style={{ fontWeight: 500 }}>{m.version}</td>
+                      <td>{m.name}</td>
+                      <td>
                         <span className={`status-badge ${m.status === 'applied' ? 'status-badge--success' : 'status-badge--warning'}`}>{m.status}</span>
                       </td>
-                      <td style={{ padding: '8px 4px' }}>{new Date(m.appliedAt).toLocaleString()}</td>
-                      <td style={{ padding: '8px 4px', fontFamily: 'monospace' }}>{m.checksum}</td>
+                      <td>{new Date(m.appliedAt).toLocaleString()}</td>
+                      <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{m.checksum}</td>
                     </tr>
                   ))}
-                  {migrations.length === 0 && <tr><td colSpan={5} style={{ padding: 12, textAlign: 'center' }}>暂无迁移记录</td></tr>}
+                  {migrations.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center' }}>暂无迁移记录</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -455,27 +455,28 @@ export default function DataManagementWorkbench() {
           <div className="panel">
             <h3 className="panel__title">操作日志</h3>
             
-            <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
               <input 
                 type="text" 
-                placeholder="按操作类型过滤 (Operation)..." 
+                placeholder="按操作类型过滤..." 
                 value={auditFilterOp} 
                 onChange={e => setAuditFilterOp(e.target.value)}
-                className="input"
-                style={{ padding: '6px 12px', border: '1px solid var(--border)', borderRadius: 4 }}
+                className="form-control"
+                style={{ width: 'auto', flex: '0 1 160px' }}
               />
               <input 
                 type="text" 
-                placeholder="按目标过滤 (Target)..." 
+                placeholder="按目标过滤..." 
                 value={auditFilterTarget} 
                 onChange={e => setAuditFilterTarget(e.target.value)}
-                className="input"
-                style={{ padding: '6px 12px', border: '1px solid var(--border)', borderRadius: 4 }}
+                className="form-control"
+                style={{ width: 'auto', flex: '0 1 160px' }}
               />
               <select 
                 value={auditFilterStatus} 
                 onChange={e => setAuditFilterStatus(e.target.value)}
-                style={{ padding: '6px 12px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg)' }}
+                className="form-control"
+                style={{ width: 'auto', flex: '0 1 120px' }}
               >
                 <option value="">所有状态</option>
                 <option value="success">Success</option>
@@ -483,17 +484,17 @@ export default function DataManagementWorkbench() {
               </select>
             </div>
 
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+            <div className="data-table-wrapper">
+              <table className="data-table">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ padding: '8px 4px' }}>事件 ID</th>
-                    <th style={{ padding: '8px 4px' }}>操作类型</th>
-                    <th style={{ padding: '8px 4px' }}>目标</th>
-                    <th style={{ padding: '8px 4px' }}>状态</th>
-                    <th style={{ padding: '8px 4px' }}>错误信息</th>
-                    <th style={{ padding: '8px 4px' }}>发生时间</th>
-                    <th style={{ padding: '8px 4px' }}>快照</th>
+                  <tr>
+                    <th>事件 ID</th>
+                    <th>操作类型</th>
+                    <th>目标</th>
+                    <th>状态</th>
+                    <th>错误信息</th>
+                    <th>发生时间</th>
+                    <th>快照</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -502,21 +503,21 @@ export default function DataManagementWorkbench() {
                     (!auditFilterTarget || a.target.toLowerCase().includes(auditFilterTarget.toLowerCase())) &&
                     (!auditFilterStatus || a.status === auditFilterStatus)
                   ).map((evt, index) => (
-                    <tr key={evt.eventId || `audit-${index}`} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '8px 4px' }}>{evt.eventId}</td>
-                      <td style={{ padding: '8px 4px', fontWeight: 500 }}>{evt.operation}</td>
-                      <td style={{ padding: '8px 4px' }}>{evt.target}</td>
-                      <td style={{ padding: '8px 4px' }}>
+                    <tr key={evt.eventId || `audit-${index}`}>
+                      <td style={{ fontSize: 11 }}>{evt.eventId}</td>
+                      <td style={{ fontWeight: 500 }}>{evt.operation}</td>
+                      <td>{evt.target}</td>
+                      <td>
                         <span className={`status-badge ${evt.status === 'success' ? 'status-badge--success' : 'status-badge--danger'}`}>{evt.status}</span>
                       </td>
-                      <td style={{ padding: '8px 4px', color: 'var(--danger)' }}>{evt.error || '-'}</td>
-                      <td style={{ padding: '8px 4px' }}>{new Date(evt.createdAt).toLocaleString()}</td>
-                      <td style={{ padding: '8px 4px' }}>
-                        {evt.snapshot ? <pre style={{ margin: 0, fontSize: 10, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{JSON.stringify(evt.snapshot)}</pre> : '-'}
+                      <td style={{ color: 'var(--destructive)', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{evt.error || '-'}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{new Date(evt.createdAt).toLocaleString()}</td>
+                      <td>
+                        {evt.snapshot ? <pre style={{ margin: 0, fontSize: 10, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{JSON.stringify(evt.snapshot)}</pre> : '-'}
                       </td>
                     </tr>
                   ))}
-                  {audits.length === 0 && <tr><td colSpan={6} style={{ padding: 12, textAlign: 'center' }}>暂无操作日志</td></tr>}
+                  {audits.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center' }}>暂无操作日志</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -525,15 +526,12 @@ export default function DataManagementWorkbench() {
 
         {activeTab === 'dangerous' && (
           <div className="panel">
-            <h3 className="panel__title" style={{ color: 'var(--danger)' }}>危险操作</h3>
+            <h3 className="panel__title" style={{ color: 'var(--destructive)' }}>危险操作</h3>
             <div className="alert-banner alert-banner--warning">
-              <div className="alert-banner__icon">⚠️</div>
-              <div className="alert-banner__content">
-                <strong>注意：</strong> 重建整个数据库将清空所有数据并重新运行迁移，请谨慎操作。
-              </div>
+              ⚠️ <strong>注意：</strong> 重建整个数据库将清空所有数据并重新运行迁移，请谨慎操作。
             </div>
             
-            <div style={{ marginTop: 24, display: 'flex', gap: 12 }}>
+            <div style={{ marginTop: 20, display: 'flex', gap: 10 }}>
                <button className="btn btn--danger" onClick={() => handleStartOperation('RESET', 'ws_demo')}>重建整个数据库 (Rebuild)</button>
             </div>
           </div>
@@ -561,34 +559,32 @@ export default function DataManagementWorkbench() {
             {opExecuteResult ? (
               <div>
                 <div className={`alert-banner alert-banner--${opExecuteResult.status === 'success' || opExecuteResult.success ? 'success' : 'danger'}`}>
-                  <div className="alert-banner__content">
-                    <strong>执行结果:</strong> {opExecuteResult.status || (opExecuteResult.success ? 'success' : 'failed')}
-                  </div>
+                  <strong>执行结果:</strong> {opExecuteResult.status || (opExecuteResult.success ? 'success' : 'failed')}
                 </div>
-                {opExecuteResult.auditId && <p style={{ margin: '8px 0 4px' }}><strong>Audit ID:</strong> {opExecuteResult.auditId}</p>}
+                {opExecuteResult.auditId && <p style={{ margin: '8px 0 4px', fontSize: 13 }}><strong>Audit ID:</strong> {opExecuteResult.auditId}</p>}
                 {opExecuteResult.warnings && opExecuteResult.warnings.length > 0 && (
-                  <div style={{ margin: '8px 0', padding: 8, background: 'var(--panel)', color: 'var(--danger)', borderRadius: 4 }}>
+                  <div style={{ margin: '8px 0', padding: 8, background: 'var(--background)', color: 'var(--destructive)', borderRadius: 6, fontSize: 13 }}>
                     <strong>Warnings:</strong>
-                    <ul style={{ margin: '4px 0 0', paddingLeft: 20, fontSize: 13 }}>
+                    <ul style={{ margin: '4px 0 0', paddingLeft: 18, fontSize: 12 }}>
                       {opExecuteResult.warnings.map((w, i) => <li key={i}>{w}</li>)}
                     </ul>
                   </div>
                 )}
                 {opExecuteResult.afterSnapshot && (
                   <div style={{ marginTop: 8 }}>
-                    <strong>After Snapshot:</strong>
-                    <pre style={{ margin: '4px 0 0', fontSize: 11, background: 'var(--bg)', padding: 8, borderRadius: 4, maxHeight: 150, overflow: 'auto' }}>
+                    <strong style={{ fontSize: 13 }}>After Snapshot:</strong>
+                    <pre style={{ margin: '4px 0 0', fontSize: 11, background: 'var(--background)', padding: 8, borderRadius: 4, maxHeight: 140, overflow: 'auto', border: '1px solid var(--border)' }}>
                       {JSON.stringify(opExecuteResult.afterSnapshot, null, 2)}
                     </pre>
                   </div>
                 )}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
                   <button className="btn" onClick={() => setOpModalOpen(false)}>完成 / 关闭</button>
                 </div>
               </div>
             ) : (
               <>
-                {opExecuting && !opDryRun ? <div style={{ marginBottom: 16 }}>加载影响分析中...</div> : null}
+                {opExecuting && !opDryRun ? <div style={{ marginBottom: 14, fontSize: 13 }}>加载影响分析中...</div> : null}
                 {opDryRun && (
                   <div className="operation-modal__impact">
                     <div className="operation-modal__impact-grid">
@@ -608,13 +604,13 @@ export default function DataManagementWorkbench() {
                       </div>
                     </div>
                     <div className="operation-modal__tables">
-                      <span className="operation-modal__label">影响表</span>
+                      <span className="operation-modal__label">影响表:</span>
                       <span>{opDryRun.affectedTables?.join(', ') || '无'}</span>
                     </div>
                     {opDryRun.warnings && opDryRun.warnings.length > 0 && (
-                      <div style={{ margin: '8px 0 4px', color: 'var(--danger)' }}>
-                        <strong>Warnings:</strong>
-                        <ul style={{ margin: '4px 0 0', paddingLeft: 20, fontSize: 13 }}>
+                      <div style={{ margin: '8px 0 4px', color: 'var(--destructive)' }}>
+                        <strong style={{ fontSize: 13 }}>Warnings:</strong>
+                        <ul style={{ margin: '4px 0 0', paddingLeft: 18, fontSize: 12 }}>
                           {opDryRun.warnings.map((w, i) => <li key={i}>{w}</li>)}
                         </ul>
                       </div>
@@ -629,22 +625,22 @@ export default function DataManagementWorkbench() {
                     )}
                   </div>
                 )}
-                {opError && <div style={{ color: 'var(--danger)', marginBottom: 16 }}>{opError}</div>}
+                {opError && <div style={{ color: 'var(--destructive)', marginBottom: 14, fontSize: 13 }}>{opError}</div>}
 
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                    请输入 <code>{opDryRun?.requiredConfirmText || '加载中...'}</code> 以确认执行:
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ display: 'block', marginBottom: 6, fontWeight: 500, fontSize: 13 }}>
+                    请输入 <code style={{ background: 'var(--secondary)', padding: '1px 6px', borderRadius: 4, fontSize: 12 }}>{opDryRun?.requiredConfirmText || '加载中...'}</code> 以确认执行:
                   </label>
                   <input 
                     type="text" 
                     value={opConfirmText} 
                     onChange={e => setOpConfirmText(e.target.value)} 
-                    style={{ width: '100%', padding: '8px', border: '1px solid var(--border)', borderRadius: 4, boxSizing: 'border-box' }}
+                    className="form-control"
                     disabled={!opDryRun}
                   />
                 </div>
                 
-                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                   <button className="btn" onClick={() => setOpModalOpen(false)}>取消</button>
                   <button 
                     className="btn btn--danger" 

@@ -516,7 +516,7 @@ agy
 </div>
 
 <script>
-const VERSION = "0.34";
+const VERSION = "0.45";
 
 const DOMAINS = {
   X: { name: "总控", agent: "主控 Agent", color: "var(--x)" },
@@ -2723,6 +2723,246 @@ Handoff：
 - 修复 apps/web/src/pages/DataManagementWorkbench.tsx 真实数据列表空 id 导致的 React duplicate key console error。
 - 复核验证：server typecheck、schema:check、smoke:admin-summary allOk=true；web lint、build、smoke 通过；真实后端数据管理读验证与受控操作链路定向 Playwright 均通过。
 - 本轮未对 ws_demo 执行未确认的破坏性正式操作；API dangerous execute 由隔离临时 workspace 验证。`
+  },
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-04 17:18",
+    title: "X-P3-UI-QUALITY-0：PLS 前端 UI 质量方案冻结",
+    brief: `目标：冻结 PLS 全产品前端 UI 质量标准、工作台 shell、响应式断点和组件系统，为后续 V 域改造提供统一验收口径。
+
+背景：
+- 当前 PLS 前端在缩放和窄屏下存在导航挤压、面板空洞、空状态不清晰、页面私有样式分散等问题。
+- 用户要求重新梳理整个 PLS 产品前端，产出高质量 UI，不再做单点视觉补丁。
+- 本轮是 UI 质量专项，不修改 A/M/D API contract、DB schema、模型 contract 或数据准入口径。
+
+范围：
+1. 复核 apps/web/src/App.tsx、apps/web/src/index.css 和五个主页面的信息层级与响应式问题。
+2. 冻结产品级 AppShell：顶部导航、workspace/dataVersion 状态、主题切换、窄屏折叠菜单。
+3. 冻结通用工作台组件：PageHeader、WorkbenchToolbar、ObjectListPane、InspectorPane、EmptyState、StatusBadge、MetricCard、DataTable、OperationModal。
+4. 冻结断点与布局策略：桌面双栏/三栏，平板压缩工具栏，移动端列表与详情分步展示或抽屉化。
+5. 冻结五类空状态：空库、空筛选、未选择、加载中、失败，并要求给出业务原因和下一步动作。
+6. 输出 docs/p3-ui-quality-plan.md，并在 wiki 中确认后续 V-P3-UI-QUALITY 实现卡边界。
+
+非目标：
+- 不直接改前端业务代码。
+- 不新增依赖。
+- 不重写业务流程。
+- 不改真实 API、Mock contract、DB schema 或模型字段。
+
+验收：
+- 文档明确目标页面、组件清单、断点、截图验收尺寸和禁止事项。
+- 后续 V 域任务可按同一组件系统串行执行。
+- 明确第一优先级为人货匹配工作台，其次再推广到其他页面族。
+
+总控归档：
+- 新增 docs/p3-ui-quality-plan.md，冻结 PLS 前端 UI 质量专项的 AppShell、组件 contract、断点、空状态、页面族改造顺序和验收方式。
+- 只读复核 apps/web/src/App.tsx、apps/web/src/index.css、AccountProfileWorkbench、MatchCoreWorkbench、Dashboard、FlywheelWorkbench、DataManagementWorkbench，确认主要问题为导航挤压、页面私有样式分散、人货匹配空态与详情比例失衡、复杂表格和弹窗响应式规则不足。
+- 冻结后续顺序：V-P3-UI-QUALITY-1 先做应用壳层与全局响应式，V-P3-UI-QUALITY-2 优先改人货匹配，再推广到实体画像 / 新品预测、经营飞轮 / 数据管理。
+- 本卡为方案冻结，不改前端业务代码、不改 API / Mock / DB / 模型 contract，未运行前端 lint / build / smoke；后续 V 实现卡必须按文档要求补齐命令和截图验收。`
+  },
+  {
+    dom: "V",
+    status: "done",
+    created: "2026-07-04 17:19",
+    title: "V-P3-UI-QUALITY-1：应用壳层与全局响应式重构",
+    brief: `目标：重构 PLS 前端应用壳层和全局样式基础，解决缩放后顶栏导航挤压、内容宽度失衡和组件 token 分散问题。
+
+前置：
+- X-P3-UI-QUALITY-0 已冻结 UI 质量方案和组件系统口径。
+
+范围：
+1. 改造 apps/web/src/App.tsx，建立统一 AppShell：品牌、主导航、当前模块、workspace/dataVersion 状态、主题切换。
+2. 桌面端保留横向主导航；1024px 以下采用可换行或折叠策略；390px 移动端不得出现导航文字重叠。
+3. 整理 apps/web/src/index.css 的基础 token、布局容器、按钮、输入框、表格、面板、空状态和焦点样式。
+4. 统一内容容器宽度、最小高度、页面 padding、工作台间距和滚动区域。
+5. 移除不必要的 inline style，优先收敛为可复用 class。
+
+红线：
+- 不改 API 请求语义。
+- 不改各页面业务状态机。
+- 不引入新 UI 依赖。
+- 不做营销 hero、渐变装饰或大面积视觉噪声。
+
+验证：
+- apps/web npm run lint。
+- apps/web npm run build。
+- apps/web npm run smoke。
+- 截图检查 1440、1024、768、390 宽度下导航、主题切换和内容容器无重叠、无横向溢出、无文字截断失控。
+
+回流格式：
+- 说明改了哪些全局文件。
+- 附验证命令结果。
+- 附 desktop / tablet / mobile 截图路径或截图检查结论。
+- 明确未覆盖页面和残留风险。
+
+总控复核：
+- 复核 AppShell 已覆盖品牌、主导航、workspace badge、主题切换和移动端 hamburger；index.css 已收敛 Design Tokens 和 1024 / 768 / 390 断点。
+- 复验 apps/web npm run lint、npm run build、npm run smoke 通过。
+- 剩余风险：workspace badge 当前仍固定展示 ws_demo；未来多 workspace 需接真实状态源。`
+  },
+  {
+    dom: "V",
+    status: "done",
+    created: "2026-07-04 17:20",
+    title: "V-P3-UI-QUALITY-2：人货匹配工作台高质量 UI 重构",
+    brief: `目标：优先重构人货匹配核心工作台，解决当前截图暴露的缩放后空洞、列表与详情比例失衡、空状态不清晰和控件宽度不稳定问题。
+
+前置：
+- V-P3-UI-QUALITY-1 已完成 AppShell 和全局响应式基础。
+
+范围：
+1. 重构 apps/web/src/pages/MatchCoreWorkbench.tsx 的页面布局为统一 WorkbenchShell。
+2. 顶部区域保留模式切换、主对象选择、筛选和导出，但在窄屏下自动换行或分组。
+3. 左侧 ObjectListPane 固定合理宽度范围，支持空筛选、空数据、加载中和错误状态。
+4. 右侧 InspectorPane 展示解释型匹配诊断；未选择时显示业务下一步，不使用大面积空白占位。
+5. 详情区按信息优先级重排：推荐结论、分数与置信度、相似标签、冲突标签、风险、操作。
+6. 修复长 ID、长标签、长风险文案在 390px 和 768px 下的换行、滚动和按钮布局。
+
+红线：
+- 不改 MatchResult、HeatmapData、ChannelProfile 等 contract。
+- 不改推荐策略、导出字段或经营决策创建语义。
+- 不用纯装饰图形掩盖空状态。
+
+验证：
+- apps/web npm run lint。
+- apps/web npm run build。
+- apps/web npm run smoke。
+- 真实 API 模式可选复验：VITE_USE_MOCK=false 运行匹配主流程 smoke。
+- 截图检查 1440、1024、768、390 宽度下按商品找实体、按实体找商品、未选择、空列表、详情展开均无明显重叠或溢出。
+
+回流格式：
+- 说明 MatchCoreWorkbench 的信息层级和响应式策略。
+- 附验证命令结果和截图检查结论。
+- 明确是否达到总控 UI 质量标准。
+
+总控复核：
+- 复核 MatchCoreWorkbench 已收敛为 toolbar + sidebar/detail 的工作台结构，空状态补充业务引导，列表和详情区使用统一组件 class。
+- 复验 apps/web npm run lint、npm run build、npm run smoke 通过。
+- 真实端到端匹配 smoke 未作为本卡阻断：当前 ws_demo 的 /api/v0/channels/entities 与 /api/v0/matches/heatmap 返回空数组，缺少业务数据前置；后续总体验收如需真实匹配链路，需先受控导入并同步 channel entities / match 数据。`
+  },
+  {
+    dom: "V",
+    status: "done",
+    created: "2026-07-04 17:21",
+    title: "V-P3-UI-QUALITY-3：实体画像与新品预测页面 UI 收敛",
+    brief: `目标：把实体与账号画像、新品预测工作台收敛到同一工作台组件系统，避免页面之间布局、空状态、指标卡和解释面板风格继续分裂。
+
+前置：
+- V-P3-UI-QUALITY-1 已完成全局 shell。
+- V-P3-UI-QUALITY-2 已验证人货匹配工作台组件模式可用。
+
+范围：
+1. 改造 apps/web/src/pages/AccountProfileWorkbench.tsx，复用 ObjectListPane、PageHeader、WorkbenchToolbar、InspectorPane 和 EmptyState。
+2. 改造 apps/web/src/pages/Dashboard.tsx，新品录入、预测结果、匹配入口和质量提示使用统一布局与状态组件。
+3. 统一实体画像、人群标签、benchmark、预测标签、drivers、qualityFlags 的展示密度和状态颜色。
+4. 处理真实空库或无账号数据时的业务空状态，引导用户进入数据管理导入或选择其他数据版本。
+5. 保证 desktop / mobile 下列表、表单、标签组和解释卡片不重叠。
+
+红线：
+- 不新增商品主数据字段。
+- 不编造真实账号、商品、标签或 demo 值。
+- 不改变预测提交、匹配入口和 CSV 导出 contract。
+
+验证：
+- apps/web npm run lint。
+- apps/web npm run build。
+- apps/web npm run smoke。
+- 截图检查实体画像分析、决策视图、新品录入、预测结果、空库状态在 1440、768、390 宽度下稳定。
+
+回流格式：
+- 说明复用的组件和移除的页面私有样式。
+- 附验证命令结果。
+- 附截图检查结论和未覆盖状态。
+
+总控复核：
+- 复核 AccountProfileWorkbench 与 Dashboard 已向统一 workbench-sidebar / workbench-detail / metric-grid / data-table-wrapper 口径收敛，并保留现有 API 与 CSV 导出语义。
+- 复验 apps/web npm run lint、npm run build、npm run smoke 通过。
+- 剩余风险：当前真实 ws_demo 无 channel entity 列表，真实实体画像主流程无法用当前库完成全链路复验。`
+  },
+  {
+    dom: "V",
+    status: "done",
+    created: "2026-07-04 17:22",
+    title: "V-P3-UI-QUALITY-4：经营飞轮与数据管理复杂页面 UI 收敛",
+    brief: `目标：收敛经营飞轮和数据管理两个复杂页面的表格、日志、危险操作弹窗和长内容响应式体验，确保工作台缩放后仍可操作。
+
+前置：
+- V-P3-UI-QUALITY-1 已完成全局 shell。
+- V-P3-UI-QUALITY-2/3 已确定主工作台组件模式。
+
+范围：
+1. 改造 apps/web/src/pages/FlywheelWorkbench.tsx，统一决策、行动、反馈、复盘状态的布局与状态色。
+2. 改造 apps/web/src/pages/DataManagementWorkbench.tsx，统一总览、库表、导入、版本、Schema、操作日志、危险操作和 README 的页面结构。
+3. 表格使用统一 DataTable 容器，支持横向滚动、sticky header 或紧凑列策略；移动端不得挤压到不可读。
+4. 危险操作弹窗使用统一 OperationModal，影响范围、warnings、confirmText、admin token、执行结果和 auditId 层级清晰。
+5. 操作日志和长 JSON / README 内容必须有受控滚动区域，不撑破页面。
+
+红线：
+- 不放宽 Admin API 写操作安全约束。
+- 不绕过 dry run、confirmText、admin token、Idempotency-Key 或 db_admin_audit。
+- 不执行未确认的 ws_demo 破坏性正式操作。
+
+验证：
+- apps/web npm run lint。
+- apps/web npm run build。
+- apps/web npm run smoke。
+- VITE_USE_MOCK=false 数据管理定向 Playwright smoke，破坏性 execute 必须拦截或使用临时 workspace。
+- 截图检查数据管理表格、危险操作弹窗、操作日志、经营飞轮详情在 1440、768、390 宽度下无重叠。
+
+回流格式：
+- 说明复杂表格和危险操作弹窗的响应式策略。
+- 附验证命令和 Playwright 结果。
+- 明确是否存在真实后端未覆盖路径。
+
+总控复核：
+- 复核 FlywheelWorkbench 与 DataManagementWorkbench 已统一 panel、segmented-control、data-table-wrapper 和 operation-modal 口径；危险操作仍保留 dry run、confirmText、admin token、Idempotency-Key 和 audit 展示链路。
+- 修复真实后端数据管理 smoke 中 ws_demo strict mode selector：AppShell 新增 workspace badge 后，测试需限定 main 区域。
+- 复验 apps/web npm run lint、npm run build、npm run smoke 通过；VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Data Management Workbench - Real Backend Smoke Test" 通过。
+- 本轮未执行 ws_demo 破坏性正式操作。`
+  },
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-04 17:23",
+    title: "X-P3-UI-QUALITY-5：PLS 前端 UI 质量总体验收",
+    brief: `目标：总控验收 PLS 前端 UI 质量专项，确认全产品工作台在缩放、窄屏、空库和真实数据模式下达到可演示和可继续扩展的 UI 标准。
+
+前置：
+- X-P3-UI-QUALITY-0 至 V-P3-UI-QUALITY-4 均完成并回流。
+
+范围：
+1. 复核 docs/p3-ui-quality-plan.md 是否被实际实现遵守。
+2. 复核 AppShell、全局 token、通用组件和各页面响应式实现。
+3. 逐页检查实体画像、人货匹配、新品预测、经营飞轮、数据管理五个模块。
+4. 覆盖空库、空筛选、未选择、加载中、失败和真实数据列表等关键状态。
+5. 运行前端 lint、build、smoke 和必要的真实 API Playwright。
+6. 输出 docs/p3-ui-quality-acceptance.md，并按结果更新 docs/wiki.html、docs/notes-infra.md、docs/notes-viz.md。
+
+红线：
+- 不用单张桌面截图替代响应式验收。
+- 不把 UI 验收建立在 iframe、静态 BI 页面或截图嵌入上。
+- 不接受导航重叠、按钮挤压、长文本遮挡、危险操作弹窗不可读。
+
+验收：
+- apps/web lint / build / smoke 通过。
+- 真实 API 模式至少复验人货匹配和数据管理主流程。
+- 1440、1280、1024、768、390 宽度截图检查通过。
+- 明确剩余视觉风险、未覆盖浏览器和后续增强建议。
+
+总控首轮验收记录：
+- 新增 docs/p3-ui-quality-acceptance.md，首轮结论为暂缓通过，当时 X-P3-UI-QUALITY-5 暂不标记 done。
+- 复验 apps/web npm run lint、npm run build、npm run smoke 通过；VITE_USE_MOCK=false 数据管理真实后端定向 Playwright 通过。
+- 已生成 1440、1280、1024、768、390 五档截图，路径为 /tmp/pls-ui-quality-acceptance；DOM 检查无页面级横向溢出、无 console/page error。
+- 暂缓原因 1：当前 ws_demo 的 /api/v0/channels/entities 与 /api/v0/matches/heatmap 返回空数组，无法完成真实 API 人货匹配主流程验收。
+- 暂缓原因 2：人货匹配真实空数据状态下，左侧为空列表时右侧仍提示“请在左侧列表中选择一项”，empty-list 与 not-selected 状态语义混用。
+- 后续需先修正 MatchCoreWorkbench 空状态语义；如总体验收要求真实匹配链路，还需单独确认受控重放 / 同步 channel entities 与 match 数据。
+
+总控最终验收记录：
+- MatchCoreWorkbench 空列表右侧状态已修复并复验：无匹配记录时显示“当前无匹配数据”，旧的“请在左侧列表中选择一项”不再出现。
+- 复验 apps/web npm run lint、npm run build、npm run smoke 通过；VITE_USE_MOCK=false 数据管理真实后端定向 Playwright 通过。
+- 复验 1440 与 390 宽度人货匹配真实空数据状态，通过 DOM 检查，无页面级横向溢出、无 console/page error。
+- X-P3-UI-QUALITY-5 标记 done；真实 API 人货匹配详情链路仍因当前 ws_demo 空业务数据未覆盖，后续如需演示需另行确认受控导入 / 同步。`
   }
 ];
 
@@ -2730,9 +2970,69 @@ const HOTFIX = [];
 
 const CHANGELOG = [
   {
-    ver: "0.40",
+    ver: "0.45",
     date: "2026-07-04",
     current: true,
+    title: "X-P3-UI-QUALITY-5 前端 UI 总体验收通过",
+    items: [
+      "更新 docs/p3-ui-quality-acceptance.md，记录 PLS 前端 UI 质量总体验收结论为通过",
+      "MatchCoreWorkbench 空列表右侧状态已修复并复验，empty-list 与 not-selected 语义不再混用",
+      "复验 apps/web lint、build、smoke 通过；真实后端数据管理定向 Playwright 通过；1440 与 390 人货匹配空态截图 / DOM 检查通过",
+      "保留风险：当前 ws_demo 的 /channels/entities 与 /matches/heatmap 为空，真实 API 人货匹配详情链路需待受控导入 / 同步数据后另行覆盖"
+    ]
+  },
+  {
+    ver: "0.44",
+    date: "2026-07-04",
+    current: false,
+    title: "X-P3-UI-QUALITY-5 前端 UI 总体验收首轮暂缓",
+    items: [
+      "新增 docs/p3-ui-quality-acceptance.md，记录 PLS 前端 UI 质量总体验收首轮结果为暂缓通过",
+      "复核验证：apps/web lint、build、smoke 通过；真实后端数据管理定向 Playwright 通过；1440、1280、1024、768、390 截图与 DOM 溢出检查完成",
+      "暂缓原因：当前 ws_demo 的 /channels/entities 与 /matches/heatmap 返回空数组，无法完成真实 API 人货匹配主流程验收",
+      "暂缓原因：人货匹配空列表时右侧仍提示选择左侧项目，empty-list 与 not-selected 状态语义需修正后复验"
+    ]
+  },
+  {
+    ver: "0.43",
+    date: "2026-07-04",
+    current: false,
+    title: "V-P3-UI-QUALITY-1 至 4 前端 UI 质量重构验收通过",
+    items: [
+      "V-P3-UI-QUALITY-1 至 V-P3-UI-QUALITY-4 经 X 总控复核标记 done，覆盖 AppShell、全局 Design Tokens、人货匹配、实体画像、新品预测、经营飞轮和数据管理复杂页面",
+      "总控修复真实后端数据管理 smoke 的 ws_demo strict mode selector，避免 AppShell workspace badge 与总览 metric 重复文本导致误判",
+      "复核验证：apps/web npm run lint、npm run build、npm run smoke 通过；真实后端数据管理定向 Playwright 通过",
+      "真实端到端匹配 smoke 当前不作为通过项：ws_demo 的 /channels/entities 与 /matches/heatmap 返回空数组，需后续受控导入 / 同步业务数据后再复验"
+    ]
+  },
+  {
+    ver: "0.42",
+    date: "2026-07-04",
+    current: false,
+    title: "X-P3-UI-QUALITY-0 前端 UI 质量方案冻结",
+    items: [
+      "X-P3-UI-QUALITY-0 经总控执行并标记 done，新增 docs/p3-ui-quality-plan.md",
+      "冻结 PLS 前端 UI 质量专项的 AppShell、组件 contract、响应式断点、五类空状态和页面族改造顺序",
+      "确认第一优先级为人货匹配工作台，后续再推广到实体画像、新品预测、经营飞轮和数据管理",
+      "本卡仅做方案冻结，不改前端业务代码、不改 API / Mock / DB / 模型 contract"
+    ]
+  },
+  {
+    ver: "0.41",
+    date: "2026-07-04",
+    current: false,
+    title: "P3 UI 质量专项任务拆卡",
+    items: [
+      "新增 X-P3-UI-QUALITY-0 至 X-P3-UI-QUALITY-5 任务卡，覆盖 PLS 前端全产品 UI 质量方案、应用壳层、人货匹配、实体画像、新品预测、经营飞轮、数据管理和总体验收",
+      "确认本轮 UI 专项不修改 A/M/D API contract、DB schema、模型 contract 或数据准入口径",
+      "第一优先级为修复人货匹配工作台缩放后空洞、导航挤压、空状态不清晰和响应式失衡问题",
+      "验收要求覆盖 1440、1280、1024、768、390 宽度截图检查，以及 lint、build、Playwright smoke"
+    ]
+  },
+  {
+    ver: "0.40",
+    date: "2026-07-04",
+    current: false,
     title: "X-P3-DB-MGMT-4 数据管理可操作化总体验收通过",
     items: [
       "X-P3-DB-MGMT-4 经总控验收标记 done，新增 docs/p3-db-mgmt-acceptance-report.md",

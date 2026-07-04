@@ -121,7 +121,7 @@ export default function Dashboard({ currentSku, setCurrentSku, prediction, setPr
       {/* Right: Prediction Results */}
       <div className="predict-result">
         {!prediction ? (
-          <div className="empty-state" style={{ minHeight: 400 }}>
+          <div className="empty-state" style={{ minHeight: 300 }}>
             <div className="empty-state__icon">🔮</div>
             <div className="empty-state__title">请先在左侧录入新品信息</div>
             <div>系统将生成画像预测结果</div>
@@ -183,7 +183,7 @@ export default function Dashboard({ currentSku, setCurrentSku, prediction, setPr
               </div>
               <div className="metric-card metric-card--compact">
                 <div className="metric-title">质量标记</div>
-                <div className="metric-value" style={{ fontSize: 16 }}>
+                <div className="metric-value" style={{ fontSize: 15 }}>
                   {prediction.qualityFlags.length === 0 ? '无异常' : prediction.qualityFlags.join(', ')}
                 </div>
                 <div className="metric-sub">

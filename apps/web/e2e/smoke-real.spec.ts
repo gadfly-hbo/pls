@@ -102,7 +102,7 @@ test('Data Management Workbench - Real Backend Smoke Test', async ({ page }) => 
 
   await page.getByText('数据管理', { exact: true }).click();
   await expect(page.getByText('数据库总览')).toBeVisible({ timeout: 10000 });
-  await expect(page.getByText('ws_demo', { exact: false })).toBeVisible();
+  await expect(page.getByRole('main').getByText('ws_demo', { exact: false })).toBeVisible();
 
   await page.getByText('库表', { exact: true }).click();
   await expect(page.getByText('库表明细')).toBeVisible();

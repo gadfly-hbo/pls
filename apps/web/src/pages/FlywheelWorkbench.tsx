@@ -141,13 +141,14 @@ export default function FlywheelWorkbench({ initialDecisionId }: { initialDecisi
       <div className="flywheel-workbench__body">
 
         {/* Left: Decision List */}
-        <div className="workbench-sidebar" style={{ height: 'auto', maxHeight: 'calc(100vh - 200px)' }}>
+        <div className="workbench-sidebar">
           <h3 className="workbench-sidebar__title">决策追踪列表</h3>
           <div className="workbench-sidebar__list">
             {decisions.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-state__icon">📋</div>
                 <div className="empty-state__title">暂无决策记录</div>
+                <div>从人货匹配工作台创建经营决策</div>
               </div>
             ) : (
               <div className="workbench-sidebar__group-items">
@@ -178,17 +179,18 @@ export default function FlywheelWorkbench({ initialDecisionId }: { initialDecisi
         {/* Right: Decision Detail */}
         <div className="flywheel-workbench__detail">
           {!selectedDecision ? (
-            <div className="empty-state" style={{ minHeight: 300 }}>
+            <div className="empty-state" style={{ minHeight: 200 }}>
               <div className="empty-state__icon">👈</div>
               <div className="empty-state__title">请在左侧选择一条决策记录</div>
+              <div>查看执行状态、行动记录和反馈复盘</div>
             </div>
           ) : (
             <>
               {/* Decision Summary */}
               <div className="panel">
-                <div className="flex-between" style={{ flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+                <div className="flex-between" style={{ flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
                   <h3 className="panel__title" style={{ margin: 0 }}>决策执行与追踪看板</h3>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button
                       className="btn"
                       onClick={() => updateStatus('in_progress')}
@@ -207,7 +209,7 @@ export default function FlywheelWorkbench({ initialDecisionId }: { initialDecisi
                   </div>
                 </div>
 
-                <div className="metric-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+                <div className="metric-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
                   <div className="flywheel-meta-item">
                     <div className="flywheel-meta-item__label">关联商品 (SKU)</div>
                     <div className="flywheel-meta-item__value">{selectedDecision.skuId}</div>
@@ -237,16 +239,16 @@ export default function FlywheelWorkbench({ initialDecisionId }: { initialDecisi
               <div className="panel">
                 <h4 className="panel__title">行动记录</h4>
                 {selectedDecision.actions.length === 0 ? (
-                  <div className="empty-state" style={{ marginBottom: 16 }}>
+                  <div className="empty-state" style={{ marginBottom: 14 }}>
                     <div className="empty-state__icon">📝</div>
                     <div className="empty-state__title">暂无行动记录</div>
                     <div>添加您的实际行动。红线：本系统不执行自动化动作。</div>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
                     {selectedDecision.actions.map(act => (
                       <div key={act.actionId} className="flywheel-action-card">
-                        <div className="flex-between" style={{ marginBottom: 4 }}>
+                        <div className="flex-between" style={{ marginBottom: 3 }}>
                           <span style={{ fontWeight: 500, fontSize: 13 }}>{getActionTypeLabel(act.type)}</span>
                           <span className="status-badge status-badge--neutral">{act.status}</span>
                         </div>
@@ -256,8 +258,8 @@ export default function FlywheelWorkbench({ initialDecisionId }: { initialDecisi
                   </div>
                 )}
                 
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <select className="form-control" style={{ flex: '0 1 150px', fontSize: 13 }} value={newActionType} onChange={e => setNewActionType(e.target.value)}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <select className="form-control" style={{ flex: '0 1 140px', fontSize: 13 }} value={newActionType} onChange={e => setNewActionType(e.target.value)}>
                     <option value="launch">铺货/投流</option>
                     <option value="adjust_budget">调整预算</option>
                     <option value="optimize_content">优化内容</option>
@@ -265,7 +267,7 @@ export default function FlywheelWorkbench({ initialDecisionId }: { initialDecisi
                   <input 
                     type="text" 
                     className="form-control" 
-                    style={{ flex: '1 1 220px', minWidth: 0, fontSize: 13 }} 
+                    style={{ flex: '1 1 200px', minWidth: 0, fontSize: 13 }} 
                     placeholder="描述具体的行动策略，例如：在核心时段追加预算" 
                     value={newActionDesc}
                     onChange={e => setNewActionDesc(e.target.value)}
@@ -279,14 +281,14 @@ export default function FlywheelWorkbench({ initialDecisionId }: { initialDecisi
                 <h4 className="panel__title">业务反馈与复盘</h4>
                 {selectedDecision.feedback ? (
                   <div className="flywheel-feedback-summary">
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
                       <div>
                         <div className="flywheel-meta-item__label">效果判定</div>
                         <span className={`status-badge ${
                           selectedDecision.feedback.effectJudgment === 'positive' ? 'status-badge--success' :
                           selectedDecision.feedback.effectJudgment === 'negative' ? 'status-badge--danger' :
                           'status-badge--neutral'
-                        }`} style={{ fontSize: 13 }}>
+                        }`} style={{ fontSize: 12 }}>
                           {selectedDecision.feedback.effectJudgment === 'positive' ? '符合预期 / 效果好' :
                            selectedDecision.feedback.effectJudgment === 'negative' ? '不及预期 / 需优化' :
                            '效果一般'}
@@ -316,10 +318,10 @@ export default function FlywheelWorkbench({ initialDecisionId }: { initialDecisi
                   </div>
                 ) : (
                   <div className="flywheel-feedback-form">
-                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       <select
                         className="form-control"
-                        style={{ flex: '0 1 180px', fontSize: 13 }}
+                        style={{ flex: '0 1 170px', fontSize: 13 }}
                         value={feedbackEffect}
                         onChange={e => setFeedbackEffect(e.target.value as 'positive' | 'neutral' | 'negative' | 'unknown')}
                       >

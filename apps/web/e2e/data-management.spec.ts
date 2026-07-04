@@ -104,13 +104,13 @@ test('Data Management Workbench - Real API Smoke', async ({ page }) => {
   await expect(page.getByText('执行结果: success')).toBeVisible();
   await expect(page.getByText('Audit ID: mock_audit_123')).toBeVisible();
   await page.getByRole('button', { name: '完成 / 关闭' }).click();
-  await expect(page.getByText('危险操作: RESET')).not.toBeVisible();
+  await expect(page.getByRole('heading', { name: '重建数据库' })).not.toBeVisible();
 
   // Test Import Flow
   await page.getByText('导入', { exact: true }).click();
   await page.locator('#importPackage').selectOption('douyin-bi');
   await page.getByRole('button', { name: '导入数据包' }).click();
-  await expect(page.getByText('危险操作: IMPORT')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '导入数据包' })).toBeVisible();
   await expect(page.getByText('Mock warning: This is a high-risk operation')).toBeVisible();
   await confirmInput.fill('IMPORT douyin-bi');
   await executeBtn.click();
@@ -125,10 +125,10 @@ test('Data Management Workbench - Real API Smoke', async ({ page }) => {
   await deleteBtn.click();
   
   // Determine target version from modal
-  const targetVersionText = await page.locator('p:has-text("目标:")').textContent();
+  const targetVersionText = await page.locator('div.operation-modal__target').textContent();
   const targetVersion = targetVersionText?.replace('目标: ', '').trim() || '';
   
-  await expect(page.getByText('危险操作: DELETE_VERSION')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '删除数据版本' })).toBeVisible();
   await confirmInput.fill(`DELETE VERSION ${targetVersion}`);
   await executeBtn.click();
   await expect(page.getByText('执行结果: success')).toBeVisible();
@@ -138,7 +138,7 @@ test('Data Management Workbench - Real API Smoke', async ({ page }) => {
   // Test Schema Flow (Apply Migrations)
   await page.getByText('Schema', { exact: true }).click();
   await page.getByText('Apply Migrations').click();
-  await expect(page.getByText('危险操作: APPLY_MIGRATIONS')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '应用迁移' })).toBeVisible();
   await confirmInput.fill('APPLY MIGRATIONS');
   await executeBtn.click();
   await expect(page.getByText('执行结果: success')).toBeVisible();

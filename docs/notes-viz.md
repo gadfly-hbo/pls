@@ -2,10 +2,17 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-04（X-P3-DB-MGMT-4 总体验收通过：数据管理前端可操作化闭环通过）
+最近更新：2026-07-04（X-P3-UI-QUALITY-5 前端 UI 总体验收通过，MatchCoreWorkbench 空状态已复验）
 
 进度：
 
+- `V-P3-UI-QUALITY-1` 已完成：重构 `App.tsx` 为统一 AppShell（品牌、导航、workspace badge、主题切换），桌面导航支持 flex-wrap，768px 以下切换 hamburger 展开面板，390px 隐藏 env-badge 防止文字重叠。重写 `index.css` 为统一 Design Token 结构（`--header-height`, `--page-padding`, `--sidebar-width` 等布局 token），合并为 1024/768/390 三档断点。
+- `V-P3-UI-QUALITY-2` 已完成：`MatchCoreWorkbench` 采用 WorkbenchShell 模式（toolbar + segmented-control + sidebar/detail 双栏），收敛内联样式为 CSS class（`match-entity-item`, `driver-card`, `section-divider` 等），空状态增加引导文案。
+- `V-P3-UI-QUALITY-3` 已完成：`AccountProfileWorkbench` 和 `Dashboard` 统一为 `workbench-sidebar` + `workbench-detail` 布局，表格包裹 `data-table-wrapper`，空状态引导、metric-grid 密度一致。
+- `V-P3-UI-QUALITY-4` 已完成：`FlywheelWorkbench` 和 `DataManagementWorkbench` 收敛为 panel + data-table + segmented-control 统一组件模式，operation modal 密度优化，tabs 改用 segmented-control。
+- X 总控复核已通过：`apps/web npm run lint`、`npm run build`、`npm run smoke` 通过；`VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Data Management Workbench - Real Backend Smoke Test"` 通过。总控修复了真实后端数据管理 smoke 中 `ws_demo` strict mode selector，避免 AppShell workspace badge 与总览 metric 重复文本导致误判。
+- 真实端到端匹配 smoke 当前不作为通过项：当前 `ws_demo` 的 `/api/v0/channels/entities` 与 `/api/v0/matches/heatmap` 返回空数组，缺少业务数据前置；如需复验真实人货匹配链路，需先通过受控导入 / 同步生成 channel entities 与 match 数据。
+- X-P3-UI-QUALITY-5 总体验收已通过，`docs/p3-ui-quality-acceptance.md` 已更新为最终版。通过项：`apps/web lint / build / smoke`、真实后端数据管理定向 Playwright、多宽度截图和 DOM 溢出检查；MatchCoreWorkbench 空列表右侧状态已修复并复验，`empty-list` 与 `not-selected` 不再混用。剩余风险：当前真实人货匹配详情链路因 `ws_demo` 的 `/api/v0/channels/entities` 与 `/api/v0/matches/heatmap` 为空未覆盖。
 - `X-P3-DB-MGMT-4` 总体验收已通过：`DataManagementWorkbench` 已作为受控数据库管理工作台接入 Admin API；前端支持导入、版本删除、表清空 / 删除、apply migrations、rebuild 的 dry run -> confirmText -> execute -> audit 结果展示链路。
 - `V-P3-DB-MGMT-2` (数据管理前端操作化) 问题修复与 E2E 补齐：修复了总控复核提出的阻断问题：将所有 Playwright 拦截响应结构更新至与真实后端同构的顶层数据返回；补充了导入包 `demo` / `douyin-bi`、版本删除、Apply Migrations 的 UI 测试流，并增加了对操作日志执行成功状态及 Audit ID 的显式断言。修复了 `USE_MOCK=true` 模式下 `DELETE_VERSION` 与 `DROP_TABLE` 的 mock confirmText 组装回退逻辑错误以及相关路由匹配漏洞。
 - 总体验收中修复了前端其他问题：`api.ts` 缺失 `DbOperationExecuteResult` type import 导致 build 失败；`data-management.spec.ts` import dry-run 拦截路径未覆盖真实 `/import-jobs/dry-run`；真实后端数据下导入 / 版本 / audit 列表空 id 触发 React duplicate key console error。
@@ -33,16 +40,18 @@
 
 下一步：
 
+- 以 `docs/wiki.html` v0.45 为当前 UI 专项任务状态真源；V-P3-UI-QUALITY-1 至 V-P3-UI-QUALITY-4 与 `X-P3-UI-QUALITY-5` 均已完成并通过 X 复核。
+- MatchCoreWorkbench 空列表时右侧 InspectorPane 状态语义已关闭：无匹配记录时展示“当前无匹配数据”，仅列表有数据但未选中时提示选择左侧项目。
 - P3-DB-MGMT 前端闭环已通过总控验收；后续增强需另开卡。
 - 若后端新增数据包列表接口，前端应移除固定 `demo` / `douyin-bi` 枚举，改为消费后端受支持数据包列表。
 
 阻塞：
 
-- 无。
+- 当前 `ws_demo` 的 `/api/v0/channels/entities` 与 `/api/v0/matches/heatmap` 返回空数组；真实后端人货匹配全链路 smoke 需要先恢复演示数据前置，不作为 V-P3-UI-QUALITY-1~4 通过阻塞。
 
 开放问题：
 
-- 无。
+- 是否为 X-P3-UI-QUALITY-5 总体验收重放 demo / douyin-bi 并执行 channel entities / match 数据同步，需由总控单独确认。
 
 ---
 
