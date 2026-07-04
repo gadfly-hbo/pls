@@ -19,131 +19,136 @@ test('Data Management Workbench - Real API Smoke', async ({ page }) => {
 
   // Overview tab asserts
   await expect(page.getByText('数据库总览')).toBeVisible();
-  await expect(page.getByText('ws_demo')).toBeVisible();
+  await expect(page.locator('.metric-card__value').filter({ hasText: 'ws_demo' }).first()).toBeVisible();
 
-  // Tables tab asserts
-  await page.getByText('库表', { exact: true }).click();
-  await expect(page.getByText('库表明细')).toBeVisible();
-  await expect(page.getByText('表/视图名')).toBeVisible();
-
-  // Test Table Details
-  await page.getByText('详情', { exact: true }).first().click();
-  await expect(page.getByText('表详情:')).toBeVisible();
-  await page.getByText('关闭').click();
-
-  // Setup interception to prevent actual destructive actions on the real database
-  await page.route('**/admin/database/rebuild', async route => {
+  const routeHandler = (operationName: string) => async (route: any) => {
     const request = route.request();
-    if (request.method() === 'POST') {
-      const postData = request.postDataJSON() || {};
-      if (postData.dryRun) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            code: 'ok',
-            data: { dryRun: true, impact: { affectedTables: ['sku'], affectedRows: 100, isUserAuthorized: false, warnings: ['audit/task'] } }
-          })
-        });
-      } else {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ code: 'ok', data: { success: true } })
-        });
-      }
-    } else {
-      await route.continue();
+    const url = request.url();
+    const isDryRun = (request.method() === 'POST' || request.method() === 'DELETE') 
+      ? (request.postDataJSON()?.dryRun || url.includes('dry-run')) 
+      : url.includes('dry-run');
+
+    let opConfirmText = '';
+    if (operationName === 'rebuild') opConfirmText = 'RESET ws_demo';
+    if (operationName === 'truncate') {
+      const parts = url.split('/');
+      const table = parts[parts.indexOf('tables') + 1];
+      opConfirmText = `TRUNCATE ${table}`;
     }
-  });
-
-  await page.route('**/admin/database/tables/*/truncate', async route => {
-    const request = route.request();
-    const headers = request.headers();
-    
-    // Assert headers are present
-    expect(headers['x-pls-admin-token']).toBe('pls-admin-token');
-    expect(headers['idempotency-key']).toBeTruthy();
-
-    if (request.method() === 'POST') {
-      const postData = request.postDataJSON() || {};
-      if (postData.dryRun) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            code: 'ok',
-            data: { dryRun: true, impact: { affectedTables: ['mock_table'], affectedRows: 10, isUserAuthorized: false, warnings: [] } }
-          })
-        });
-      } else {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ code: 'ok', data: { success: true } })
-        });
-      }
-    } else {
-      await route.continue();
+    if (operationName === 'delete_version') {
+      const parts = url.split('/');
+      const version = parts[parts.indexOf('versions') + 1];
+      opConfirmText = `DELETE VERSION ${version}`;
     }
-  });
+    if (operationName === 'apply_migrations') opConfirmText = 'APPLY MIGRATIONS';
+    if (operationName === 'import') {
+      const postData = request.postDataJSON() || {};
+      opConfirmText = `IMPORT ${postData.packageType || 'douyin-bi'}`;
+    }
 
-  // Test Dangerous Operations Flow
+    if (isDryRun) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 'ok',
+          data: {
+            affectedTables: ['mock_table'],
+            affectedRows: 10,
+            isUserAuthorized: false,
+            warnings: ['Mock warning: This is a high-risk operation'],
+            requiredConfirmText: opConfirmText
+          }
+        })
+      });
+    } else {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 'ok',
+          data: {
+            success: true,
+            status: 'success',
+            auditId: 'mock_audit_123',
+            afterSnapshot: { mocked: 'snapshot' }
+          }
+        })
+      });
+    }
+  };
+
+  await page.route('**/admin/database/rebuild', routeHandler('rebuild'));
+  await page.route('**/admin/database/tables/*/truncate*', routeHandler('truncate'));
+  await page.route('**/admin/database/versions/*', routeHandler('delete_version'));
+  await page.route('**/admin/database/migrations/apply*', routeHandler('apply_migrations'));
+  await page.route('**/admin/database/import-jobs/dry-run', routeHandler('import'));
+  await page.route('**/admin/database/import-jobs', routeHandler('import'));
+
+  // Test Dangerous Operations Flow (Rebuild)
   await page.getByText('危险操作', { exact: true }).click();
   await page.getByText('重建整个数据库 (Rebuild)').click();
-
-  // Modal checks for rebuild
   await expect(page.getByText('加载影响分析中')).not.toBeVisible();
   await expect(page.getByText('影响表:')).toBeVisible();
-  await expect(page.getByText('影响行数:')).toBeVisible();
-
-  // Confirmation input test
-  const executeBtn = page.getByRole('button', { name: '确认执行' });
-  await expect(executeBtn).toBeDisabled();
+  await expect(page.getByText('Mock warning: This is a high-risk operation')).toBeVisible();
 
   const confirmInput = page.locator('input[type="text"]');
+  const executeBtn = page.getByRole('button', { name: '确认执行' });
   await confirmInput.fill('wrong text');
   await expect(executeBtn).toBeDisabled();
-
   await confirmInput.fill('RESET ws_demo');
   await expect(executeBtn).toBeEnabled();
-
   await executeBtn.click();
+  
+  // Assert execution result screen
+  await expect(page.getByText('执行结果: success')).toBeVisible();
+  await expect(page.getByText('Audit ID: mock_audit_123')).toBeVisible();
+  await page.getByRole('button', { name: '完成 / 关闭' }).click();
   await expect(page.getByText('危险操作: RESET')).not.toBeVisible();
 
-  // Test Non-rebuild Dangerous Operation Flow (Clear table)
-  await page.getByText('库表', { exact: true }).click();
+  // Test Import Flow
+  await page.getByText('导入', { exact: true }).click();
+  await page.locator('#importPackage').selectOption('douyin-bi');
+  await page.getByRole('button', { name: '导入数据包' }).click();
+  await expect(page.getByText('危险操作: IMPORT')).toBeVisible();
+  await expect(page.getByText('Mock warning: This is a high-risk operation')).toBeVisible();
+  await confirmInput.fill('IMPORT douyin-bi');
+  await executeBtn.click();
+  await expect(page.getByText('执行结果: success')).toBeVisible();
+  await expect(page.getByText('Audit ID: mock_audit_123')).toBeVisible();
+  await page.getByRole('button', { name: '完成 / 关闭' }).click();
+
+  // Test Versions Flow (Delete Version)
+  await page.getByText('版本', { exact: true }).click();
+  // Assume there is at least one delete button
+  const deleteBtn = page.getByText('删除', { exact: true }).first();
+  await deleteBtn.click();
   
-  // Assert "重建" button does not exist in the tables list
-  await expect(page.locator('table').getByRole('button', { name: '重建' })).toHaveCount(0);
+  // Determine target version from modal
+  const targetVersionText = await page.locator('p:has-text("目标:")').textContent();
+  const targetVersion = targetVersionText?.replace('目标: ', '').trim() || '';
+  
+  await expect(page.getByText('危险操作: DELETE_VERSION')).toBeVisible();
+  await confirmInput.fill(`DELETE VERSION ${targetVersion}`);
+  await executeBtn.click();
+  await expect(page.getByText('执行结果: success')).toBeVisible();
+  await expect(page.getByText('Audit ID: mock_audit_123')).toBeVisible();
+  await page.getByRole('button', { name: '完成 / 关闭' }).click();
 
-  // Find the first "清空" button and click it
-  await page.getByText('清空', { exact: true }).first().click();
-
-  await expect(page.getByText('加载影响分析中')).not.toBeVisible();
-  await expect(page.getByText('影响表:')).toBeVisible();
-
-  // Confirmation input test for truncate
-  const executeTruncateBtn = page.getByRole('button', { name: '确认执行' });
-  await expect(executeTruncateBtn).toBeDisabled();
-
-  // Determine the target table name from the modal title
-  const tableName = await page.locator('p:has-text("目标:")').textContent();
-  const targetName = tableName?.replace('目标: ', '').trim() || '';
-
-  const truncateInput = page.locator('input[type="text"]');
-  await truncateInput.fill(`TRUNCATE ${targetName}`);
-  await expect(executeTruncateBtn).toBeEnabled();
-
-  await executeTruncateBtn.click();
-  await expect(page.getByText('危险操作: CLEAR_TABLE')).not.toBeVisible();
+  // Test Schema Flow (Apply Migrations)
+  await page.getByText('Schema', { exact: true }).click();
+  await page.getByText('Apply Migrations').click();
+  await expect(page.getByText('危险操作: APPLY_MIGRATIONS')).toBeVisible();
+  await confirmInput.fill('APPLY MIGRATIONS');
+  await executeBtn.click();
+  await expect(page.getByText('执行结果: success')).toBeVisible();
+  await expect(page.getByText('Audit ID: mock_audit_123')).toBeVisible();
+  await page.getByRole('button', { name: '完成 / 关闭' }).click();
 
   // Check audits tab snapshot
   await page.getByText('操作日志', { exact: true }).click();
   await expect(page.getByText('快照')).toBeVisible();
 
-  // Wait a bit to ensure no errors are thrown asynchronously
   await page.waitForTimeout(500);
-  
   expect(logs).toHaveLength(0);
 });

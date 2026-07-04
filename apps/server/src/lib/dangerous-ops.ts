@@ -22,7 +22,7 @@ export const PROTECTED_TABLES = new Set([
 ]);
 
 /** Tables that admin can drop if explicit. */
-const DROPPABLE_TABLES = new Set([
+export const DROPPABLE_TABLES = new Set([
   "sku",
   "channel_profile",
   "wide_table_row",
@@ -47,7 +47,7 @@ const DROPPABLE_TABLES = new Set([
   "strategy_review",
 ]);
 
-const DROPPABLE_VIEWS = new Set([
+export const DROPPABLE_VIEWS = new Set([
   "match_result_latest",
   "douyin_account_latest",
   "douyin_account_benchmark_tag_latest",
@@ -64,19 +64,38 @@ const DROPPABLE_VIEWS = new Set([
 // Types
 // ---------------------------------------------------------------------------
 
-export interface ImpactReport {
-  target: string;
-  targetType: "table" | "view" | "version" | "workspace";
+/** Standardized impact report for every admin database operation. */
+export interface OperationImpact {
+  operation: string;
+  targetType: "table" | "view" | "version" | "workspace" | "package" | "migration";
+  targetName: string;
   affectedTables: string[];
   affectedRows: number;
-  isProtected: boolean;
-  isUserAuthorized: boolean;
+  sourceType: string | null;
+  dataVersion: string | null;
+  containsUserAuthorized: boolean;
+  containsSystemHistory: boolean;
   warnings: string[];
+  requiredConfirmText: string;
 }
 
-export interface RebuildReport extends ImpactReport {
+/** Legacy shape kept for compatibility; callers should migrate to OperationImpact. */
+export interface ImpactReport extends OperationImpact {
+  target: string;
+  isProtected: boolean;
+  isUserAuthorized: boolean;
+}
+
+export interface RebuildReport extends OperationImpact {
   snapshotPath: string | null;
   steps: Array<{ step: string; status: "ok" | "skipped" | "error"; detail?: string }>;
+}
+
+export interface ExecuteResult<T extends OperationImpact = OperationImpact> {
+  impact: T;
+  afterSnapshot: Record<string, unknown>;
+  auditId: string;
+  notFound?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -112,13 +131,15 @@ function writeAudit(
   after: Record<string, unknown>,
   status: "success" | "failed",
   error?: string
-): void {
+): string {
+  const auditId = randomUUID();
   try {
     db.prepare(`INSERT INTO db_admin_audit (audit_id, workspace_id, actor, operation, target_type, target_name, before_snapshot, after_snapshot, status, error, created_at)
       VALUES (?, ?, 'admin-api', ?, ?, ?, ?, ?, ?, ?, datetime('now'))`).run(
-      randomUUID(), workspaceId, operation, targetType, targetName,
+      auditId, workspaceId, operation, targetType, targetName,
       JSON.stringify(before), JSON.stringify(after), status, error ?? null);
   } catch { /* audit table may not exist yet during rebuild */ }
+  return auditId;
 }
 
 export { writeAudit as writeAdminAudit };
@@ -127,30 +148,38 @@ export { writeAudit as writeAdminAudit };
 // Truncate table
 // ---------------------------------------------------------------------------
 
-export function impactTruncate(workspaceId: string, tableName: string): ImpactReport {
+export function impactTruncate(workspaceId: string, tableName: string): OperationImpact {
   const db = openDb(workspaceId);
   try {
     const isProtected = PROTECTED_TABLES.has(tableName);
     const exists = isTable(db, tableName);
     const rowCount = exists ? tableRowCount(db, tableName) : 0;
+    const warnings: string[] = [];
+    if (isProtected) warnings.push("table is protected (system/audit), truncate refused");
+    if (!exists) warnings.push(`table "${tableName}" does not exist`);
     return {
-      target: tableName,
+      operation: "truncate",
       targetType: "table",
+      targetName: tableName,
       affectedTables: exists ? [tableName] : [],
       affectedRows: rowCount,
-      isProtected,
-      isUserAuthorized: tableName.startsWith("douyin_"),
-      warnings: isProtected ? ["table is protected (system/audit), truncate refused"] : [],
+      sourceType: exists ? "system_runtime" : null,
+      dataVersion: null,
+      containsUserAuthorized: tableName.startsWith("douyin_"),
+      containsSystemHistory: PROTECTED_TABLES.has(tableName) || ["batch", "audit_event", "idempotency_key", "task"].includes(tableName),
+      warnings,
+      requiredConfirmText: `TRUNCATE ${tableName}`,
     };
   } finally {
     db.close();
   }
 }
 
-export function executeTruncate(workspaceId: string, tableName: string): ImpactReport {
+export function executeTruncate(workspaceId: string, tableName: string): ExecuteResult<OperationImpact> {
   const impact = impactTruncate(workspaceId, tableName);
-  if (impact.isProtected || !isTableAfter(workspaceId, tableName)) {
-    return impact;
+  const exists = isTableAfter(workspaceId, tableName);
+  if (!exists) {
+    return { impact, afterSnapshot: { rowCount: 0, exists: false }, auditId: "", notFound: true };
   }
   const db = openDb(workspaceId);
   try {
@@ -158,9 +187,10 @@ export function executeTruncate(workspaceId: string, tableName: string): ImpactR
     try {
       db.exec(`DELETE FROM sqlite_sequence WHERE name='${tableName}'`);
     } catch { /* sqlite_sequence only exists for autoincrement tables */ }
-    writeAudit(db, workspaceId, "truncate_table", "table", tableName,
-      { rowCount: impact.affectedRows }, { rowCount: 0 }, "success");
-    return { ...impact, affectedRows: 0 };
+    const afterSnapshot = { rowCount: 0 };
+    const auditId = writeAudit(db, workspaceId, "truncate", "table", tableName,
+      { rowCount: impact.affectedRows }, afterSnapshot, "success");
+    return { impact, afterSnapshot, auditId };
   } finally {
     db.close();
   }
@@ -177,7 +207,7 @@ function isTableAfter(workspaceId: string, name: string): boolean {
 // Drop table
 // ---------------------------------------------------------------------------
 
-export function impactDrop(workspaceId: string, tableName: string): ImpactReport {
+export function impactDrop(workspaceId: string, tableName: string): OperationImpact {
   const db = openDb(workspaceId);
   try {
     const isProtected = PROTECTED_TABLES.has(tableName);
@@ -186,45 +216,52 @@ export function impactDrop(workspaceId: string, tableName: string): ImpactReport
     const exists = tblExists || viewExists;
     const rowCount = tblExists ? tableRowCount(db, tableName) : 0;
     const isCodeDefined = DROPPABLE_TABLES.has(tableName) || DROPPABLE_VIEWS.has(tableName);
+    const warnings: string[] = [];
+    if (isProtected) warnings.push("table is protected (system/audit), drop refused");
+    if (exists && !isCodeDefined) warnings.push("table/view is not in droppable whitelist");
+    if (!exists) warnings.push(`table/view "${tableName}" does not exist`);
     return {
-      target: tableName,
+      operation: "drop",
       targetType: tblExists ? "table" : "view",
+      targetName: tableName,
       affectedTables: exists ? [tableName] : [],
       affectedRows: rowCount,
-      isProtected,
-      isUserAuthorized: tableName.startsWith("douyin_"),
-      warnings: [
-        !isCodeDefined ? "table/view is not in droppable whitelist" : "",
-        isProtected ? "table is protected (system/audit), drop refused" : "",
-      ].filter(Boolean),
+      sourceType: exists ? "system_runtime" : null,
+      dataVersion: null,
+      containsUserAuthorized: tableName.startsWith("douyin_"),
+      containsSystemHistory: PROTECTED_TABLES.has(tableName) || ["batch", "audit_event", "idempotency_key", "task"].includes(tableName),
+      warnings,
+      requiredConfirmText: `DROP ${tableName}`,
     };
   } finally {
     db.close();
   }
 }
 
-export function executeDrop(workspaceId: string, tableName: string): ImpactReport {
+export function executeDrop(workspaceId: string, tableName: string): ExecuteResult<OperationImpact> {
   const impact = impactDrop(workspaceId, tableName);
-  if (impact.isProtected) return impact;
+  if (PROTECTED_TABLES.has(tableName)) {
+    return { impact, afterSnapshot: { dropped: false }, auditId: "" };
+  }
   if (!DROPPABLE_TABLES.has(tableName) && !DROPPABLE_VIEWS.has(tableName)) {
-    return impact;
+    return { impact, afterSnapshot: { dropped: false, reason: "not in droppable whitelist" }, auditId: "" };
   }
   const db = openDb(workspaceId);
   try {
-    // SQLite requires DROP TABLE for tables and DROP VIEW for views; using the
-    // wrong one raises an error. Detect type and use matching statement.
-    if (isTable(db, tableName)) {
+    const tableExists = isTable(db, tableName);
+    const viewExists = isView(db, tableName);
+    if (!tableExists && !viewExists) {
+      return { impact, afterSnapshot: { dropped: false, exists: false }, auditId: "", notFound: true };
+    }
+    if (tableExists) {
       db.exec(`DROP TABLE IF EXISTS "${tableName}"`);
-    } else if (isView(db, tableName)) {
-      db.exec(`DROP VIEW IF EXISTS "${tableName}"`);
-    } else {
-      // Fallback: try both IF EXISTS, no-op
-      db.exec(`DROP TABLE IF EXISTS "${tableName}"`);
+    } else if (viewExists) {
       db.exec(`DROP VIEW IF EXISTS "${tableName}"`);
     }
-    writeAudit(db, workspaceId, "drop_table", "table", tableName,
-      { rowCount: impact.affectedRows }, { dropped: true }, "success");
-    return { ...impact, affectedRows: 0, affectedTables: [] };
+    const afterSnapshot = { dropped: true };
+    const auditId = writeAudit(db, workspaceId, "drop", impact.targetType, tableName,
+      { rowCount: impact.affectedRows }, afterSnapshot, "success");
+    return { impact, afterSnapshot, auditId };
   } finally {
     db.close();
   }
@@ -246,13 +283,11 @@ const VERSIONED_TABLES = [
   "douyin_summary_metric",
 ];
 
-export function impactDeleteVersion(workspaceId: string, dataVersion: string): ImpactReport {
+export function impactDeleteVersion(workspaceId: string, dataVersion: string): OperationImpact {
   const db = openDb(workspaceId);
   try {
-    // Count rows across all versioned tables for this data_version
     const affectedTables: string[] = [];
     let totalRows = 0;
-    let hasUserAuthorized = false;
     for (const table of VERSIONED_TABLES) {
       if (!isTable(db, table)) continue;
       const row = db
@@ -263,7 +298,6 @@ export function impactDeleteVersion(workspaceId: string, dataVersion: string): I
         totalRows += row.cnt;
       }
     }
-    // Also count batch rows (table may not exist on a fresh workspace)
     try {
       if (isTable(db, "batch")) {
         const batchRow = db
@@ -276,36 +310,35 @@ export function impactDeleteVersion(workspaceId: string, dataVersion: string): I
       }
     } catch { /* batch table missing — fresh workspace */ }
 
+    const warnings: string[] = [];
     if (totalRows === 0) {
-      return {
-        target: dataVersion,
-        targetType: "version",
-        affectedTables: [],
-        affectedRows: 0,
-        isProtected: false,
-        isUserAuthorized: false,
-        warnings: [`data_version "${dataVersion}" not found in any versioned table`],
-      };
+      warnings.push(`data_version "${dataVersion}" not found in any versioned table`);
+    } else if (affectedTables.some((t) => t.startsWith("douyin_"))) {
+      warnings.push("contains user_authorized douyin_* data");
     }
-
-    hasUserAuthorized = affectedTables.some((t) => t.startsWith("douyin_"));
     return {
-      target: dataVersion,
+      operation: "delete_version",
       targetType: "version",
+      targetName: dataVersion,
       affectedTables,
       affectedRows: totalRows,
-      isProtected: false,
-      isUserAuthorized: hasUserAuthorized,
-      warnings: hasUserAuthorized ? ["contains user_authorized douyin_* data"] : [],
+      sourceType: totalRows > 0 ? "user_authorized" : null,
+      dataVersion,
+      containsUserAuthorized: totalRows > 0 && affectedTables.some((t) => t.startsWith("douyin_")),
+      containsSystemHistory: affectedTables.includes("batch"),
+      warnings,
+      requiredConfirmText: `DELETE VERSION ${dataVersion}`,
     };
   } finally {
     db.close();
   }
 }
 
-export function executeDeleteVersion(workspaceId: string, dataVersion: string): ImpactReport {
+export function executeDeleteVersion(workspaceId: string, dataVersion: string): ExecuteResult<OperationImpact> {
   const impact = impactDeleteVersion(workspaceId, dataVersion);
-  if (impact.warnings.length > 0 && impact.affectedRows === 0) return impact;
+  if (impact.affectedRows === 0) {
+    return { impact, afterSnapshot: { deletedRows: 0, tablesDeleted: [] }, auditId: "" };
+  }
   const db = openDb(workspaceId);
   try {
     let deletedRows = 0;
@@ -321,7 +354,6 @@ export function executeDeleteVersion(workspaceId: string, dataVersion: string): 
         tablesDeleted.push(table);
       }
     }
-    // Also delete batch rows matching pattern (table may not exist on a fresh workspace)
     try {
       if (isTable(db, "batch")) {
         const batchPattern = `douyin_bi_import_%_${dataVersion}`;
@@ -336,10 +368,11 @@ export function executeDeleteVersion(workspaceId: string, dataVersion: string): 
       }
     } catch { /* batch table missing — fresh workspace */ }
 
-    writeAudit(db, workspaceId, "delete_version", "version", dataVersion,
+    const afterSnapshot = { deletedRows, tablesDeleted };
+    const auditId = writeAudit(db, workspaceId, "delete_version", "version", dataVersion,
       { rowCount: impact.affectedRows, affectedTables: impact.affectedTables },
-      { deletedRows, tablesDeleted }, "success");
-    return { ...impact, affectedRows: 0 };
+      afterSnapshot, "success");
+    return { impact, afterSnapshot, auditId };
   } finally {
     db.close();
   }
@@ -349,7 +382,7 @@ export function executeDeleteVersion(workspaceId: string, dataVersion: string): 
 // Rebuild workspace
 // ---------------------------------------------------------------------------
 
-export function impactRebuild(workspaceId: string): ImpactReport {
+export function impactRebuild(workspaceId: string): OperationImpact {
   const db = openDb(workspaceId);
   try {
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all() as Array<{ name: string }>;
@@ -377,25 +410,28 @@ export function impactRebuild(workspaceId: string): ImpactReport {
       );
     }
     return {
-      target: workspaceId,
+      operation: "rebuild",
       targetType: "workspace",
+      targetName: workspaceId,
       affectedTables: affected,
       affectedRows: totalRows,
-      isProtected: false,
-      isUserAuthorized: hasUserAuthorized,
+      sourceType: "system_runtime",
+      dataVersion: null,
+      containsUserAuthorized: hasUserAuthorized,
+      containsSystemHistory: protectedAffected.length > 0,
       warnings,
+      requiredConfirmText: `RESET ${workspaceId}`,
     };
   } finally {
     db.close();
   }
 }
 
-export async function executeRebuild(workspaceId: string, skipSnapshot: boolean): Promise<RebuildReport> {
-  const impact = impactRebuild(workspaceId);
+export async function executeRebuild(workspaceId: string, skipSnapshot: boolean): Promise<ExecuteResult<RebuildReport>> {
+  const impact = impactRebuild(workspaceId) as RebuildReport;
   const steps: RebuildReport["steps"] = [];
   let snapshotPath: string | null = null;
 
-  // Step 1: snapshot (unless skipped)
   if (skipSnapshot) {
     steps.push({ step: "snapshot", status: "skipped", detail: "skipSnapshot=true" });
   } else {
@@ -407,14 +443,13 @@ export async function executeRebuild(workspaceId: string, skipSnapshot: boolean)
         steps.push({ step: "snapshot", status: "ok", detail: snapshotPath });
       } catch (err) {
         steps.push({ step: "snapshot", status: "error", detail: err instanceof Error ? err.message : String(err) });
-        return { ...impact, snapshotPath, steps };
+        return { impact, afterSnapshot: { snapshotPath, steps }, auditId: "" };
       }
     } else {
       steps.push({ step: "snapshot", status: "skipped", detail: "no existing db file" });
     }
   }
 
-  // Step 2: close & delete file
   const dbPath = join(REPO_ROOT, "data/workspaces", workspaceId, "db.sqlite");
   const walPath = `${dbPath}-wal`;
   const shmPath = `${dbPath}-shm`;
@@ -426,17 +461,14 @@ export async function executeRebuild(workspaceId: string, skipSnapshot: boolean)
     steps.push({ step: "delete_db_file", status: "ok" });
   } catch (err) {
     steps.push({ step: "delete_db_file", status: "error", detail: err instanceof Error ? err.message : String(err) });
-    return { ...impact, snapshotPath, steps };
+    return { impact, afterSnapshot: { snapshotPath, steps }, auditId: "" };
   }
 
-  // Step 3: re-initialize (open will create empty db, apply migrations + business DDL)
   try {
     mkdirSync(join(REPO_ROOT, "data/workspaces", workspaceId), { recursive: true });
     const db = openDb(workspaceId);
     const migrationsDir = resolve(REPO_ROOT, "apps/server/src/db/migrations");
     const result = runMigrations(db, migrationsDir);
-    // Also apply the idempotent business DDL (workspace, sku, channel_profile, etc.)
-    // because versioned migrations only cover system/admin tables.
     const {
       SCHEMA_DDL, DOUYIN_BI_DDL, DOUYIN_BI_DDL_PART2, DOUYIN_BI_DDL_PART3,
       DATA_MANAGEMENT_DDL, CHANNEL_ENTITY_DDL, NEW_PRODUCT_DDL, FLYWHEEL_DDL,
@@ -461,10 +493,9 @@ export async function executeRebuild(workspaceId: string, skipSnapshot: boolean)
     steps.push({ step: "apply_migrations", status: "ok", detail: `${result.applied} applied, ${result.failed} failed (migration runner)` });
   } catch (err) {
     steps.push({ step: "apply_migrations", status: "error", detail: err instanceof Error ? err.message : String(err) });
-    return { ...impact, snapshotPath, steps };
+    return { impact, afterSnapshot: { snapshotPath, steps }, auditId: "" };
   }
 
-  // Step 4: ensure workspace row
   try {
     const db = openDb(workspaceId);
     db.prepare("INSERT OR IGNORE INTO workspace (workspace_id, name) VALUES (?, ?)").run(workspaceId, workspaceId);
@@ -472,27 +503,24 @@ export async function executeRebuild(workspaceId: string, skipSnapshot: boolean)
     steps.push({ step: "init_workspace", status: "ok" });
   } catch (err) {
     steps.push({ step: "init_workspace", status: "error", detail: err instanceof Error ? err.message : String(err) });
-    return { ...impact, snapshotPath, steps };
+    return { impact, afterSnapshot: { snapshotPath, steps }, auditId: "" };
   }
 
-  // Step 5: audit (writes to a fresh admin audit table)
   try {
     const db = openDb(workspaceId);
-    writeAudit(db, workspaceId, "rebuild", "workspace", workspaceId,
+    const auditId = writeAudit(db, workspaceId, "rebuild", "workspace", workspaceId,
       { rowCount: impact.affectedRows, tables: impact.affectedTables },
-      { rebuilt: true, snapshotPath }, "success");
+      { rebuilt: true, snapshotPath, steps }, "success");
     db.close();
+    return {
+      impact: { ...impact, snapshotPath, steps },
+      afterSnapshot: { rebuilt: true, snapshotPath, steps },
+      auditId,
+    };
   } catch (err) {
     steps.push({ step: "audit", status: "error", detail: err instanceof Error ? err.message : String(err) });
+    return { impact: { ...impact, snapshotPath, steps }, afterSnapshot: { snapshotPath, steps }, auditId: "" };
   }
-
-  return {
-    ...impact,
-    affectedRows: 0,
-    affectedTables: [],
-    snapshotPath,
-    steps,
-  };
 }
 
 // ---------------------------------------------------------------------------

@@ -37,6 +37,17 @@
 - 新建文件、只读操作可直接执行。
 - 不回滚他人或其他 agent 的改动。
 
+### 2.x Smoke 测试的 workspace 隔离（A-P3-DB-MGMT-3）
+
+任何会写入或破坏目标 workspace 的 smoke 脚本必须满足以下约束：
+
+1. **禁止硬编码对主 workspace（`ws_demo`）特定业务数据的依赖**（如特定 `dataVersion`、import job、business row）。所有需要"先导入数据再验证"或"需要真实破坏性闭环"的场景，必须在独立临时 workspace 上运行。
+2. **临时 workspace 由 wrapper 脚本创建**：通过 Admin API `POST /api/v0/admin/database/rebuild`（带 `Idempotency-Key` + `confirmText: "RESET <ws>"` + `skipSnapshot: true`）初始化完整 schema，再受控导入 demo / douyin-bi 等数据。workspace 命名统一为 `ws_${purpose}_${timestamp}`（例如 `ws_empty_${ts}` / `ws_imported_${ts}` / `ws_smoke_${purpose}_${ts}`）。
+3. **wrapper 注入 `PLS_WORKSPACE` 环境变量**到子脚本；子脚本仍可作为独立入口运行（默认 `ws_demo`），但通过 `PLS_ADMIN_SMOKE_MODE=empty|dry-run|imported` 等开关控制行为模式。
+4. **危险操作写型端点的 confirmText 校验必须先于"目标不存在"短路**。`POST /api/v0/admin/database/import-jobs`、`DELETE /api/v0/admin/database/versions/:dataVersion` 等端点的 handler 应在打开 DB / 查询影响前校验 `body.confirmText`，否则对不存在目标 / 空库的错误 confirmText 会误返回 404 或 200 success。
+5. **每个 smoke 入口必须在 README / 脚本 help 中显式声明前置假设**：目标 workspace 当前状态、是否需要导入数据、是否会产生临时 workspace、清理方式。
+6. **JSON summary runner**（如 `smoke-admin-summary.mjs`）按顺序运行各模式 wrapper 并输出合并 JSON；每条子脚本末尾输出 `RESULT: {...}` JSON 行供 wrapper 解析汇总。
+
 ---
 
 ## 三、协作规则
@@ -71,7 +82,10 @@
 2. **强制沙盘推演**：涉及前后端联调、真实 API 接入、危险操作或 E2E Mock 时，在代码实现前必须先列出完整的端到端请求期望（包含 HTTP Method、精准 URL 路径、鉴权与防重放 Headers、确切的 Body 参数结构及确认文本格式），确保对齐后再动工；纯样式、文案、局部无接口 bugfix 不强制输出完整推演。
 3. **Adapter 层强隔离**：面对前后端字段定义分歧（如后端的 `truncatable` 对应前端的 `isClearable`，或需要通过嵌套对象推导平铺状态时），禁止将后端响应或原生错误直接透传给 UI 组件，必须在接口请求层提供严格的属性映射清洗。
 4. **Mock 与真实形态同构**：任何针对前端测试、本地开发的 Mock 数据或 Playwright E2E 路由拦截响应，其数据层级、属性命名、类型形态必须与真实后端返回保持同构；确需差异时，必须在测试或任务说明中显式标注差异原因、适用范围和不覆盖的真实行为，避免脱节的“自欺欺人”测试。
-
+5. **本地 Mock 与 E2E 拦截防坑纪律（USE_MOCK 陷阱）**：
+   - **拦截盲区**：前端代码库中的 `USE_MOCK=true` 机制（如 `api.ts`）会直接在代码层短路并返回数据，**不发起真实网络请求**。这会导致 Playwright 的 `page.route` 拦截失效。若需通过 `page.route` 验证真实 contract 或拦截真实请求，必须显式使用 `VITE_USE_MOCK=false` 或绕开本地 Mock 短路；否则测试只能验证 Local Mock 兜底路径。
+   - **路由匹配陷阱**：在编写 Playwright `page.route` 匹配规则时，严禁将 HTTP Method 当作 URL Path 进行匹配（例如，拦截 `DELETE /api/versions/1` 时不能写成 `**/versions/*/delete*`）。必须根据真实发出的精确 URL 进行 glob 匹配。
+   - **Mock 演进同步**：修改后端契约，或修改用于代表真实契约 / 默认本地体验的前端拦截响应时，必须同步更新 `api.ts` 中的本地 `USE_MOCK` 实现。仅用于单个测试场景的临时拦截可不更新 `api.ts`，但必须在测试或任务说明中标明其适用范围，防止本地无后端的体验出现“Mock 漂移”导致的验证阻断。
 ---
 
 ## 六、当前产品目标

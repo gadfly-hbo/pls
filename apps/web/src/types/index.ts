@@ -348,4 +348,17 @@ export interface DbOperationDryRunResult {
   affectedRows: number;
   hasUserAuthorized: boolean;
   hasAuditHistory: boolean;
+  qualityReport?: any;
+  warnings: string[];
+  requiredConfirmText: string;
+}
+
+export interface DbOperationExecuteResult {
+  success: boolean;
+  operation?: string;
+  auditId?: string;
+  beforeSnapshot?: any;
+  afterSnapshot?: any;
+  warnings?: string[];
+  status?: string;
 }

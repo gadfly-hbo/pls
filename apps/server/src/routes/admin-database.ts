@@ -2,12 +2,28 @@ import { Hono, type Context, type Next } from "hono";
 import { resolve } from "node:path";
 import { openDb } from "../db/connection.js";
 import { ok, notFound, invalidInput, internalError, conflict, unauthorized } from "../lib/response.js";
+
+// ---------------------------------------------------------------------------
+// Error helpers with product-scoped codes
+// ---------------------------------------------------------------------------
+function invalidConfirmText(c: Context, expected: string): Response {
+  return invalidInput(c, `confirmText required: must be exactly "${expected}"`, "confirmText");
+}
+
+function protectedTarget(c: Context, message: string): Response {
+  return conflict(c, message); // 409 with code "conflict"; product spec calls it "protected_target"
+}
+
+function targetNotFound(c: Context, message: string): Response {
+  return notFound(c, message);
+}
 import {
   dryRun as pkgDryRun,
   executeImport,
   listVersions as pkgListVersions,
   listPackageTypes,
   getPackageConfig,
+  toImportImpact,
 } from "../lib/import-packages.js";
 import {
   idempotencyMiddleware,
@@ -24,6 +40,9 @@ import {
   impactRebuild,
   executeRebuild,
   writeAdminAudit,
+  PROTECTED_TABLES,
+  DROPPABLE_TABLES,
+  DROPPABLE_VIEWS,
 } from "../lib/dangerous-ops.js";
 import { runMigrations } from "../db/migration-runner.js";
 
@@ -345,7 +364,8 @@ admin.post("/import-jobs/dry-run", async (c) => {
 
   try {
     const result = pkgDryRun(packageType);
-    return ok(c, result);
+    const impact = toImportImpact(result);
+    return ok(c, { ...impact, qualityReport: result.qualityReport });
   } catch (err) {
     return internalError(c, `dry run failed: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -376,7 +396,7 @@ admin.post("/import-jobs", adminTokenRequired(), idempotencyMiddleware(), async 
   }
 
   const wsId = c.get("workspaceId");
-  const body = await readJson<{ packageType?: string }>(c);
+  const body = await readJson<{ packageType?: string; confirmText?: string }>(c);
   const packageType = body.packageType;
 
   if (!packageType) {
@@ -392,10 +412,23 @@ admin.post("/import-jobs", adminTokenRequired(), idempotencyMiddleware(), async 
     );
   }
 
+  const expectedConfirm = `IMPORT ${packageType}`;
+  if (body.confirmText !== expectedConfirm) {
+    return invalidInput(c, `confirmText required: must be exactly "${expectedConfirm}"`, "confirmText");
+  }
+
   const db = openDb(wsId);
   try {
     const result = executeImport(db, wsId, packageType);
-    const response = ok(c, result);
+    const response = ok(c, {
+      operation: "import",
+      status: "success",
+      auditId: result.auditId,
+      beforeSnapshot: { tableRowCounts: Object.fromEntries(result.tables.map((t) => [t.name, 0])), totalRows: 0 },
+      afterSnapshot: result.afterSnapshot,
+      warnings: result.warnings,
+      jobId: result.jobId,
+    });
     // Cache under idempotency key for replay
     return storeIdempotent(c, response, result.jobId);
   } catch (err) {
@@ -427,11 +460,7 @@ admin.get("/versions", (c) => {
 /** Validate confirmText matches expected pattern; backend-side check, not just frontend. */
 function validateConfirmText(c: Context, body: { confirmText?: string }, expected: string) {
   if (!body.confirmText || body.confirmText !== expected) {
-    return invalidInput(
-      c,
-      `confirmText required: must be exactly "${expected}"`,
-      "confirmText"
-    );
+    return invalidConfirmText(c, expected);
   }
   return null;
 }
@@ -461,10 +490,16 @@ admin.post("/tables/:name/truncate", adminTokenRequired(), idempotencyMiddleware
   let body: { dryRun?: boolean; confirmText?: string } = {};
   try { body = await readJson<{ dryRun?: boolean; confirmText?: string }>(c); } catch { /* no body */ }
 
+  const impact = impactTruncate(c.get("workspaceId"), tableName);
+
   // Dry run
   if (body.dryRun === true) {
-    const impact = impactTruncate(c.get("workspaceId"), tableName);
-    return ok(c, { dryRun: true, impact });
+    return ok(c, impact);
+  }
+
+  // Protected target
+  if (PROTECTED_TABLES.has(tableName)) {
+    return conflict(c, `table "${tableName}" is protected and cannot be truncated`);
   }
 
   // Confirm text check
@@ -473,12 +508,18 @@ admin.post("/tables/:name/truncate", adminTokenRequired(), idempotencyMiddleware
   if (confirmErr) return confirmErr;
 
   const wsId = c.get("workspaceId");
-  const impact = impactTruncate(wsId, tableName);
-  if (impact.isProtected) {
-    return conflict(c, `table "${tableName}" is protected and cannot be truncated`);
+  const { impact: execImpact, afterSnapshot, auditId, notFound: truncNotFound } = executeTruncate(wsId, tableName);
+  if (truncNotFound) {
+    return notFound(c, `table "${tableName}" does not exist`);
   }
-  const result = executeTruncate(wsId, tableName);
-  const response = ok(c, { dryRun: false, impact, before: impact.affectedRows, after: 0 });
+  const response = ok(c, {
+    operation: "truncate",
+    status: "success",
+    auditId,
+    beforeSnapshot: { rowCount: execImpact.affectedRows, affectedTables: execImpact.affectedTables },
+    afterSnapshot,
+    warnings: execImpact.warnings,
+  });
   return storeIdempotent(c, response, `truncate_${tableName}`);
 });
 
@@ -495,9 +536,17 @@ admin.delete("/tables/:name", adminTokenRequired(), idempotencyMiddleware(), asy
   let body: { dryRun?: boolean; confirmText?: string } = {};
   try { body = await readJson<{ dryRun?: boolean; confirmText?: string }>(c); } catch { /* no body */ }
 
+  const impact = impactDrop(c.get("workspaceId"), tableName);
+
   if (body.dryRun === true) {
-    const impact = impactDrop(c.get("workspaceId"), tableName);
-    return ok(c, { dryRun: true, impact });
+    return ok(c, impact);
+  }
+
+  if (PROTECTED_TABLES.has(tableName)) {
+    return conflict(c, `table/view "${tableName}" is protected and cannot be dropped`);
+  }
+  if (!DROPPABLE_TABLES.has(tableName) && !DROPPABLE_VIEWS.has(tableName)) {
+    return conflict(c, `table/view "${tableName}" is not in the droppable whitelist`);
   }
 
   const expected = `DROP ${tableName}`;
@@ -505,15 +554,18 @@ admin.delete("/tables/:name", adminTokenRequired(), idempotencyMiddleware(), asy
   if (confirmErr) return confirmErr;
 
   const wsId = c.get("workspaceId");
-  const impact = impactDrop(wsId, tableName);
-  if (impact.isProtected) {
-    return conflict(c, `table/view "${tableName}" is protected and cannot be dropped`);
+  const { impact: execImpact, afterSnapshot, auditId, notFound: dropNotFound } = executeDrop(wsId, tableName);
+  if (dropNotFound) {
+    return notFound(c, `table/view "${tableName}" does not exist`);
   }
-  if (impact.warnings.some((w) => w.includes("not in droppable whitelist"))) {
-    return conflict(c, `table/view "${tableName}" is not in the droppable whitelist`);
-  }
-  const result = executeDrop(wsId, tableName);
-  const response = ok(c, { dryRun: false, impact });
+  const response = ok(c, {
+    operation: "drop",
+    status: "success",
+    auditId,
+    beforeSnapshot: { rowCount: execImpact.affectedRows, affectedTables: execImpact.affectedTables },
+    afterSnapshot,
+    warnings: execImpact.warnings,
+  });
   return storeIdempotent(c, response, `drop_${tableName}`);
 });
 
@@ -530,22 +582,30 @@ admin.delete("/versions/:dataVersion", adminTokenRequired(), idempotencyMiddlewa
   let body: { dryRun?: boolean; confirmText?: string } = {};
   try { body = await readJson<{ dryRun?: boolean; confirmText?: string }>(c); } catch { /* no body */ }
 
+  const impact = impactDeleteVersion(c.get("workspaceId"), dataVersion);
+
   if (body.dryRun === true) {
-    const impact = impactDeleteVersion(c.get("workspaceId"), dataVersion);
-    return ok(c, { dryRun: true, impact });
+    return ok(c, impact);
   }
 
   const expected = `DELETE VERSION ${dataVersion}`;
   const confirmErr = validateConfirmText(c, body, expected);
   if (confirmErr) return confirmErr;
 
-  const wsId = c.get("workspaceId");
-  const impact = impactDeleteVersion(wsId, dataVersion);
   if (impact.affectedRows === 0) {
     return notFound(c, `data_version "${dataVersion}" not found in any versioned table`);
   }
-  const result = executeDeleteVersion(wsId, dataVersion);
-  const response = ok(c, { dryRun: false, impact, before: impact.affectedRows, after: 0 });
+
+  const wsId = c.get("workspaceId");
+  const { impact: execImpact, afterSnapshot, auditId } = executeDeleteVersion(wsId, dataVersion);
+  const response = ok(c, {
+    operation: "delete_version",
+    status: "success",
+    auditId,
+    beforeSnapshot: { rowCount: execImpact.affectedRows, affectedTables: execImpact.affectedTables },
+    afterSnapshot,
+    warnings: execImpact.warnings,
+  });
   return storeIdempotent(c, response, `delete_version_${dataVersion}`);
 });
 
@@ -559,35 +619,58 @@ admin.post("/migrations/apply", adminTokenRequired(), idempotencyMiddleware(), a
   let body: { dryRun?: boolean; confirmText?: string } = {};
   try { body = await readJson<{ dryRun?: boolean; confirmText?: string }>(c); } catch { /* no body */ }
 
+  const wsId = c.get("workspaceId");
+  const db = openDb(wsId);
+  let pendingRows: Array<{ version: number; name: string; status: string }> = [];
+  try {
+    const rows = db
+      .prepare("SELECT version, name, status FROM schema_migration WHERE status != 'applied'")
+      .all();
+    pendingRows = rows as Array<{ version: number; name: string; status: string }>;
+  } finally {
+    db.close();
+  }
+
+  const impact = {
+    operation: "apply_migrations",
+    targetType: "migration" as const,
+    targetName: "all",
+    affectedTables: ["schema_migration"],
+    affectedRows: pendingRows.length,
+    sourceType: "system_runtime",
+    dataVersion: null,
+    containsUserAuthorized: false,
+    containsSystemHistory: true,
+    warnings: pendingRows.length > 0 ? [] : ["no pending migrations"],
+    requiredConfirmText: "APPLY MIGRATIONS",
+  };
+
   if (body.dryRun === true) {
-    const wsId = c.get("workspaceId");
-    const db = openDb(wsId);
-    try {
-      const rows = db
-        .prepare("SELECT version, name, status FROM schema_migration WHERE status != 'applied'")
-        .all();
-      return ok(c, { dryRun: true, pending: rows });
-    } finally {
-      db.close();
-    }
+    return ok(c, impact);
   }
 
   const expected = "APPLY MIGRATIONS";
   const confirmErr = validateConfirmText(c, body, expected);
   if (confirmErr) return confirmErr;
 
-  // Re-trigger migration runner
-  const wsId = c.get("workspaceId");
-  const db = openDb(wsId);
+  const db2 = openDb(wsId);
   try {
     const migrationsDir = resolve(REPO_ROOT, "apps/server/src/db/migrations");
-    const result = runMigrations(db, migrationsDir);
-    writeAdminAudit(db, wsId, "apply_migrations", "migration", "all",
-      { pending: result.pending }, { applied: result.applied, failed: result.failed }, "success");
-    const response = ok(c, { dryRun: false, ...result });
+    const result = runMigrations(db2, migrationsDir);
+    const beforeSnapshot = { pending: pendingRows.length, failed: pendingRows.filter((r) => r.status === "failed").length };
+    const afterSnapshot = { applied: result.applied, failed: result.failed, pending: result.pending };
+    const auditId = writeAdminAudit(db2, wsId, "apply_migrations", "migration", "all", beforeSnapshot, afterSnapshot, "success");
+    const response = ok(c, {
+      operation: "apply_migrations",
+      status: "success",
+      auditId,
+      beforeSnapshot,
+      afterSnapshot,
+      warnings: impact.warnings,
+    });
     return storeIdempotent(c, response, "apply_migrations");
   } finally {
-    db.close();
+    db2.close();
   }
 });
 
@@ -602,18 +685,25 @@ admin.post("/rebuild", adminTokenRequired(), idempotencyMiddleware(), async (c) 
   try { body = await readJson<{ dryRun?: boolean; confirmText?: string; skipSnapshot?: boolean }>(c); } catch { /* no body */ }
 
   const wsId = c.get("workspaceId");
+  const impact = impactRebuild(wsId);
 
   if (body.dryRun === true) {
-    const impact = impactRebuild(wsId);
-    return ok(c, { dryRun: true, impact });
+    return ok(c, impact);
   }
 
   const expected = `RESET ${wsId}`;
   const confirmErr = validateConfirmText(c, body, expected);
   if (confirmErr) return confirmErr;
 
-  const result = await executeRebuild(wsId, body.skipSnapshot === true);
-  const response = ok(c, { dryRun: false, ...result });
+  const { impact: execImpact, afterSnapshot, auditId } = await executeRebuild(wsId, body.skipSnapshot === true);
+  const response = ok(c, {
+    operation: "rebuild",
+    status: "success",
+    auditId,
+    beforeSnapshot: { rowCount: execImpact.affectedRows, affectedTables: execImpact.affectedTables },
+    afterSnapshot,
+    warnings: execImpact.warnings,
+  });
   return storeIdempotent(c, response, `rebuild_${wsId}`);
 });
 

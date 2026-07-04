@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
+import type { OperationImpact } from "./dangerous-ops.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -22,6 +23,8 @@ export interface ImportJobResult {
   errors: string[];
   qualityReport: Record<string, unknown>;
   tables: Array<{ name: string; rowCount: number }>;
+  afterSnapshot: Record<string, unknown>;
+  auditId: string;
   startedAt: string | null;
   finishedAt: string | null;
 }
@@ -118,6 +121,42 @@ function jsonVal(v: any): string {
   return JSON.stringify(v ?? {});
 }
 
+const MANIFEST_TO_TABLE_NAME: Record<string, string> = {
+  douyin_accounts: "douyin_account",
+  douyin_account_benchmark_tags: "douyin_account_benchmark_tag",
+  douyin_account_reports: "douyin_account_report",
+  douyin_products: "douyin_product",
+  douyin_product_account_fits: "douyin_product_account_fit",
+  douyin_comparison_dimensions: "douyin_comparison_dimension",
+  douyin_adjustment_advice: "douyin_adjustment_advice",
+  douyin_summary_metrics: "douyin_summary_metric",
+  skus: "sku",
+  channel_profiles: "channel_profile",
+  wide_table: "wide_table_row",
+};
+
+function manifestToTableName(name: string): string {
+  return MANIFEST_TO_TABLE_NAME[name] ?? name;
+}
+
+/** Convert a dry-run result into the standardized OperationImpact shape. */
+export function toImportImpact(dry: DryRunResult): OperationImpact {
+  const affectedTables = dry.tables.map((t) => manifestToTableName(t.name));
+  return {
+    operation: "import",
+    targetType: "package",
+    targetName: dry.packageType,
+    affectedTables,
+    affectedRows: dry.totalRows,
+    sourceType: dry.sourceType,
+    dataVersion: dry.dataVersion,
+    containsUserAuthorized: dry.sourceType === "user_authorized",
+    containsSystemHistory: false,
+    warnings: [...dry.warnings, ...dry.errors],
+    requiredConfirmText: `IMPORT ${dry.packageType}`,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Dry run: douyin-bi
 // ---------------------------------------------------------------------------
@@ -160,7 +199,7 @@ function dryRunDouyinBi(pkg: PackageConfig): DryRunResult {
     }
     try {
       const rows = readJsonl(filePath);
-      result.tables.push({ name: table.name, file: table.file, rowCount: rows.length });
+      result.tables.push({ name: manifestToTableName(table.name), file: table.file, rowCount: rows.length });
       result.totalRows += rows.length;
 
       // Validate required fields
@@ -215,8 +254,12 @@ function dryRunDemo(pkg: PackageConfig): DryRunResult {
   }
 
   // Count rows in JSONL files
-  const jsonlFiles = ["skus.jsonl", "channel_profiles.jsonl", "wide_table.jsonl"];
-  for (const file of jsonlFiles) {
+  const jsonlFiles = [
+    { file: "skus.jsonl", tableName: "sku" },
+    { file: "channel_profiles.jsonl", tableName: "channel_profile" },
+    { file: "wide_table.jsonl", tableName: "wide_table_row" },
+  ];
+  for (const { file, tableName } of jsonlFiles) {
     const filePath = join(packageDir, file);
     if (!existsSync(filePath)) {
       result.warnings.push(`file not found: ${file} (optional)`);
@@ -224,7 +267,6 @@ function dryRunDemo(pkg: PackageConfig): DryRunResult {
     }
     try {
       const rows = readJsonl(filePath);
-      const tableName = file.replace(".jsonl", "");
       result.tables.push({ name: tableName, file, rowCount: rows.length });
       result.totalRows += rows.length;
     } catch (err) {
@@ -243,7 +285,7 @@ function executeDouyinBi(
   db: DatabaseSync,
   workspaceId: string,
   pkg: PackageConfig,
-): Omit<ImportJobResult, "jobId" | "dryRun"> {
+): Omit<ImportJobResult, "jobId" | "dryRun" | "auditId"> {
   const packageDir = resolve(REPO_ROOT, pkg.basePath);
   const manifest = JSON.parse(readFileSync(join(packageDir, pkg.manifestFile!), "utf-8"));
   const batchId = manifest.batchId as string;
@@ -433,7 +475,7 @@ function executeDouyinBi(
       const rows = readJsonl(filePath);
       const count = fn(rows);
       entityCounts[table.name] = count;
-      tables.push({ name: table.name, rowCount: count });
+      tables.push({ name: manifestToTableName(table.name), rowCount: count });
       total += count;
     }
 
@@ -465,6 +507,11 @@ function executeDouyinBi(
     errors,
     qualityReport: JSON.parse(qualityReportJson),
     tables,
+    afterSnapshot: {
+      tableRowCounts: Object.fromEntries(tables.map((t) => [t.name, t.rowCount])),
+      totalRows: total,
+      dataVersion,
+    },
     startedAt: new Date().toISOString(),
     finishedAt: new Date().toISOString(),
   };
@@ -478,7 +525,7 @@ function executeDemo(
   db: DatabaseSync,
   workspaceId: string,
   _pkg: PackageConfig,
-): Omit<ImportJobResult, "jobId" | "dryRun"> {
+): Omit<ImportJobResult, "jobId" | "dryRun" | "auditId"> {
   const packageDir = resolve(REPO_ROOT, "data/demo");
   const warnings: string[] = [];
   const errors: string[] = [];
@@ -565,6 +612,11 @@ function executeDemo(
     errors,
     qualityReport: {},
     tables,
+    afterSnapshot: {
+      tableRowCounts: Object.fromEntries(tables.map((t) => [t.name, t.rowCount])),
+      totalRows: total,
+      dataVersion: null,
+    },
     startedAt: new Date().toISOString(),
     finishedAt: new Date().toISOString(),
   };
@@ -590,6 +642,11 @@ export function dryRun(packageType: string): DryRunResult {
   throw new Error(`dry run not implemented for package type: ${packageType}`);
 }
 
+/** Standardized dry-run impact for a package. */
+export function dryRunImpact(packageType: string): OperationImpact {
+  return toImportImpact(dryRun(packageType));
+}
+
 export function executeImport(
   db: DatabaseSync,
   workspaceId: string,
@@ -610,7 +667,7 @@ export function executeImport(
   db.prepare("UPDATE data_import_job SET status = 'running' WHERE job_id = ?").run(jobId);
 
   try {
-    let result: Omit<ImportJobResult, "jobId" | "dryRun">;
+    let result: Omit<ImportJobResult, "jobId" | "dryRun" | "auditId">;
     if (pkg.type === "douyin-bi") {
       result = executeDouyinBi(db, workspaceId, pkg);
     } else if (pkg.type === "demo") {
@@ -629,12 +686,14 @@ export function executeImport(
       JSON.stringify(result.qualityReport), result.dataVersion, jobId);
 
     // Write admin audit
-    db.prepare(`INSERT INTO db_admin_audit (audit_id, workspace_id, actor, operation, target_type, target_name, after_snapshot, status, created_at)
-      VALUES (?, ?, 'admin-api', 'import', 'package', ?, ?, 'success', datetime('now'))`).run(
-      randomUUID(), workspaceId, packageType,
-      JSON.stringify({ jobId, rowCount: result.rowCount, dataVersion: result.dataVersion }));
+    const auditId = randomUUID();
+    db.prepare(`INSERT INTO db_admin_audit (audit_id, workspace_id, actor, operation, target_type, target_name, before_snapshot, after_snapshot, status, created_at)
+      VALUES (?, ?, 'admin-api', 'import', 'package', ?, ?, ?, 'success', datetime('now'))`).run(
+      auditId, workspaceId, packageType,
+      JSON.stringify({ tableRowCounts: Object.fromEntries(result.tables.map((t) => [t.name, 0])), totalRows: 0 }),
+      JSON.stringify(result.afterSnapshot));
 
-    return { jobId, dryRun: false, ...result };
+    return { jobId, dryRun: false, auditId, ...result };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     db.prepare("UPDATE data_import_job SET status = 'failed', error = ?, finished_at = datetime('now') WHERE job_id = ?").run(errorMsg, jobId);

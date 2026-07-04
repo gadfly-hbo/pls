@@ -299,7 +299,7 @@
 依次执行：
 
 1. 运行相关校验；若当前阶段没有可运行校验，说明原因并做文件/语法检查。
-2. 覆盖 `docs/notes-<域>.md` 的「## 0. 当前状态」。
+2. 对照 `docs/wiki.html` 最新任务状态、changelog 和本次实际完成内容，覆盖 `docs/notes-<域>.md` 的「## 0. 当前状态」；若未更新 notes，必须说明原因。
 3. 若产生新决策、踩坑或风险，沉淀到对应 notes 正文。
 4. 列出本次改动文件清单。
 5. 说明验证结果和剩余风险。
@@ -318,6 +318,25 @@
 5. 回报改动文件、验证结果、剩余风险。
 
 不要执行 git 操作。</script>
+    <script type="text/plain" id="src-learn-review"># PLS · /learn 沉淀复核 SOP
+
+你正在为 PLS 复核其他 agent 执行 `/learn` 后对项目级系统提示词（通常是 `AGENTS.md`）的修改。
+
+依次执行：
+
+1. 读 `AGENTS.md`，必要时对照 `Orchestration.md`、`docs/wiki.html` 和相关 `docs/notes-<域>.md` 的当前状态。
+2. 只读检查新增规则是否冲突或过度泛化，重点关注：
+   - 是否误伤用户授权数据准入口径。
+   - 是否破坏总控 / 域 agent 边界。
+   - 是否放宽 destructive 操作、Admin API、confirmText、Idempotency-Key、audit 或 workspace 隔离约束。
+   - 是否把测试场景经验错误提升成全局硬规则。
+   - 是否存在路径、接口、环境变量、Mock / E2E 机制表述不准。
+3. 先用简短结论列出问题：阻断 / 建议修 / 可接受。
+4. 若用户要求修复，直接做最小文案修改；不扩大到无关规则，不重写整份 `AGENTS.md`。
+5. 修完后复读相关段落，确认格式、语义和项目口径一致。
+6. 回报改了什么、为什么改、是否还有剩余风险。
+
+不要执行 git 操作。不要因为 `/learn` 新增规则就默认接受；也不要因为措辞不完美就推翻有效经验。</script>
   </section>
 
   <section id="agentAssets" class="view">
@@ -2516,6 +2535,194 @@ Handoff：
 - 复验 apps/server npm run typecheck、npm run schema:check、npm run smoke:admin-database、apps/web npm run lint、npm run build、npm run smoke、VITE_USE_MOCK=false npx playwright test e2e/data-management.spec.ts --project=chromium 通过。
 - apps/server npm run smoke:admin-dangerous 有 3 个主库 v1_20260703 数据断言失败，原因是本次选择空库不重放，脚本假设与验收目标冲突；临时 workspace 危险操作闭环仍通过。
 - 输出 docs/p3-db-rebuild-acceptance.md，记录快照、校验、未重放数据和剩余风险。`
+  },
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-04 00:10",
+    title: "X-P3-DB-MGMT-0：数据管理可操作化方案冻结",
+    brief: `目标：把数据管理模块从只读工作台升级为受控 SQLite 数据库运维工作台，并冻结产品边界、API 边界、操作分级和验收口径。
+
+背景：
+- X-P3-DB-0 至 X-P3-DB-8 已完成，ws_demo 已受控 rebuild 为空业务 schema。
+- 用户希望在数据管理模块中直接管理后端 SQLite 数据库。
+- 既有 P3-DB 卡保持 done；本轮是新增增强卡组，不重开旧卡。
+
+范围：
+1. 冻结一级功能：总览、库表管理、导入管理、版本管理、Schema 管理、危险操作、操作日志。
+2. 冻结操作分级：只读、安全写入、中风险清理、高风险重建。
+3. 冻结写操作统一流程：dry run -> 影响范围 -> 确认文本 -> admin token -> Idempotency-Key -> audit -> 刷新状态。
+4. 明确不做通用 SQL console，不允许前端直接访问 SQLite 文件，不做单元格级在线编辑。
+5. 输出或更新产品方案文档，并派发 A/V/X 后续实现卡。
+
+验收：
+- docs/wiki.html 中 P3-DB-MGMT 任务卡完整发布。
+- 方案明确当前 ws_demo 为空业务库，后续业务数据需通过受控导入重放。
+- 后续实现不得绕过 Admin API、db_admin_audit、confirmText 和 Idempotency-Key。
+
+总控归档：
+- 新增 docs/p3-db-mgmt-operational-plan.md，冻结数据管理可操作化产品边界、操作分级、API 边界、前端体验、任务拆分和验收标准。
+- 明确数据管理模块升级为受控 SQLite 数据库运维工作台，但不做 SQL console、不允许前端直接访问 SQLite 文件、不做单元格级在线编辑。
+- 冻结写操作统一流程：dry run -> 影响范围 -> confirmText + admin token + Idempotency-Key -> 后端校验 -> db_admin_audit -> 前端刷新状态。
+- 确认当前 ws_demo 为空业务库，后续业务数据需通过受控导入重放；旧 P3-DB 卡保持 done，不重开旧卡。
+- 后续按 A-P3-DB-MGMT-1 -> V-P3-DB-MGMT-2 / A-P3-DB-MGMT-3 -> X-P3-DB-MGMT-4 推进。`
+  },
+  {
+    dom: "A",
+    status: "done",
+    created: "2026-07-04 00:11",
+    title: "A-P3-DB-MGMT-1：Admin Database API 可操作化加固",
+    brief: `目标：补齐数据管理前端可操作化所需的 Admin Database API 语义，支持空库导入重放、dry run 标准化、危险操作统一响应和审计闭环。
+
+前置：
+- X-P3-DB-MGMT-0 冻结产品方案。
+- X-P3-DB-8 已确认 ws_demo 当前为空业务 schema。
+
+范围：
+1. 复核并补齐 /api/v0/admin/database/* 写接口 contract。
+2. 标准化 dry run response：affectedTables、affectedRows、sourceType、dataVersion、containsUserAuthorized、containsSystemHistory、warnings、requiredConfirmText。
+3. 支持从空业务库 dry run 并导入 data/demo 与 data/p1/douyin-bi。
+4. 正式导入、truncate、drop、delete version、apply migrations、rebuild 均要求 admin token、Idempotency-Key 和后端 confirmText 校验。
+5. 所有写操作写入 db_admin_audit，并返回 after snapshot 摘要。
+6. 修正或新增 smoke，使空库状态与重放数据状态都可验证。
+
+红线：
+- 不提供任意 SQL 执行接口。
+- 不允许前端直接传 SQL 或 SQLite 文件路径。
+- 不绕过 workspace 隔离、confirmText、Idempotency-Key 或 audit。
+- 不自动重放 user_authorized 数据，除非任务或用户当次确认。
+
+验收：
+- apps/server typecheck 通过。
+- admin database / import / dangerous smoke 覆盖空库与导入后两种状态。
+- API 文档或 contract 注明每个写接口的 method、path、headers、body、confirmText 和错误码。
+- 临时 workspace 验证不误删 ws_demo；如需操作 ws_demo，必须先 dry run 并记录影响范围。
+
+总控归档：
+- 新增 docs/p3-db-mgmt-api-contract.md，冻结 /api/v0/admin/database/* 写接口的 headers、body、confirmText、错误码和统一 dry run / execute response。
+- apps/server/src/lib/dangerous-ops.ts 统一 OperationImpact，并让 truncate / drop / delete version / rebuild 返回 impact、afterSnapshot 和 auditId；truncate / drop 目标不存在时正式执行返回 404。
+- apps/server/src/lib/import-packages.ts 支持 demo / douyin-bi dry run 映射为统一 OperationImpact，正式导入写入 db_admin_audit 并返回 auditId / afterSnapshot。
+- apps/server/src/routes/admin-database.ts 已让 import、truncate、drop、delete-version、apply-migrations、rebuild 写接口统一 admin token、Idempotency-Key、confirmText 和响应结构；import 缺失或错误 confirmText 返回 400。
+- smoke 已适配空库与导入后状态：smoke:admin-database 37/37、smoke:admin-import 52/52、smoke:admin-dangerous 55/55 通过；typecheck 与 schema:check 通过。
+- 当前 ws_demo 已通过 smoke 导入 demo + douyin-bi，不再是空业务库；如需恢复空库，需通过 Admin API rebuild。`
+  },
+  {
+    dom: "V",
+    status: "done",
+    created: "2026-07-04 00:12",
+    title: "V-P3-DB-MGMT-2：数据管理前端操作化工作台",
+    brief: `目标：把 DataManagementWorkbench 从只读展示升级为可操作但受控的数据库管理工作台，接入真实 Admin API 写操作。
+
+前置：
+- X-P3-DB-MGMT-0 冻结产品方案。
+- A-P3-DB-MGMT-1 提供稳定 Admin API contract。
+
+范围：
+1. 总览页明确展示当前 workspace、schema 状态、业务行数、最近导入和最近危险操作。
+2. 库表页支持查看 schema / sample，并按后端能力展示清空表、删除表入口。
+3. 导入页支持数据包选择、dry run、质量报告、正式导入和导入任务状态刷新。
+4. 版本页支持查看 dataVersion，并接入删除版本 dry run / execute。
+5. Schema 页支持 schema check 和 apply migrations 入口。
+6. 危险操作页支持 rebuild workspace，所有危险操作统一弹窗：影响范围、warnings、确认文本、admin token、执行结果。
+7. 操作日志页可按 operation、target、status 查看 db_admin_audit。
+
+红线：
+- 不做 SQL console。
+- 不直接访问 SQLite 文件。
+- 不允许一键无确认删除。
+- 不隐藏 user_authorized、audit、task、import history 等影响提示。
+- 移动端不得出现按钮、表格、确认弹窗或长文本重叠。
+
+验证：
+- apps/web lint。
+- apps/web build。
+- Playwright 覆盖 dry run、错误确认文本、成功执行后的刷新、操作日志出现记录。
+- 真实 API 模式下至少跑通导入 data/p1/douyin-bi、删除版本 dry run、rebuild dry run；正式破坏性请求在 e2e 中必须拦截或使用临时 workspace。
+
+总控归档：
+- DataManagementWorkbench 已升级为数据管理操作化工作台，覆盖总览、库表、导入、版本、Schema、危险操作和操作日志过滤。
+- 前端 API adapter 已对齐 docs/p3-db-mgmt-api-contract.md，支持 IMPORT、TRUNCATE、DROP_TABLE、DELETE_VERSION、RESET、APPLY_MIGRATIONS 的 dry run 和 execute。
+- 导入包枚举已对齐后端 contract，仅保留 demo 与 douyin-bi；dry run 会透传后端 requiredConfirmText、warnings 和 qualityReport。
+- 统一危险操作弹窗已展示影响范围、用户授权数据提示、warnings、Admin Token、后端确认文本、执行结果、Audit ID 和 After Snapshot。
+- 修复原“只读工作台”文案和 import succeeded 状态标识；mock confirmText 已对齐 DROP / DELETE VERSION / APPLY MIGRATIONS / IMPORT 后端格式。
+- 验证回流：npx tsc --noEmit、npm run lint、npm run smoke 通过；Playwright 已覆盖 rebuild、import douyin-bi、delete version、apply migrations 的 dry run / execute 拦截链路和执行结果展示。
+- 剩余缺口：当前 e2e 对操作日志只做结构级检查，未严格断言某次执行后的具体 audit 记录；后续 A-P3-DB-MGMT-3 或 X-P3-DB-MGMT-4 需补强真实 audit 记录断言。`
+  },
+  {
+    dom: "A",
+    status: "done",
+    created: "2026-07-04 00:13",
+    title: "A-P3-DB-MGMT-3：空库与重放数据 smoke 适配",
+    brief: `目标：把当前 admin smoke 从单一历史数据假设改为同时支持空业务库和重放数据后的数据库管理闭环。
+
+前置：
+- A-P3-DB-MGMT-1 完成 API 加固。
+- V-P3-DB-MGMT-2 的关键前端流程已明确依赖。
+
+范围：
+1. 拆分空库 smoke：验证 schema、workspace、db_admin_audit、data_import_job 初始状态。
+2. 拆分导入后 smoke：通过受控导入重放 data/demo 或 data/p1/douyin-bi，再验证 versions、tables、quality、audit。
+3. 修正 smoke:admin-dangerous 中对 ws_demo 必然存在 v1_20260703 数据的旧断言。
+4. 危险操作正式执行默认使用临时 workspace，不污染 ws_demo。
+5. 输出 JSON summary，便于 X 总控复核。
+
+红线：
+- 不为了让测试通过自动重放 user_authorized 数据到 ws_demo。
+- 不在 smoke 中执行未拦截的 ws_demo rebuild、drop 或 delete version。
+- 不吞掉危险操作失败原因。
+
+验收：
+- 空库 smoke 通过。
+- 导入后 smoke 通过。
+- 临时 workspace dangerous smoke 通过。
+- README 或脚本 help 明确每条 smoke 对数据库状态的前置假设。
+
+总控归档：
+- 新增 smoke:admin-empty，自动创建临时 workspace 并通过 rebuild 初始化空业务 schema，覆盖 database(empty)、import dry-run 和 dangerous smoke。
+- 新增 smoke:admin-imported，自动创建临时 workspace 并通过 Admin API 导入 demo + douyin-bi，覆盖 import(imported)、database(imported) 和 dangerous smoke。
+- 新增 smoke:admin-summary，串行运行 empty / imported 两套隔离 workspace smoke，并输出 allOk JSON summary 供 X 总控复核。
+- smoke-admin-database 与 smoke-admin-import 已支持 PLS_ADMIN_SMOKE_MODE，脚本末尾输出 RESULT JSON；apps/server/scripts/README-admin-smoke.md 已说明前置假设、环境变量和红线。
+- smoke-admin-dangerous 已移除对 ws_demo v1_20260703 的旧假设，正式 destructive 操作只在临时 workspace 执行，delete version 使用 import 响应动态 dataVersion。
+- DELETE /versions/:dataVersion 正式执行顺序已调整为先校验 confirmText，再检查 affectedRows === 0，避免错误 confirmText 被 not_found 掩盖。
+- 验证回流：apps/server typecheck、schema:check、smoke:admin-empty 131/131、smoke:admin-imported 157/157、smoke:admin-summary allOk=true 通过。
+- ws_demo 保持 A-P3-DB-MGMT-1 smoke 后的 demo + douyin-bi 状态；本卡未再污染主库。`
+  },
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-04 00:14",
+    title: "X-P3-DB-MGMT-4：数据管理可操作化总体验收",
+    brief: `目标：总控验收数据管理模块可操作化闭环，确认用户可以在前端通过受控流程管理后端 SQLite 数据库。
+
+前置：
+- X-P3-DB-MGMT-0 至 A-P3-DB-MGMT-3 均完成并回流。
+
+范围：
+1. 复核产品方案、Admin API、前端工作台和 smoke 脚本。
+2. 从空业务库开始，验证页面能展示当前状态。
+3. 验证 dry run 并导入 data/p1/douyin-bi 或用户确认的数据包。
+4. 验证版本页出现 dataVersion，操作日志记录导入。
+5. 验证删除版本 dry run 和错误确认文本拦截。
+6. 验证危险操作不绕过 admin token、Idempotency-Key、confirmText 和 db_admin_audit。
+7. 输出验收报告，并按结果更新 docs/wiki.html、docs/notes-infra.md、docs/notes-app.md、docs/notes-viz.md。
+
+红线：
+- 不执行未确认的 ws_demo 破坏性正式操作。
+- 不通过手工修改 SQLite 文件完成验收。
+- 不把旧 P3-DB done 卡改回 todo。
+
+验收：
+- typecheck / lint / build / API smoke / Playwright smoke 通过。
+- 当前数据库状态、导入重放、版本管理、危险操作 dry run 和 audit 全部可追溯。
+- 明确剩余风险、未覆盖数据包和是否允许进入后续真实数据管理增强。
+
+总控验收归档：
+- 新增 docs/p3-db-mgmt-acceptance-report.md，结论为通过，允许进入后续真实数据管理增强。
+- 验收中修复 apps/web/src/services/api.ts 缺失 DbOperationExecuteResult type import，恢复前端 build。
+- 修复 apps/web/e2e/data-management.spec.ts import dry-run 拦截路径，避免真实后端模式下半真半 mock。
+- 修复 apps/web/src/pages/DataManagementWorkbench.tsx 真实数据列表空 id 导致的 React duplicate key console error。
+- 复核验证：server typecheck、schema:check、smoke:admin-summary allOk=true；web lint、build、smoke 通过；真实后端数据管理读验证与受控操作链路定向 Playwright 均通过。
+- 本轮未对 ws_demo 执行未确认的破坏性正式操作；API dangerous execute 由隔离临时 workspace 验证。`
   }
 ];
 
@@ -2523,9 +2730,93 @@ const HOTFIX = [];
 
 const CHANGELOG = [
   {
+    ver: "0.40",
+    date: "2026-07-04",
+    current: true,
+    title: "X-P3-DB-MGMT-4 数据管理可操作化总体验收通过",
+    items: [
+      "X-P3-DB-MGMT-4 经总控验收标记 done，新增 docs/p3-db-mgmt-acceptance-report.md",
+      "确认数据管理模块已形成前端受控操作 -> Admin API -> SQLite -> db_admin_audit 的闭环",
+      "验收中修复前端 build type import、Playwright import dry-run 拦截和真实数据 duplicate key 问题",
+      "复核验证结果：server typecheck、schema:check、smoke:admin-summary allOk=true；web lint、build、smoke 与真实后端数据管理定向 Playwright 通过"
+    ]
+  },
+  {
+    ver: "0.39",
+    date: "2026-07-04",
+    current: false,
+    title: "A-P3-DB-MGMT-3 Admin Smoke 分层验收通过",
+    items: [
+      "A-P3-DB-MGMT-3 经 X 总控复核标记 done，新增 smoke:admin-empty、smoke:admin-imported 和 smoke:admin-summary",
+      "空库 smoke 与导入后 smoke 均使用隔离临时 workspace，dangerous 正式操作不再污染 ws_demo",
+      "smoke-admin-dangerous 移除对 ws_demo 历史 v1_20260703 数据的依赖，delete version 改为动态读取导入版本",
+      "复核验证结果：typecheck、schema:check、smoke:admin-empty 131/131、smoke:admin-imported 157/157、smoke:admin-summary allOk=true 通过"
+    ]
+  },
+  {
+    ver: "0.38",
+    date: "2026-07-04",
+    current: false,
+    title: "V-P3-DB-MGMT-2 数据管理前端操作化验收通过",
+    items: [
+      "V-P3-DB-MGMT-2 经 X 总控复核标记 done，DataManagementWorkbench 升级为受控数据库管理工作台",
+      "前端已接入 Admin Database dry run / execute，覆盖导入、表清空 / 删除、版本删除、apply migrations 和 rebuild",
+      "统一危险操作弹窗展示影响范围、warnings、Admin Token、后端确认文本、执行结果、Audit ID 和 After Snapshot",
+      "复核验证结果：npx tsc --noEmit、npm run lint、npm run smoke 通过；剩余缺口为具体 audit 记录断言需后续补强"
+    ]
+  },
+  {
+    ver: "0.37",
+    date: "2026-07-04",
+    current: false,
+    title: "A-P3-DB-MGMT-1 Admin Database API 加固验收通过",
+    items: [
+      "A-P3-DB-MGMT-1 经 X 总控复核标记 done，新增 docs/p3-db-mgmt-api-contract.md",
+      "确认 Admin Database 写接口统一 dry run / execute 响应，正式执行要求 admin token、Idempotency-Key 和后端 confirmText 校验",
+      "确认 import 缺失或错误 confirmText 返回 400，truncate / drop 目标不存在时正式执行返回 404",
+      "复核验证结果：apps/server typecheck、schema:check、smoke:admin-database 37/37、smoke:admin-import 52/52、smoke:admin-dangerous 55/55 通过"
+    ]
+  },
+  {
+    ver: "0.36",
+    date: "2026-07-04",
+    current: false,
+    title: "X-P3-DB-MGMT-0 数据管理可操作化方案冻结",
+    items: [
+      "X-P3-DB-MGMT-0 经总控自做标记 done，新增 docs/p3-db-mgmt-operational-plan.md",
+      "冻结数据管理模块升级为受控 SQLite 数据库运维工作台，不做 SQL console、不直接访问 SQLite 文件、不做单元格级在线编辑",
+      "冻结写操作统一流程：dry run、影响范围、confirmText、admin token、Idempotency-Key、后端校验、db_admin_audit 和状态刷新",
+      "确认当前 ws_demo 为空业务库，后续业务数据需通过受控导入重放；旧 P3-DB 卡保持 done"
+    ]
+  },
+  {
+    ver: "0.35",
+    date: "2026-07-04",
+    current: false,
+    title: "数据管理可操作化任务拆卡",
+    items: [
+      "新增 P3-DB-MGMT 任务卡组，目标是把数据管理模块从只读工作台升级为受控 SQLite 数据库运维工作台",
+      "冻结增强方向：总览、库表管理、导入管理、版本管理、Schema 管理、危险操作和操作日志",
+      "明确所有写操作必须走 Admin API、dry run、confirmText、admin token、Idempotency-Key 和 db_admin_audit",
+      "旧 P3-DB 卡保持 done，后续增强以 X-P3-DB-MGMT-0 至 X-P3-DB-MGMT-4 新卡推进"
+    ]
+  },
+  {
+    ver: "0.34",
+    date: "2026-07-04",
+    current: false,
+    title: "SQLite 数据库操作能力代码核查完成",
+    items: [
+      "复核代码与文档后确认 X-P3-DB-0 至 X-P3-DB-8 均已完成并保持 done 状态",
+      "代码已覆盖 schema migration、Admin Database API、导入版本 API、危险操作 API、DataManagementWorkbench 和 Playwright 危险操作验证",
+      "docs/notes-data.md 与 docs/p3-db-rebuild-acceptance.md 已记录 ws_demo 受控 rebuild 完成，当前业务库为空 schema 状态",
+      "更正上一轮误判：P3-DB 卡不应重新发布为 todo，后续如需增强应另开新卡"
+    ]
+  },
+  {
     ver: "0.33",
     date: "2026-07-03",
-    current: true,
+    current: false,
     title: "SQLite 重构与数据管理模块拆卡发布",
     items: [
       "新增 P3-DB 任务卡组，覆盖 SQLite 重构、现有数据盘点、schema migration、Admin API、导入版本管理、前端数据管理和危险操作闭环",
@@ -3015,6 +3306,7 @@ const PROMPTS = [
   { id: "resume-infra", title: "Session 开场 · infra", desc: "infra / X 域：读 notes-infra / 接缝契约，先汇报再开工" },
   { id: "wrapup", title: "Session 收尾", desc: "校验、覆盖 notes 当前状态、沉淀知识、列改动清单" },
   { id: "hotfix", title: "快修通道", desc: "小修小补，先判数据准入和接缝层边界" },
+  { id: "learn-review", title: "/learn 沉淀复核", desc: "复核其他 agent 学习后修改的 AGENTS.md，并做最小规则修正" },
 ];
 
 const promptList = document.getElementById("promptList");

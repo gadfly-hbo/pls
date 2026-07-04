@@ -2,10 +2,14 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-03（V-P3-DB-7 完成）
+最近更新：2026-07-04（X-P3-DB-MGMT-4 总体验收通过：数据管理前端可操作化闭环通过）
 
 进度：
 
+- `X-P3-DB-MGMT-4` 总体验收已通过：`DataManagementWorkbench` 已作为受控数据库管理工作台接入 Admin API；前端支持导入、版本删除、表清空 / 删除、apply migrations、rebuild 的 dry run -> confirmText -> execute -> audit 结果展示链路。
+- `V-P3-DB-MGMT-2` (数据管理前端操作化) 问题修复与 E2E 补齐：修复了总控复核提出的阻断问题：将所有 Playwright 拦截响应结构更新至与真实后端同构的顶层数据返回；补充了导入包 `demo` / `douyin-bi`、版本删除、Apply Migrations 的 UI 测试流，并增加了对操作日志执行成功状态及 Audit ID 的显式断言。修复了 `USE_MOCK=true` 模式下 `DELETE_VERSION` 与 `DROP_TABLE` 的 mock confirmText 组装回退逻辑错误以及相关路由匹配漏洞。
+- 总体验收中修复了前端其他问题：`api.ts` 缺失 `DbOperationExecuteResult` type import 导致 build 失败；`data-management.spec.ts` import dry-run 拦截路径未覆盖真实 `/import-jobs/dry-run`；真实后端数据下导入 / 版本 / audit 列表空 id 触发 React duplicate key console error。
+- 验证通过：`apps/web npm run lint`、`npm run build`、`npm run smoke`。
 - `V-P3-DB-7` (危险操作前端与操作日志闭环) 已完成：在数据管理前端支持清空表、删除表、删除版本、重建 workspace 的受控入口。所有操作均需先进行 dry run（展示影响表、行数、是否含用户授权数据及审计记录），并强制要求用户输入诸如 `RESET ws_demo` 的文本进行确认。操作完成后自动刷新当前数据。操作日志页现在展示完整快照（JSON 缩略视图）。
 - `V-P3-DB-5` (数据管理前端只读工作台) 已完成：新增 `DataManagementWorkbench`，提供总览、库表、导入、版本、Schema、操作日志、危险操作七个 Tab。由于 A 域 Admin API 尚未就绪，已在前端 `api.ts` 中完成了 mock 联调，并定义了 `DbOverview` 等 8 个相关 TS 类型。坚守了数据红线（不直接访问 SQLite、不实现单元格编辑、危险操作仅展示禁用态），已通过 lint、build 及 Playwright smoke 测试，截图检查确认表格、按钮和长表名无重叠。
 - `V-P2-UI-1` 至 `V-P2-UI-4`（PLS 工作台 UI 改造二阶段）已完成并通过 X 总控复核：应用导航顺序已调整为“实体与账号画像 -> 人货匹配核心工作台 -> 新品预测工作台 -> 经营飞轮”，默认入口改为 `AccountProfileWorkbench`。四个工作台统一接入 PageHeader、SegmentedControl、MetricCard、StatusBadge、EntityListItem、EmptyState、AlertBanner、Toolbar、Panel 等轻量 UI 样式；清理旧 `App.css` starter 样式，并收敛工作台 spacing、radius、shadow、状态色和响应式布局。总控复验 `npm run lint`、`npm run build`、`npm run smoke` 通过，并补做 1440px desktop 与 375px mobile 四模块截图检查，未发现明显遮挡、错位或 console/page error。
@@ -29,7 +33,8 @@
 
 下一步：
 
-- 等待 D-P2-7 新品主数据预测输入模板或后续正式 `ProductChannelFit` API；若后端新增独立 `missingTags` / `lowConfidenceTags`，前端需补齐映射。
+- P3-DB-MGMT 前端闭环已通过总控验收；后续增强需另开卡。
+- 若后端新增数据包列表接口，前端应移除固定 `demo` / `douyin-bi` 枚举，改为消费后端受支持数据包列表。
 
 阻塞：
 
@@ -52,9 +57,10 @@
   1. **无契约不动手**：写代码前必须利用工具读取后端源码，严禁仅凭猜测或旧 Mock 开始编写对接逻辑。
   2. **强制 Adapter 隔离层对齐**：Header（如 `Idempotency-Key`, `X-PLS-Admin-Token`）、Method、URL、Body 和 Response（包括数组清洗、布尔值及多形态状态的推导）必须在 `api.ts` 过一遍严格映射和沙盘推演。
   3. **Mock 必须反映真实形态**：E2E 的 Mock 响应必须与后端真实返回结构的字段及层级完全一致，杜绝“自欺欺人”的脱节测试。
+- **本地 Mock 与 E2E 拦截的坑（USE_MOCK 陷阱）**：在补齐 V-P3-DB-MGMT-2 的 E2E 覆盖时深刻体会到：前端 `api.ts` 的 `USE_MOCK=true` 会导致不发起真实网络请求，致使 Playwright 的 `page.route` 网络拦截完全失效。另外，Playwright 的 `page.route` 路由匹配不能包含 HTTP Method（不能写成 `**/versions/*/delete*`），只能用精确的 URL glob 匹配。这要求我们在修改任何拦截内容时，必须同步修正 `api.ts` 本地短路的 fallback 验证逻辑，防止因前端代码库“Mock 漂移”导致的 CI 流程断链。
 - **以实体为视角的双轨视图**：为适应 P2 阶段需求，账号画像由单一的“比对模式”升级为“实体优先”模式。通过划分“画像分析”与“决策诊断”两个 Tab，前者展示本实体的 Benchmark 和基盘特征，后者可自由挂载不同的 SKU 进行针对性投流或货品铺发测试，兼顾业务的纵览与深钻。
 - **决策飞轮边界与人工审核机制**：在引入 `FlywheelWorkbench` 时，严守了“不自动执行策略”红线。尽管工具串联了从匹配诊断到后续决策流转（如“铺货”或“调价”）的动作记录与归因反馈环节，但在 P2 及可见阶段，所有的行动执行仍依赖业务人员在外部系统或人工完成；前端看板仅用于跟踪、状态校验及记录复盘偏差。
-- **数据管理红线**：P3 阶段数据管理工作台（`DataManagementWorkbench`）保持前端只读和控制，不进行直接的 SQLite 操作，危险操作必须由 API 提供带确认和防重放的受控入口。
+- **数据管理红线**：P3-DB-MGMT 后 `DataManagementWorkbench` 已允许通过受控 Admin API 执行数据库运维操作，但仍禁止前端直接访问 SQLite 文件、通用 SQL console、单元格级在线编辑和绕过 confirmText / admin token / Idempotency-Key / audit 的写操作。
 
 ---
 

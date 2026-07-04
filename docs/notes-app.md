@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-03（Session 收尾：A-P3-DB-6 三轮返工完成，app 域 P3-DB 全套交付待总控复核）
+最近更新：2026-07-04（X-P3-DB-MGMT-4 总体验收通过：Admin Database API 与 smoke 闭环通过）
 
 进度：
 
@@ -12,8 +12,12 @@
 - A-P2-3 已通过总控复核（channel_entity 投影表 + /channels/entities）。
 - A-P2-9 已完稿并通过总控复核（新品预测 API + 匹配衔接）。
 - A-P2-10 已完稿并通过总控复核（经营飞轮最小闭环 API）。
-- **A-P3-DB-2 / 3 / 4 已完稿 + 返工**（admin token 前置于 idempotency replay）。
-- **A-P3-DB-6 本轮完稿 + 三轮返工**：受控危险操作 API 与 workspace rebuild 流程。
+- **A-P3-DB-2 / 3 / 4 已通过总控复核并 mark done**（admin token 前置于 idempotency replay）。
+- **A-P3-DB-6 已 mark done**：受控危险操作 API 与 workspace rebuild 流程经三轮返工后通过。
+- **X-P3-DB-8 已 mark done**：用户确认空库重放，ws_demo 通过 Admin API 完成受控 rebuild，未手工 rm 主库。
+- **A-P3-DB-MGMT-1 已完成**：Admin Database API 可操作化加固，统一 dry run / 正式执行响应、补齐 after snapshot、导入重放、危险操作 confirmText 和 audit 闭环。
+- **A-P3-DB-MGMT-3 已完成并经总控 mark done**：拆分空库 smoke（`smoke:admin-empty`）与导入后 smoke（`smoke:admin-imported`）；dangerous 操作正式执行仅使用临时 workspace；新增 `smoke:admin-summary` 输出 JSON summary；README 明确每条 smoke 对数据库状态的前置假设。
+- **X-P3-DB-MGMT-4 已完成**：总控验收确认 Admin Database API、empty/imported/summary smoke、版本管理、危险操作 dry run / confirmText / admin token / Idempotency-Key / audit 闭环通过。
 - 应用侧数据准入按项目级放行口径；taxonomy gate 未变。
 
 关键决策（A-P3-DB-6 三轮返工）：
@@ -26,12 +30,12 @@
 - **Round 2 — view 类型检测**：executeDrop 先 `isTable()` 再 `isView()` 再 fallback IF EXISTS。
 - **Round 3 — 路由层语义修正**：DELETE /versions/:dataVersion 改用 `affectedRows === 0` 判 not-found，不再用 `warnings.length > 0`。warnings 仅描述数据特征（user_authorized / protected），不影响存在性判断。
 - **fresh workspace 容错**：dangerous-ops 的 batch 表查询/删除加 `isTable(db, "batch")` 守卫 + try-catch。
+- **A-P3-DB-MGMT-3 补充**：delete-version 正式执行时先校验 `confirmText` 再检查 `affectedRows === 0`，避免错误 confirmText 因版本不存在而误返回 404。
 
 下一步：
 
-- 等 X 总控复核 A-P3-DB-2/3/4/6 并 mark done。
-- X-P3-DB-8（清库重建总体验收）可开工，依赖全部 P3-DB 任务。
-- V-P3-DB-5（前端只读工作台）和 V-P3-DB-7（危险操作前端）依赖 A 域完成，可由 V 域开工。
+- P3-DB-MGMT 当前全组已完成；后续若新增数据管理增强，需另开任务卡。
+- App 后续可优先承接：后端数据包列表接口、临时 workspace 清理策略、更细粒度 admin 权限 / token 获取方式、真实用户授权数据包模板。
 
 阻塞：
 
@@ -47,18 +51,28 @@
 
 验证：
 
-- `apps/server npm run typecheck` 通过（0 错误）。
-- `apps/server npm run migrate` 通过；V001_create_admin_tables 已应用。
-- `apps/server npm run schema:check` 通过（Valid: true, 1 migration applied）。
-- `apps/server npm run smoke` 通过：24/24。
-- `apps/server npm run smoke:douyin-bi` 通过：15/15。
-- `apps/server npm run smoke:data-management` 通过：22/22。
-- `apps/server npm run smoke:channel-entities` 通过：15/15。
-- `apps/server npm run smoke:p2-api` 通过：20/20。
-- `apps/server npm run smoke:admin-database` 通过：35/35。
-- `apps/server npm run smoke:admin-import` 通过：31/31。
-- `apps/server npm run smoke:admin-dangerous` 通过：37/37（含三轮返工后的真实 drop view / 真实 delete-version 完整闭环 / protected tables warning）。
-- **总计 199 项冒烟测试全部通过，无回归。**
+- 重建前（2026-07-03）：199 项 API 冒烟全部通过，无回归。
+- A-P3-DB-MGMT-1 验证（2026-07-04，返工后）：
+  - `apps/server npm run typecheck` 通过。
+  - `apps/server npm run schema:check` 通过（Valid true，0 missing / 0 extra，1 applied / 0 pending / 0 failed）。
+  - `apps/server npm run smoke:admin-database` 通过 37/37（空库状态）。
+  - `apps/server npm run smoke:admin-import` 通过 52/52（空库 → demo 导入 → douyin-bi 导入；覆盖缺失/错误 confirmText）。
+  - `apps/server npm run smoke:admin-dangerous` 通过 55/55（含临时 workspace 真实 drop view / drop table / truncate non-existent / drop non-existent / delete version / rebuild 闭环）。
+  - `docs/p3-db-mgmt-api-contract.md` 已更新，明确 import confirmText 为 `IMPORT ${packageType}`。
+- A-P3-DB-MGMT-3 验证（2026-07-04）：
+  - `apps/server npm run typecheck` 通过。
+  - `apps/server npm run schema:check` 通过（Valid true，0 missing / 0 extra，1 applied / 0 pending / 0 failed）。
+  - `apps/server npm run smoke:admin-empty` 通过 131/131（database 43 + import 32 + dangerous 56）。
+  - `apps/server npm run smoke:admin-imported` 通过 157/157（import 52 + database 49 + dangerous 56）。
+  - `apps/server npm run smoke:admin-summary` 通过，输出 JSON summary（allOk: true）。
+  - `apps/server/scripts/README-admin-smoke.md` 已新增，说明每条 smoke 的前置假设与 workspace 行为。
+- X-P3-DB-MGMT-4 总体验收（2026-07-04）：
+  - `apps/server npm run typecheck` 通过。
+  - `apps/server npm run schema:check` 通过（`ws_demo` valid，1 applied / 0 pending / 0 failed）。
+  - `apps/server npm run smoke:admin-summary` 通过，`allOk: true`。
+  - empty suite：database 43/43，import dry-run 32/32，dangerous 56/56。
+  - imported suite：import 52/52，database imported 49/49，dangerous 56/56。
+- ws_demo 当前状态（A-P3-DB-MGMT-1 smoke 执行后）：已导入 demo + douyin-bi，business rows > 0；A-P3-DB-MGMT-3 wrapper 使用独立临时 workspace，不污染 `ws_demo`。
 
 ---
 
@@ -77,6 +91,14 @@
 
 - 契约定型见 `## 0` 关键契约点段落。
 - V 域调用序列已定型两套（新品画像工作台 5 步、渠道匹配热力图 4 步）。
+
+## A-P3-DB-MGMT-3 沉淀
+
+- **Smoke wrapper 模板**：把数据库管理 smoke 切成 `empty` / `imported` 两套独立临时 workspace 后，复制成本极低；后续只要在 wrapper 内追加新的子脚本和模式字段即可。跨产品 / 跨任务都可以复用此模式（见 `AGENTS.md` §2.x）。
+- **危险操作 confirmText 前置校验**：所有"先查后写"的危险操作路由都必须把 `confirmText` 校验放在打开 DB / 计算影响之前。否则对"目标不存在 / 空库 / 未经导入的数据集"的错误 confirmText 会被短路成 404 / 200 success，绕过用户明确确认的强制语义。该规则已写入 `AGENTS.md` §2.x-4。
+- **ESM .mjs 文件易掉坑**：用 `edit` 多次插入 `let passed = 0;` / `function printResult() {}` 时，必须注意 `Replace all` 默认替换所有同名标识符；本次曾因重复声明 `function printResult` 触发 SyntaxError。落地：在 edit 前先 `grep -n` 整个文件确认无同名标识符，再做精准 patch。
+- **JSON summary runner 子脚本末尾必须输出 `RESULT: {...}`**：wrapper 通过正则 `RESULT:\s*(\{[^\n]+\})` 抓取并汇总；任何不带该行的子脚本都会被 wrapper 标记为 "no result line"。
+
 - 数据准入门禁当前口径：
   - safety 接口保留但默认 pass；不再因 `phone` / `name` / `address` / `orderId` / `memberId` / `openId` / `adId` / `deviceId` 或手机号/邮箱/身份证形态拒绝。
   - taxonomy 门禁：`tagId` 必须在标签体系白名单；未命中且有 `mappingRuleId` 进 `unmappedTags`；否则 `taxonomy_violation`。

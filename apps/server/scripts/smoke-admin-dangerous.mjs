@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// A-P3-DB-6: Smoke script for admin dangerous operations.
-// Assumes server on localhost:3100 and ws_demo schema ready.
+// A-P3-DB-MGMT-1: Smoke script for admin dangerous operations.
+// Covers empty-DB dry-run behavior and destructive execute on a TEMP workspace.
 
 const BASE = process.env.PLS_API_BASE ?? "http://localhost:3100/api/v0";
 const TOKEN = process.env.PLS_API_TOKEN ?? "pls-p0-demo-token";
@@ -8,7 +8,13 @@ const ADMIN_TOKEN = process.env.PLS_ADMIN_TOKEN ?? "pls-admin-token";
 const WS = process.env.PLS_WORKSPACE ?? "ws_demo";
 const HDR = { Authorization: `Bearer ${TOKEN}`, "X-PLS-Workspace": WS };
 
+let passed = 0;
 let failures = 0;
+
+function assert(label, cond, detail = "") {
+  if (cond) { console.log(`  OK   ${label}`); passed += 1; }
+  else { console.error(`  FAIL ${label} :: ${detail}`); failures += 1; }
+}
 
 async function req(path, opts = {}) {
   const res = await fetch(`${BASE}${path}`, { headers: HDR, ...opts });
@@ -16,24 +22,19 @@ async function req(path, opts = {}) {
   return { status: res.status, body };
 }
 
-function assert(label, cond, detail = "") {
-  if (cond) console.log(`  OK   ${label}`);
-  else { console.error(`  FAIL ${label} :: ${detail}`); failures += 1; }
-}
-
 async function main() {
   console.log(`Smoke admin-dangerous against ${BASE}`);
 
-  // === truncate ===
-  // dry-run truncate
+  // === truncate (empty-DB safe target) ===
   const dryTrunc = await req("/admin/database/tables/decision_record/truncate", {
     method: "POST",
     headers: { ...HDR, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `dry_trunc_${Date.now()}` },
     body: JSON.stringify({ dryRun: true }),
   });
   assert("truncate dry-run returns 200", dryTrunc.status === 200);
-  assert("truncate dry-run has impact", dryTrunc.body.data?.dryRun === true);
-  assert("truncate dry-run has affectedTables", Array.isArray(dryTrunc.body.data?.impact?.affectedTables));
+  assert("truncate dry-run operation is truncate", dryTrunc.body.data?.operation === "truncate");
+  assert("truncate dry-run has affectedTables", Array.isArray(dryTrunc.body.data?.affectedTables));
+  assert("truncate dry-run requiredConfirmText", dryTrunc.body.data?.requiredConfirmText === "TRUNCATE decision_record");
 
   // truncate without admin token
   const truncNoAuth = await req("/admin/database/tables/decision_record/truncate", {
@@ -59,57 +60,46 @@ async function main() {
   });
   assert("truncate wrong confirmText returns 400", truncWrongConfirm.status === 400);
 
-  // truncate protected table
+  // truncate protected table (dry-run)
   const truncProtected = await req("/admin/database/tables/schema_migration/truncate", {
     method: "POST",
     headers: { ...HDR, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `trunc_prot_${Date.now()}` },
     body: JSON.stringify({ dryRun: true }),
   });
-  assert("truncate protected table isProtected=true", truncProtected.body.data?.impact?.isProtected === true);
+  assert("truncate protected table containsSystemHistory", truncProtected.body.data?.containsSystemHistory === true);
+  assert("truncate protected table warns", truncProtected.body.data?.warnings?.some((w) => w.includes("protected")) === true);
 
   // === drop ===
-  // dry-run drop
   const dryDrop = await req("/admin/database/tables/decision_record", {
     method: "DELETE",
     headers: { ...HDR, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `dry_drop_${Date.now()}` },
     body: JSON.stringify({ dryRun: true }),
   });
   assert("drop dry-run returns 200", dryDrop.status === 200);
+  assert("drop dry-run operation is drop", dryDrop.body.data?.operation === "drop");
+  assert("drop dry-run requiredConfirmText", dryDrop.body.data?.requiredConfirmText === "DROP decision_record");
 
-  // drop protected table
+  // drop protected table (dry-run)
   const dropProtected = await req("/admin/database/tables/schema_migration", {
     method: "DELETE",
     headers: { ...HDR, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `drop_prot_${Date.now()}` },
     body: JSON.stringify({ dryRun: true }),
   });
-  assert("drop protected table isProtected=true", dropProtected.body.data?.impact?.isProtected === true);
+  assert("drop protected table containsSystemHistory", dropProtected.body.data?.containsSystemHistory === true);
+  assert("drop protected table warns", dropProtected.body.data?.warnings?.some((w) => w.includes("protected")) === true);
 
-  // === delete version ===
-  // dry-run delete nonexistent version
+  // === delete version (empty-DB should find 0 rows) ===
   const dryDelVer = await req("/admin/database/versions/nonexistent_version", {
     method: "DELETE",
     headers: { ...HDR, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `dry_delver_${Date.now()}` },
     body: JSON.stringify({ dryRun: true }),
   });
   assert("delete version dry-run returns 200", dryDelVer.status === 200);
-  assert("delete version not found", dryDelVer.body.data?.impact?.warnings?.length > 0);
+  assert("delete version empty affectedRows is 0", dryDelVer.body.data?.affectedRows === 0);
+  assert("delete version requiredConfirmText", dryDelVer.body.data?.requiredConfirmText === "DELETE VERSION nonexistent_version");
+  assert("delete version not found warning", dryDelVer.body.data?.warnings?.some((w) => w.includes("not found")) === true);
 
-  // dry-run delete REAL data_version v1_20260703 (matches douyin_* rows)
-  const dryDelVerReal = await req("/admin/database/versions/v1_20260703", {
-    method: "DELETE",
-    headers: { ...HDR, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `dry_delver_real_${Date.now()}` },
-    body: JSON.stringify({ dryRun: true }),
-  });
-  assert("delete version v1_20260703 dry-run returns 200", dryDelVerReal.status === 200);
-  assert("delete version v1_20260703 finds data", (dryDelVerReal.body.data?.impact?.affectedRows ?? 0) > 0,
-    `got ${dryDelVerReal.body.data?.impact?.affectedRows}`);
-  assert("delete version v1_20260703 lists douyin tables",
-    dryDelVerReal.body.data?.impact?.affectedTables?.some((t) => t.startsWith("douyin_")) === true,
-    `got ${JSON.stringify(dryDelVerReal.body.data?.impact?.affectedTables)}`);
-  assert("delete version v1_20260703 warns user_authorized",
-    dryDelVerReal.body.data?.impact?.warnings?.some((w) => w.includes("user_authorized")) === true);
-
-  // delete version with wrong confirmText
+  // delete version with wrong confirmText (uses non-existent version so test is workspace-agnostic)
   const delVerWrong = await req("/admin/database/versions/any_version", {
     method: "DELETE",
     headers: { ...HDR, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `delver_wrong_${Date.now()}` },
@@ -124,6 +114,9 @@ async function main() {
     body: JSON.stringify({ dryRun: true }),
   });
   assert("migrations dry-run returns 200", dryMigrations.status === 200);
+  assert("migrations dry-run operation is apply_migrations", dryMigrations.body.data?.operation === "apply_migrations");
+  assert("migrations dry-run containsSystemHistory", dryMigrations.body.data?.containsSystemHistory === true);
+  assert("migrations dry-run requiredConfirmText", dryMigrations.body.data?.requiredConfirmText === "APPLY MIGRATIONS");
 
   const migWrong = await req("/admin/database/migrations/apply", {
     method: "POST",
@@ -132,15 +125,21 @@ async function main() {
   });
   assert("migrations wrong confirm returns 400", migWrong.status === 400);
 
-  // === rebuild ===
+  // === rebuild dry-run on main workspace (read-only impact, no execute) ===
   const dryRebuild = await req("/admin/database/rebuild", {
     method: "POST",
     headers: { ...HDR, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `dry_rebuild_${Date.now()}` },
     body: JSON.stringify({ dryRun: true }),
   });
   assert("rebuild dry-run returns 200", dryRebuild.status === 200);
-  assert("rebuild dry-run targetType=workspace", dryRebuild.body.data?.impact?.targetType === "workspace");
-  assert("rebuild dry-run has affectedTables", Array.isArray(dryRebuild.body.data?.impact?.affectedTables));
+  assert("rebuild dry-run operation is rebuild", dryRebuild.body.data?.operation === "rebuild");
+  assert("rebuild dry-run targetType is workspace", dryRebuild.body.data?.targetType === "workspace");
+  assert("rebuild dry-run targetName is current ws", dryRebuild.body.data?.targetName === WS);
+  assert("rebuild dry-run has affectedTables", Array.isArray(dryRebuild.body.data?.affectedTables));
+  assert("rebuild dry-run requiredConfirmText", dryRebuild.body.data?.requiredConfirmText === `RESET ${WS}`);
+  assert("rebuild dry-run warns about system history",
+    dryRebuild.body.data?.warnings?.some((w) => w.includes("protected")) === true,
+    `got warnings: ${JSON.stringify(dryRebuild.body.data?.warnings)}`);
 
   const rebuildNoAuth = await req("/admin/database/rebuild", {
     method: "POST",
@@ -156,23 +155,15 @@ async function main() {
   });
   assert("rebuild wrong confirm returns 400", rebuildWrong.status === 400);
 
-  // === rebuild dry-run: must include protected system table rows ===
-  const rebuildDryCheck = await req("/admin/database/rebuild", {
-    method: "POST",
-    headers: { ...HDR, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `rebuild_drycheck_${Date.now()}` },
-    body: JSON.stringify({ dryRun: true }),
-  });
-  assert("rebuild dry-run returns 200", rebuildDryCheck.status === 200);
-  assert("rebuild dry-run warns about protected tables",
-    rebuildDryCheck.body.data?.impact?.warnings?.some((w) => w.includes("protected")) === true,
-    `got warnings: ${JSON.stringify(rebuildDryCheck.body.data?.impact?.warnings)}`);
-
-  // === real drop view on TEMP workspace (smoke-safe) ===
-  // Use temp workspace so we don't touch main ws_demo
+  // === REAL destructive operations on TEMPORARY workspace ===
   const DROP_WS = `ws_drop_test_${Date.now()}`;
   const dropHdr = { Authorization: `Bearer ${TOKEN}`, "X-PLS-Workspace": DROP_WS };
-  // Initialize temp workspace
-  await fetch(`${BASE}/admin/database/tables/workspace/sample?limit=1`, { headers: dropHdr });
+  // Initialize temp workspace with full schema via rebuild
+  await fetch(`${BASE}/admin/database/rebuild`, {
+    method: "POST",
+    headers: { ...dropHdr, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `drop_init_${Date.now()}` },
+    body: JSON.stringify({ confirmText: `RESET ${DROP_WS}`, skipSnapshot: true }),
+  });
   // Drop a view (match_result_latest is created by SCHEMA_DDL)
   const dropViewRes = await fetch(`${BASE}/admin/database/tables/match_result_latest`, {
     method: "DELETE",
@@ -185,62 +176,98 @@ async function main() {
   const viewCheck = await fetch(`${BASE}/admin/database/tables/match_result_latest/schema`, { headers: dropHdr });
   assert("view is dropped (404)", viewCheck.status === 404);
 
+  // Drop a real business table so we can test truncate/drop on non-existent target
+  const dropTableRes = await fetch(`${BASE}/admin/database/tables/decision_record`, {
+    method: "DELETE",
+    headers: { ...dropHdr, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `drop_table_${Date.now()}` },
+    body: JSON.stringify({ confirmText: "DROP decision_record" }),
+  });
+  assert("real drop business table returns 200", dropTableRes.status === 200);
+
+  // Truncate non-existent table -> 404
+  const truncMissing = await fetch(`${BASE}/admin/database/tables/decision_record/truncate`, {
+    method: "POST",
+    headers: { ...dropHdr, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `trunc_missing_${Date.now()}` },
+    body: JSON.stringify({ confirmText: "TRUNCATE decision_record" }),
+  });
+  assert("truncate non-existent table returns 404", truncMissing.status === 404);
+
+  // Drop non-existent table (in whitelist) -> 404
+  const dropMissing = await fetch(`${BASE}/admin/database/tables/decision_record`, {
+    method: "DELETE",
+    headers: { ...dropHdr, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `drop_missing_${Date.now()}` },
+    body: JSON.stringify({ confirmText: "DROP decision_record" }),
+  });
+  assert("drop non-existent table returns 404", dropMissing.status === 404);
+
   // === real DELETE VERSION on TEMP workspace with imported data ===
-  // Initialize temp workspace via rebuild (creates full schema), import douyin-bi, then delete v1_20260703
   const DEL_WS = `ws_review_delete_version_${Date.now()}`;
   const delHdr = { Authorization: `Bearer ${TOKEN}`, "X-PLS-Workspace": DEL_WS };
-  // 1. Init temp workspace dir + run rebuild to create full schema
   await fetch(`${BASE}/admin/database/tables/workspace/sample?limit=1`, { headers: delHdr });
   await fetch(`${BASE}/admin/database/rebuild`, {
     method: "POST",
     headers: { ...delHdr, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `temp_init_${Date.now()}` },
     body: JSON.stringify({ confirmText: `RESET ${DEL_WS}`, skipSnapshot: true }),
   });
-  // 2. Import douyin-bi via admin API
   const importRes = await fetch(`${BASE}/admin/database/import-jobs`, {
     method: "POST",
     headers: { ...delHdr, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `temp_import_${Date.now()}` },
-    body: JSON.stringify({ packageType: "douyin-bi" }),
+    body: JSON.stringify({ packageType: "douyin-bi", confirmText: "IMPORT douyin-bi" }),
   });
   const importBody = await importRes.json();
   assert("temp workspace import douyin-bi returns 200", importRes.status === 200,
     `got ${importRes.status}, body: ${JSON.stringify(importBody).slice(0, 300)}`);
-  assert("temp workspace import has rowCount > 0", (importBody.data?.rowCount ?? 0) > 0,
-    `got rowCount=${importBody.data?.rowCount}`);
-  // 3. Dry-run delete v1_20260703
-  const tempDry = await fetch(`${BASE}/admin/database/versions/v1_20260703`, {
+  assert("temp workspace import has rowCount > 0", (importBody.data?.afterSnapshot?.totalRows ?? 0) > 0,
+    `got rowCount=${importBody.data?.afterSnapshot?.totalRows}`);
+
+  const importedVersion = importBody.data?.afterSnapshot?.dataVersion ?? "v1_20260703";
+  assert("temp workspace import dataVersion exists", !!importedVersion);
+
+  // Dry-run delete imported version
+  const tempDry = await fetch(`${BASE}/admin/database/versions/${importedVersion}`, {
     method: "DELETE",
     headers: { ...delHdr, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `temp_drydel_${Date.now()}` },
     body: JSON.stringify({ dryRun: true }),
   });
   const tempDryBody = await tempDry.json();
   assert("temp workspace dry-run delete returns 200", tempDry.status === 200);
-  const dryRows = tempDryBody.data?.impact?.affectedRows ?? 0;
+  const dryRows = tempDryBody.data?.affectedRows ?? 0;
   assert("temp workspace dry-run finds > 0 rows", dryRows > 0,
-    `dryRows=${dryRows}, impact=${JSON.stringify(tempDryBody.data?.impact)}`);
-  // 4. Real delete with correct confirmText
-  const tempReal = await fetch(`${BASE}/admin/database/versions/v1_20260703`, {
+    `dryRows=${dryRows}, data=${JSON.stringify(tempDryBody.data)}`);
+  assert("temp workspace dry-run lists douyin tables",
+    tempDryBody.data?.affectedTables?.some((t) => t.startsWith("douyin_")) === true,
+    `got ${JSON.stringify(tempDryBody.data?.affectedTables)}`);
+  assert("temp workspace dry-run warns user_authorized",
+    tempDryBody.data?.warnings?.some((w) => w.includes("user_authorized")) === true);
+  assert("temp workspace dry-run requiredConfirmText",
+    tempDryBody.data?.requiredConfirmText === `DELETE VERSION ${importedVersion}`);
+
+  // Real delete with correct confirmText
+  const tempReal = await fetch(`${BASE}/admin/database/versions/${importedVersion}`, {
     method: "DELETE",
     headers: { ...delHdr, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `temp_realdel_${Date.now()}` },
-    body: JSON.stringify({ confirmText: "DELETE VERSION v1_20260703" }),
+    body: JSON.stringify({ confirmText: `DELETE VERSION ${importedVersion}` }),
   });
   assert("temp workspace real delete returns 200 (not 404)", tempReal.status === 200,
-    `got ${tempReal.status}, body: ${JSON.stringify(await tempReal.clone().json().catch(() => ({})))}`);
-  // 5. Verify data is gone (dry-run should now find 0 rows)
-  const tempAfter = await fetch(`${BASE}/admin/database/versions/v1_20260703`, {
+    `got ${tempReal.status}`);
+  const tempRealBody = await tempReal.json();
+  assert("temp workspace real delete has auditId", !!tempRealBody.data?.auditId);
+  assert("temp workspace real delete status success", tempRealBody.data?.status === "success");
+
+  // Verify data is gone
+  const tempAfter = await fetch(`${BASE}/admin/database/versions/${importedVersion}`, {
     method: "DELETE",
     headers: { ...delHdr, "Content-Type": "application/json", "X-PLS-Admin-Token": ADMIN_TOKEN, "Idempotency-Key": `temp_afterdel_${Date.now()}` },
     body: JSON.stringify({ dryRun: true }),
   });
   const tempAfterBody = await tempAfter.json();
-  const afterRows = tempAfterBody.data?.impact?.affectedRows ?? 0;
+  const afterRows = tempAfterBody.data?.affectedRows ?? 0;
   assert("after real delete, dry-run finds 0 rows", afterRows === 0,
-    `afterRows=${afterRows}, warnings=${JSON.stringify(tempAfterBody.data?.impact?.warnings)}`);
+    `afterRows=${afterRows}, warnings=${JSON.stringify(tempAfterBody.data?.warnings)}`);
 
   // === rebuild on TEMPORARY workspace (smoke-safe) ===
   const TEMP_WS = `ws_smoke_${Date.now()}`;
   const tempHdr = { Authorization: `Bearer ${TOKEN}`, "X-PLS-Workspace": TEMP_WS };
-  // Init temp workspace via migrations
   await fetch(`${BASE}/admin/database/tables/workspace/sample?limit=1`, { headers: tempHdr });
   const tempRebuild = await fetch(`${BASE}/admin/database/rebuild`, {
     method: "POST",
@@ -249,8 +276,10 @@ async function main() {
   });
   const tempRebuildBody = await tempRebuild.json();
   assert("temp workspace rebuild returns 200", tempRebuild.status === 200);
-  assert("temp workspace rebuild has steps", Array.isArray(tempRebuildBody.data?.steps));
-  const allOk = tempRebuildBody.data?.steps?.every((s) => s.status === "ok" || s.status === "skipped");
+  assert("temp workspace rebuild status success", tempRebuildBody.data?.status === "success");
+  assert("temp workspace rebuild has auditId", !!tempRebuildBody.data?.auditId);
+  assert("temp workspace rebuild has steps", Array.isArray(tempRebuildBody.data?.afterSnapshot?.steps));
+  const allOk = tempRebuildBody.data?.afterSnapshot?.steps?.every((s) => s.status === "ok" || s.status === "skipped");
   assert("temp workspace rebuild all steps ok/skipped", allOk === true);
 
   // Verify rebuild did not affect main ws_demo
@@ -260,7 +289,12 @@ async function main() {
   assert("main ws_demo not affected by temp rebuild", mainTableCount >= 28);
 
   console.log(`\n${failures === 0 ? "All" : failures} smoke checks ${failures === 0 ? "passed." : "FAILED."}`);
+  printResult();
   process.exit(failures === 0 ? 0 : 1);
+}
+
+function printResult() {
+  console.log(`\nRESULT: ${JSON.stringify({ name: "admin-dangerous", workspace: WS, passed, failed: failures, ok: failures === 0 })}`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

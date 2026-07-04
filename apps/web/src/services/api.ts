@@ -1,4 +1,4 @@
-import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord, DbOverview, DbTableInfo, DbSchemaInfo, DbSampleInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbOperationDryRunResult } from '../types';
+import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord, DbOverview, DbTableInfo, DbSchemaInfo, DbSampleInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbOperationDryRunResult, DbOperationExecuteResult } from '../types';
 
 // Feature flag for local mock vs real backend
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
@@ -914,7 +914,7 @@ export const api = {
       code: 'ok',
       data: {
         items: [
-          { jobId: 'job_123', sourceType: 'demo_csv', status: 'completed', rowCount: 1500, successCount: 1500, errorCount: 0, startedAt: '2026-07-03T10:05:00Z', completedAt: '2026-07-03T10:06:00Z' }
+          { jobId: 'job_123', sourceType: 'demo', status: 'succeeded', rowCount: 1500, successCount: 1500, errorCount: 0, startedAt: '2026-07-03T10:05:00Z', completedAt: '2026-07-03T10:06:00Z' }
         ] as DbImportJob[]
       }
     };
@@ -948,18 +948,22 @@ export const api = {
     };
   },
 
-  dryRunDbOperation: async (operation: string, target: string) => {
+  dryRunDbOperation: async (operation: string, target: string, adminToken: string = 'pls-admin-token') => {
     if (!USE_MOCK) {
       const { path, method } = getDbOpRoute(operation, target);
-      const res = await fetchApi<any>(path, {
+      const isImport = operation === 'IMPORT';
+      const bodyPayload = isImport ? { packageType: target } : { dryRun: true };
+      const dryRunPath = isImport ? `${path}/dry-run` : path;
+
+      const res = await fetchApi<any>(dryRunPath, {
         method,
         headers: {
-          'X-PLS-Admin-Token': 'pls-admin-token',
+          'X-PLS-Admin-Token': adminToken,
           'Idempotency-Key': `dry_run_${operation}_${target}_${Date.now()}`
         },
-        body: JSON.stringify({ dryRun: true })
+        body: JSON.stringify(bodyPayload)
       });
-      const impact = res.data?.impact || {};
+      const impact = res.data || {};
       const warnings: string[] = impact.warnings || [];
       const hasAuditHistory = warnings.some(w => w.includes('protected system tables') || w.includes('audit/task') || w.includes('audit'));
       
@@ -968,8 +972,11 @@ export const api = {
         data: {
           affectedTables: impact.affectedTables || [target],
           affectedRows: impact.affectedRows || 0,
-          hasUserAuthorized: !!impact.isUserAuthorized,
-          hasAuditHistory: hasAuditHistory
+          hasUserAuthorized: !!impact.containsUserAuthorized || !!impact.isUserAuthorized,
+          hasAuditHistory: hasAuditHistory,
+          qualityReport: impact.qualityReport,
+          warnings: impact.warnings || [],
+          requiredConfirmText: impact.requiredConfirmText || ''
         } as DbOperationDryRunResult
       };
     }
@@ -979,35 +986,34 @@ export const api = {
         affectedTables: target === 'ws_demo' ? ['sku', 'match_result'] : [target],
         affectedRows: target === 'ws_demo' ? 1420 : 150,
         hasUserAuthorized: true,
-        hasAuditHistory: true
+        hasAuditHistory: true,
+        warnings: ['Mock warning: This is a high-risk operation'],
+        requiredConfirmText: operation === 'CLEAR_TABLE' ? `TRUNCATE ${target}` : operation === 'DROP_TABLE' ? `DROP ${target}` : operation === 'DELETE_VERSION' ? `DELETE VERSION ${target}` : operation === 'APPLY_MIGRATIONS' ? 'APPLY MIGRATIONS' : operation === 'IMPORT' ? `IMPORT ${target}` : `${operation} ${target}`
       } as DbOperationDryRunResult
     };
   },
 
-  executeDbOperation: async (operation: string, target: string, confirmText: string) => {
+  executeDbOperation: async (operation: string, target: string, confirmText: string, adminToken: string = 'pls-admin-token') => {
     if (!USE_MOCK) {
       const { path, method } = getDbOpRoute(operation, target);
-      return fetchApi<any>(path, {
+      const bodyPayload = operation === 'IMPORT' ? { packageType: target, confirmText } : { confirmText };
+      const res = await fetchApi<any>(path, {
         method,
         headers: { 
-          'X-PLS-Admin-Token': 'pls-admin-token',
+          'X-PLS-Admin-Token': adminToken,
           'Idempotency-Key': `${operation}_${target}_${Date.now()}` 
         },
-        body: JSON.stringify({ confirmText })
+        body: JSON.stringify(bodyPayload)
       });
+      return { code: 'ok', data: { success: true, ...res.data } as DbOperationExecuteResult };
     }
     
-    let expected = `${operation} ${target}`;
-    if (operation === 'CLEAR_TABLE') expected = `TRUNCATE ${target}`;
-    if (operation === 'DROP_TABLE') expected = `DROP ${target}`;
-    if (operation === 'DELETE_VERSION') expected = `DELETE VERSION ${target}`;
-    if (operation === 'RESET') expected = `RESET ${target}`;
-    if (operation === 'APPLY_MIGRATIONS') expected = `APPLY MIGRATIONS`;
+    let expected = operation === 'CLEAR_TABLE' ? `TRUNCATE ${target}` : operation === 'DROP_TABLE' ? `DROP ${target}` : operation === 'DELETE_VERSION' ? `DELETE VERSION ${target}` : operation === 'APPLY_MIGRATIONS' ? 'APPLY MIGRATIONS' : operation === 'IMPORT' ? `IMPORT ${target}` : `${operation} ${target}`;
 
     if (confirmText !== expected) {
       return Promise.reject(new Error('Confirmation text does not match.'));
     }
-    return { code: 'ok', data: { success: true } };
+    return { code: 'ok', data: { success: true, status: 'success', auditId: 'mock_audit_123', afterSnapshot: { mock: 'snapshot' } } as DbOperationExecuteResult };
   }
 };
 
@@ -1018,6 +1024,7 @@ function getDbOpRoute(operation: string, target: string): { path: string; method
     case 'DELETE_VERSION': return { path: `/admin/database/versions/${target}`, method: 'DELETE' };
     case 'RESET': return { path: `/admin/database/rebuild`, method: 'POST' };
     case 'APPLY_MIGRATIONS': return { path: `/admin/database/migrations/apply`, method: 'POST' };
+    case 'IMPORT': return { path: `/admin/database/import-jobs`, method: 'POST' };
     default: throw new Error(`Unknown operation: ${operation}`);
   }
 }
