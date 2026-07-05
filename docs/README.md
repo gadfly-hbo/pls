@@ -18,6 +18,8 @@
 | [data-safety-policy.md](data-safety-policy.md) | X 总控 | P0 数据安全分级、LLM 准入边界、共享对象约束 |
 | [data-spec.md](data-spec.md) | D | 历史 SKU 训练宽表、DMP 聚合导入、商品和渠道字段 |
 | [model-plan.md](model-plan.md) | M | 商品画像预测、商品 × 渠道匹配算法、回测指标 |
+| [single-product-portrait-algorithm-contract.md](single-product-portrait-algorithm-contract.md) | X 总控 | 单品商品属性到平台人群画像的规则 baseline contract、输出形态、验证标准和实现任务边界 |
+| [p5-portrait-baseline-acceptance.md](p5-portrait-baseline-acceptance.md) | X 总控 | 单品画像规则 baseline 总体验收、第一期展示边界和后续任务顺序 |
 | [api-contract.md](api-contract.md) | A | P0 API 契约、核心对象、接口清单、V 域调用序列 |
 | [pipeline-design.md](pipeline-design.md) | A | 任务状态机、pipeline 阶段、存储分层、审计与反馈骨架 |
 | [ui-flow.md](ui-flow.md) | V | 新品画像工作台、渠道匹配热力图、页面流转 |

@@ -2,12 +2,12 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-04（同步 P3-DB 完成状态，无 model 实现改动）
+最近更新：2026-07-05（X-P5-PORTRAIT-2 单品画像 baseline 总体验收通过）
 
 进度：
 
-- 本次 session 仅执行 model 域开场 SOP 与收尾复验，未改动 model 实现、contract、schema、API 或任务卡。
-- 收尾复验：`npm run typecheck` 通过；`npm run contract-test` 首次受沙箱限制无法创建 `tsx` IPC pipe，提权复跑通过，输出 `ok: true` 且 `failures: []`。
+- 本次 session 完成 M-P5-PORTRAIT-1 实现与验证，新增 `apps/model/src/single-product-portrait.ts`、`apps/model/src/single-product-portrait-smoke.ts`、`apps/model/src/single-product-portrait-contract-test.ts`，并扩展 `apps/model/src/cli.ts`。
+- 收尾复验：`npm run typecheck` 通过；`npm run contract-test` 通过；`npm run single-product-portrait-contract-test` 输出 `ok: true` 且 `failures: []`；`npm run single-product-portrait-smoke` 成功生成 5 款差异化商品画像并报告 CSV 异常行。
 - P3-DB（SQLite 重构与数据管理模块）已由 X/D/A/V 域完成并总控验收：`docs/wiki.html` 中 X-P3-DB-0 至 X-P3-DB-8 全部标记 done，`ws_demo` 已按新 schema 重建为空库并保留快照。本域在 P3 无新增 model 任务。
 - 已完成 M-P1-A3 cutoff 时间切分回测实现：`npm run backtest:cutoff` / `npm run backtest:panel` 默认读取 `data/p1/multi-timewindow-demo/wide_table.jsonl`，训练早于 cutoff 的窗口并验证 cutoff 窗口。
 - cutoff smoke 指标：`topKTagHit@5 = 0.8`，`segmentTop1Hit = 0.667`，`driverPrecision = 0.556`，`matchNDCG@3 = 0.754`；报告见 `docs/model-p1-a3-cutoff-backtest.md` 与 `docs/model-p1-d1-backtest-panel.md`。
@@ -24,6 +24,17 @@
 - 已完成 M-P2-8 新品人群预测 baseline contract：新增 `apps/model/src/new-product-prediction.ts`，冻结 `PredictedProductProfile`，输出预测标签、置信度、相似历史商品、解释来源、风险和不可用边界。
 - M-P2-8 已接入 `npm run contract-test`，覆盖 baseline_with_similar_sku、insufficient_input、no_similar_sample、low_confidence、similar_missing_identity、tag_unmapped；文档见 `docs/model-p2-8-new-product-prediction-contract.md`。
 - M-P2-8 红线修复已完成：缺少商品身份时 `PredictedProductProfile.skuId` 与 `resolvedProductKey.value` 返回 `null`，相似商品缺少真实引用时不生成占位 ID，无商品身份时禁止桥接 `ProductChannelFit`。
+- 已由 X 总控完成 X-P5-PORTRAIT-0 单品画像映射算法口径冻结；文档见 `docs/single-product-portrait-algorithm-contract.md`，`docs/wiki.html` v0.55 已发布 M-P5-PORTRAIT-1 todo。
+- P5-PORTRAIT 数据真源：用户提供的 `单款信息表.xlsx` 为商品属性输入 X，`10A326100109画像数据（单款商品人群画像）.csv` 为单品画像目标 Y；两份 Kimi docx 仅作候选规则参考，不作为已验证源码。
+- P5-PORTRAIT 第一阶段只能实现 `single_product_portrait_rule_baseline`，即规则驱动 + 单锚点校准；当前只有 1 款商品具备真实画像 Y，不能声明已训练监督模型或泛化能力。
+- P5-PORTRAIT 输出与平台回流画像同构，保留 `标签类型 / 标签 / 占比 / TGI`；只有白名单映射到 `profile-taxonomy-v0.md` 的标签才能 bridge 到 PLS `PredictedProductProfile`，长尾平台标签不得强行伪造成 PLS tagId。
+- 已完成 M-P5-PORTRAIT-1 规则 baseline：实现 source parser（xlsx）、portrait CSV parser、feature extractor、rule engine、calibration、platform portrait export 与可选 PLS bridge；输出固定风险 `baseline_not_trained_model`、`single_anchor_only`、`manual_rule_weight`，并报告 `csv_source_row_anomaly`。
+- M-P5-PORTRAIT-1 contract test 覆盖：xlsx 解析 103 款、CSV 异常行 1 条、单款输出字段、5 款批量差异化、封闭维度归一化、evidence 可追溯、重复运行稳定性、PLS bridge、anchor 缺失状态。
+- M-P5-PORTRAIT-1 当前 anchor SKU `10A326100109` 不在 `单款信息表.xlsx` 的 103 款中，因此输出 `anchor_product_attributes_missing`，未伪造属性。
+- X 总控复核发现 README 原 `npm run predict -- single-product-portrait` 示例会误走旧 predict 分支；已补齐 `npm run single-product-portrait` 专用脚本并修正 README，复验单 SKU CLI 可运行。
+- X-P5-PORTRAIT-2 已完成总体验收，新增 `docs/p5-portrait-baseline-acceptance.md`；结论为通过，可进入 A/V 联调，但只能按“规则 baseline + 单锚点弱校准”的产品口径展示。
+- X-P5-PORTRAIT-2 冻结第一期默认展示维度：预测性别、预测年龄段、八大消费群体、预测消费能力、城市等级、抖音视频观看兴趣 TopN、PLS bridge、evidence 和 riskFlags。
+- X-P5-PORTRAIT-2 冻结默认折叠维度：地域分布、城市、电商品类成交偏好、电商品牌成交偏好、触点互动偏好、手机品牌、手机价格、头条 / 西瓜兴趣、美妆特色、电商消费频次 / 金额、兴趣长尾等。
 
 下一步：
 
@@ -35,11 +46,16 @@
 - M-P2-5 的正式替换点固定在 `explainProductChannelFit` 内部评分、置信度和推荐逻辑；外部 `ProductChannelFitInput` / `ProductChannelFit` / `FitExplanation` contract 应保持稳定。
 - M-P2-8 的正式替换点固定在 `predictNewProductProfile` 内部相似商品加权、tag 合并、置信度和 segment 生成逻辑；外部 `NewProductMasterPredictionInput` / `PredictedProductProfile` / `toProductChannelFitProfile` contract 应保持稳定。
 - A-P2-9 消费 M-P2-8 时必须处理 `skuId = null` / `resolvedProductKey.value = null` 的不可用状态，不能自行生成占位 product ID。
+- P5-PORTRAIT 后续：等待用户提供更多带真实画像的商品样本（目标 >=5 款）和平台大盘 TGI 基准后，再评估是否进入小样本权重校准阶段；当前不得移除 `baseline_not_trained_model`。
+- P5-PORTRAIT 规则权重、版型/面料/FAB 映射细节、平台标签到 PLS taxonomy 的 bridge 映射需用户 / X 总控拍板后固化。
+- 后续可单独优化 `runSingleProductPortrait` CLI 输出体积：当前单 SKU 模式仍返回 `products` 全量解析结果，适合调试但不适合作为前端或 API 响应形态。
+- P5-PORTRAIT 后续任务顺序已冻结：D-P5-PORTRAIT-3 样本包模板 -> X-P5-PORTRAIT-4 bridge 复核 -> A-P5-PORTRAIT-5 API/artifact -> V-P5-PORTRAIT-6 工作台 -> M-P5-PORTRAIT-7 权重校准框架。
 
 阻塞：
 
 - 无实现阻塞。D-P1-A2 mock 多窗口输入已存在，但当前结果只能作为 cutoff smoke，不能声明真实泛化能力。
 - 真实样例下游准入当前仍为暂缓；正式泛化回测和正式号货匹配算法都依赖后续输入/公式。
+- P5-PORTRAIT 尚缺更多带画像商品样本和平台大盘 TGI 基准；第一期只能做单锚点规则 baseline。
 
 已解决问题：
 
@@ -59,6 +75,7 @@
 - M-P2-5 当前只冻结解释型输出 contract 和 baseline smoke，不假设用户尚未提供的正式算法权重；`legacyFitScore` 继续只能作为 `diagnostic_reference_only`。
 - M-P2-8 当前只冻结新品预测输出 contract 和可解释 baseline；baseline 不是已训练模型，输出必须保留 `baseline_not_trained_model`。
 - M-P2-8 的 `similarHistoricalProducts` 只允许透出输入中真实存在的 `productId`、`skuId`、`sourceProductKey`；缺失时字段省略，不能回退到 fake ID。
+- P5-PORTRAIT 的平台画像输出不是现有 `ProfileTagScore[]` 的简单替代；先保留平台原始 `labelType/label/share/tgi`，再通过显式 bridge 映射到 PLS taxonomy。
 
 ---
 

@@ -10,6 +10,7 @@ import {
   toProductDNA,
   validateDemoTagIds,
 } from "./baseline.js";
+import { runSingleProductPortrait } from "./single-product-portrait.js";
 
 const [command, ...args] = process.argv.slice(2);
 
@@ -54,6 +55,12 @@ if (command === "predict") {
   printJson(runSegmentCalibrationReport({ inputPath: getArg("--input"), cutoffTimeWindow: getArg("--cutoff") }));
 } else if (command === "token-governance") {
   printJson(runTokenGovernanceReport());
+} else if (command === "single-product-portrait") {
+  const xlsxPath = getArg("--xlsx") ?? "/Users/huangbo/Downloads/单款信息表.xlsx";
+  const csvPath = getArg("--csv") ?? "/Users/huangbo/Downloads/10A326100109画像数据（单款商品人群画像）.csv";
+  const skuId = getArg("--sku");
+  const outputPath = getArg("--output");
+  printJson(runSingleProductPortrait({ xlsxPath, csvPath, skuId, outputPath }));
 } else {
-  throw new Error("Usage: cli.ts <predict|match|backtest|validate-tags|segment-calibration|token-governance> [--sku mock_sku_101] [--mode demo|cutoff] [--input path] [--cutoff timeWindow]");
+  throw new Error("Usage: cli.ts <predict|match|backtest|validate-tags|segment-calibration|token-governance|single-product-portrait> [--sku ...] [--mode demo|cutoff] [--input path] [--cutoff timeWindow] [--xlsx path] [--csv path] [--output path]");
 }

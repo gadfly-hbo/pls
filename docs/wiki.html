@@ -3411,6 +3411,277 @@ Handoff：
 - 给出通过 / 暂缓通过结论。
 - 说明验证命令、临时 workspace、导入包和关键结果。
 - 标记 wiki 任务状态并归档风险。`
+  },
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-05 11:20",
+    title: "X-P5-PORTRAIT-0：单品画像映射算法口径冻结",
+    brief: `目标：冻结 PLS 模型算法专题中“单品商品属性 -> 单品人群画像”的第一期 contract，明确用户提供的抖音商品属性表与单品画像真源如何进入可实现 baseline。
+
+背景：
+- 用户提供两份 Kimi 生成的模型算法文档，均基于用户给到的数据真源，有参考价值但不保证完全正确。
+- 用户提供 /Users/huangbo/Downloads/单款信息表.xlsx 和 /Users/huangbo/Downloads/10A326100109画像数据（单款商品人群画像）.csv 作为算法专题真源样例。
+- 当前只有 10A326100109 一款商品具备真实画像 Y，不能声明已训练监督模型或泛化能力。
+
+范围：
+1. 只读解析两份 docx、单款信息表和单款画像 CSV。
+2. 输出 docs/single-product-portrait-algorithm-contract.md。
+3. 冻结第一期方法为 single_product_portrait_rule_baseline：规则驱动 + 单锚点校准。
+4. 明确平台画像输出 contract、PLS taxonomy bridge、evidence、riskFlags、CSV 异常行处理和验证标准。
+5. 派发 M-P5-PORTRAIT-1 实现卡。
+
+非目标：
+- 不实现模型代码。
+- 不导入 SQLite 或主 workspace。
+- 不新增 taxonomy tagId、DB schema 或 API contract。
+- 不把 Kimi 文档中的代码说明视为已验证源码。
+
+总控归档：
+- 新增 docs/single-product-portrait-algorithm-contract.md。
+- 确认商品表为 103 款 / 25 字段，画像 CSV 为 25 个标签类型 / 约 2984 条可解析画像行。
+- 记录画像 CSV 存在 1 行 6 字段异常，第一期先标记 csv_source_row_anomaly 并排除校准，等待平台导出口径确认。
+- 冻结第一期不能移除 baseline_not_trained_model / single_anchor_only / manual_rule_weight 风险标记。`
+  },
+  {
+    dom: "M",
+    status: "done",
+    created: "2026-07-05 11:21",
+    title: "M-P5-PORTRAIT-1：单品画像映射规则 baseline 实现",
+    brief: `目标：按 X-P5-PORTRAIT-0 冻结口径，实现“单品商品属性 -> 平台人群画像”的可解释规则 baseline，支持单款和批量商品画像生成。
+
+前置：
+- 已冻结 docs/single-product-portrait-algorithm-contract.md。
+- 先读取 docs/single-product-portrait-algorithm-contract.md、docs/model-p2-8-new-product-prediction-contract.md、apps/model/src/new-product-prediction.ts、apps/model/README.md 和 docs/notes-model.md。
+- Kimi 两份 docx 可作为候选规则参考，但不得直接照抄为事实实现；规则必须可测试、可解释、可追溯。
+
+输入真源：
+- /Users/huangbo/Downloads/单款信息表.xlsx
+- /Users/huangbo/Downloads/10A326100109画像数据（单款商品人群画像）.csv
+
+范围：
+1. 新增或扩展 model 域模块，实现 source parser、feature extractor、rule engine、calibration、platform portrait export。
+2. 输入 contract 对齐单款信息表字段，至少支持 skuId、gender、category、fitType、fabric、fab、ipCollaboration、specialFunctionOrMaterial、sales/planning fields。
+3. 输出 SingleProductPortraitPrediction，包含 platformPortraitRows、dimensionSummaries、riskFlags、explanationSources 和可选 PLS bridge。
+4. 画像 CSV 解析必须报告当前 1 行 6 字段异常；第一期不得悄悄吞掉或自动改写。
+5. 对至少 5 款不同品类商品生成画像，展示性别、品类、版型、面料、IP/功能差异。
+6. 如 10A326100109 在商品表中存在，则做 anchor backtest；若不存在，输出 anchor_product_attributes_missing，不得伪造属性。
+7. 增加 contract test 或 smoke，覆盖 parser、异常行、单款输出、批量输出、evidence 可追溯和重复运行稳定性。
+
+红线：
+- 不训练神经网络，不声明正式泛化模型。
+- 不新增 taxonomy tagId，不改 DB schema，不改 Admin Import。
+- 不把平台长尾标签强行映射为 PLS taxonomy。
+- 不导入主 workspace，不绕过数据管理审计。
+- 不自动读取用户未指定的本地文件。
+
+验证：
+- apps/model npm run typecheck。
+- 新增 smoke / contract test 并说明命令结果。
+- 输出样例需包含 baseline_not_trained_model、single_anchor_only、manual_rule_weight。
+- 文档或 README 记录运行方式、输入路径、输出路径、已知限制和升级门槛。
+
+回流格式：
+- 说明新增 / 修改文件。
+- 说明算法路径、规则来源、输出字段和 PLS bridge 覆盖。
+- 附验证命令结果。
+- 明确仍需用户 / X 拍板的规则权重、平台大盘 TGI 基准和更多真实画像样本。`
+  },
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-05 13:20",
+    title: "X-P5-PORTRAIT-2：单品画像 baseline 总体验收",
+    brief: `目标：总控验收 M-P5-PORTRAIT-1 单品画像映射规则 baseline，判断其是否可以进入 PLS 产品化联调，并冻结第一期展示边界和后续任务拆分。
+
+前置：
+- X-P5-PORTRAIT-0 已冻结 docs/single-product-portrait-algorithm-contract.md。
+- M-P5-PORTRAIT-1 已完成并回流。
+- 先读取 docs/single-product-portrait-algorithm-contract.md、apps/model/src/single-product-portrait.ts、apps/model/README.md、docs/notes-model.md。
+
+范围：
+1. 复核 M-P5-PORTRAIT-1 是否遵守 contract：单锚点规则 baseline、CSV 异常行、evidence、riskFlags、PLS bridge 和 anchor 缺失状态。
+2. 冻结第一期可产品化展示的画像维度与默认折叠维度。
+3. 明确 API / UI / 数据样本包后续任务边界。
+4. 输出 docs/p5-portrait-baseline-acceptance.md。
+5. 更新 docs/wiki.html、docs/notes-infra.md、docs/notes-model.md。
+
+非目标：
+- 不改模型算法代码。
+- 不导入 SQLite 或主 workspace。
+- 不新增 API、DB schema、taxonomy tagId。
+- 不声明监督模型或泛化效果。
+
+验收：
+- 给出通过 / 暂缓通过结论。
+- 明确可展示维度、折叠维度、禁止展示口径。
+- 明确 A/V/D/M/X 后续卡执行顺序。
+- 记录验证命令和剩余风险。
+
+总控归档：
+- 新增 docs/p5-portrait-baseline-acceptance.md，结论为通过，可进入 A/V 联调。
+- 冻结第一期默认展示维度：预测性别、预测年龄段、八大消费群体、预测消费能力、城市等级、抖音视频观看兴趣 TopN、PLS bridge、evidence 和 riskFlags。
+- 冻结地域、城市、品牌偏好、品类偏好、触点互动、手机相关、兴趣长尾等维度默认折叠，只能作为长尾画像 / 调试详情展示。
+- 明确后续顺序：D-P5-PORTRAIT-3 -> X-P5-PORTRAIT-4 -> A-P5-PORTRAIT-5 -> V-P5-PORTRAIT-6 -> M-P5-PORTRAIT-7。`
+  },
+  {
+    dom: "D",
+    status: "todo",
+    created: "2026-07-05 13:21",
+    title: "D-P5-PORTRAIT-3：单品画像真实样本包模板",
+    brief: `目标：定义后续新增 5-20 款真实单品画像样本的标准数据包，让规则校准不再依赖散落 Downloads 文件。
+
+前置：
+- X-P5-PORTRAIT-2 冻结验收口径。
+- 先读取 docs/p5-portrait-baseline-acceptance.md、docs/single-product-portrait-algorithm-contract.md、data/templates/profile-extract/README.md、data/templates/business-aggregate/README.md。
+
+范围：
+1. 新增 data/templates/single-product-portrait-sample/ 或同等模板目录。
+2. 定义样本包结构：source_manifest、product_attributes、platform_portrait、quality_report、field_mapping、report。
+3. 每个真实画像样本必须绑定可追溯 skuId / sourceProductKey 和商品属性，不允许只有画像无商品属性。
+4. validator 校验：商品属性必填、画像 CSV 行结构、标签类型集合、异常行、样本计数和 source/timeWindow。
+5. 提供 mock_sample，不伪装真实业务结论。
+
+红线：
+- 不新增 taxonomy tagId。
+- 不连接生产平台或 SQL。
+- 不捏造真实画像、商品属性或平台大盘基准。
+- 不导入主 workspace。
+
+验证：
+- 运行新增 validator。
+- 文档说明样本包如何被 M-P5-PORTRAIT-7 消费。
+
+回流格式：
+- 说明模板目录和字段结构。
+- 附 validator 命令结果。
+- 明确仍缺多少真实样本才能进入小样本校准。`
+  },
+  {
+    dom: "X",
+    status: "todo",
+    created: "2026-07-05 13:22",
+    title: "X-P5-PORTRAIT-4：PLS taxonomy bridge 复核",
+    brief: `目标：复核平台画像标签到 PLS taxonomy 的 bridge 边界，冻结哪些平台维度第一期可映射，哪些保持平台原始画像不进入 taxonomy。
+
+前置：
+- X-P5-PORTRAIT-2 冻结展示边界。
+- 先读取 docs/profile-taxonomy-v0.md、docs/single-product-portrait-algorithm-contract.md、apps/model/src/single-product-portrait.ts。
+
+范围：
+1. 复核现有 PLS_BRIDGE_MAP。
+2. 冻结第一期允许映射维度：性别、年龄段、消费能力、城市等级、少量明确兴趣。
+3. 冻结暂不映射维度：品牌偏好、品类偏好、城市、触点互动、兴趣长尾。
+4. 判断是否需要新增 taxonomy tagId；如需要，只输出提案，不直接改 taxonomy。
+5. 输出 bridge mapping 复核文档。
+
+红线：
+- 不把平台长尾标签强行伪造成 PLS tagId。
+- 不在本卡直接扩展 taxonomy，除非用户另行确认。
+
+验收：
+- A/V/M 后续都能按同一 bridge 边界消费。
+- 每个映射都有原因、置信度和不可映射理由。`
+  },
+  {
+    dom: "A",
+    status: "todo",
+    created: "2026-07-05 13:23",
+    title: "A-P5-PORTRAIT-5：单品画像预测 API 与 artifact 存储",
+    brief: `目标：把单品画像规则 baseline 接入后端受控读取与 artifact 存储，让前端可通过 API 获取预测结果、证据和风险。
+
+前置：
+- X-P5-PORTRAIT-2 已冻结产品化展示边界。
+- D-P5-PORTRAIT-3 样本包模板优先完成；如未完成，本卡只能接本地受控 demo 路径，不得做真实样本包导入。
+- 先读取 docs/p5-portrait-baseline-acceptance.md、apps/model/src/single-product-portrait.ts、apps/server/src/routes/tools.ts、apps/server/src/routes/data-management.ts。
+
+范围：
+1. 设计并实现读取型 API 或 tools artifact 接入路径。
+2. 输入只允许来自受控数据包、workspace artifact 或已注册工具输出；前端不得传任意本地文件路径。
+3. 输出保存 modelVersion、source files、platformPortraitRows、dimensionSummaries、riskFlags、evidence、PLS bridge。
+4. artifact 与 workspace 隔离，跨 workspace 不可读取。
+5. 增加 smoke，覆盖成功、未知 sku、异常 CSV、workspace 隔离。
+
+红线：
+- 不让前端任意读取本地文件。
+- 不写主业务画像表；第一期只保存 derived prediction artifact。
+- 不绕过 Admin API / tools artifact / audit 约束。
+
+验证：
+- apps/server typecheck。
+- 新增 smoke 通过。
+
+回流格式：
+- 说明 API method/path/header/body/response。
+- 说明 artifact 存储位置和 workspace 隔离。
+- 附验证结果。`
+  },
+  {
+    dom: "V",
+    status: "todo",
+    created: "2026-07-05 13:24",
+    title: "V-P5-PORTRAIT-6：单品画像预测工作台接入",
+    brief: `目标：在 PLS 前端展示单品画像预测结果，重点呈现核心画像、规则证据、风险标记和 PLS bridge 覆盖率。
+
+前置：
+- X-P5-PORTRAIT-2 已冻结展示边界。
+- A-P5-PORTRAIT-5 提供稳定 API；如 A 未完成，只能使用同构 mock，不得假装真实后端已接入。
+- 先读取 docs/p5-portrait-baseline-acceptance.md、apps/web/src/services/api.ts、现有工作台组件。
+
+范围：
+1. 新增或扩展模型 / 商品画像工作台入口。
+2. 展示核心维度：性别、年龄、八大消费群体、消费能力、城市等级、抖音兴趣 TopN。
+3. 长尾维度默认折叠：地域、城市、品牌偏好、品类偏好、触点互动、手机相关等。
+4. 展示 evidence、riskFlags、anchor missing、bridgeCoverageRate。
+5. UI 文案必须明确这是规则 baseline，不是训练模型。
+6. 移动端 / 窄屏避免表格和证据文本溢出。
+
+红线：
+- 不隐藏 baseline_not_trained_model / single_anchor_only。
+- 不把长尾弱先验包装为精准洞察。
+- 不展示原始本地文件路径给普通用户。
+
+验证：
+- apps/web lint / build / smoke。
+- Playwright 覆盖核心维度、折叠长尾、证据展开、风险标记和窄屏布局。
+
+回流格式：
+- 说明新增 / 修改前端文件。
+- 说明 API adapter 映射与 mock 同构情况。
+- 附验证结果和视觉检查结论。`
+  },
+  {
+    dom: "M",
+    status: "todo",
+    created: "2026-07-05 13:25",
+    title: "M-P5-PORTRAIT-7：规则权重校准框架",
+    brief: `目标：为后续 5-20 款真实画像样本建立规则权重校准框架，支持留一验证和分维度指标，但不训练神经网络。
+
+前置：
+- D-P5-PORTRAIT-3 提供样本包模板。
+- 至少有 mock/sample 包可跑框架；真实校准需等待用户提供 >=5 款带画像商品。
+- 先读取 docs/p5-portrait-baseline-acceptance.md、docs/single-product-portrait-algorithm-contract.md、apps/model/src/single-product-portrait.ts。
+
+范围：
+1. 将规则权重配置化，避免散落硬编码。
+2. 增加校准输入读取器，消费 D-P5-PORTRAIT-3 样本包。
+3. 实现 leave-one-out / small-sample validation 框架。
+4. 输出指标：anchorTopLabelOverlap@K、dimensionCoverageRate、closedDimensionMassError、evidenceCoverageRate、bridgeCoverageRate。
+5. 当前无足够真实样本时输出 not_enough_labeled_samples，不得生成伪指标。
+
+红线：
+- 不训练神经网络。
+- 不移除 baseline_not_trained_model。
+- 不用同一锚点同时调权和宣称验证通过。
+
+验证：
+- apps/model typecheck。
+- 新增 contract / smoke 覆盖 mock sample、样本不足、指标输出结构。
+
+回流格式：
+- 说明权重配置结构、指标和样本不足处理。
+- 附验证结果。
+- 明确进入真实小样本校准所需数据条件。`
   }
 ];
 
@@ -3418,9 +3689,48 @@ const HOTFIX = [];
 
 const CHANGELOG = [
   {
+    ver: "0.57",
+    date: "2026-07-05",
+    current: true,
+    title: "X-P5-PORTRAIT-2 单品画像 baseline 总体验收通过",
+    items: [
+      "X-P5-PORTRAIT-2 经总控验收标记 done，新增 docs/p5-portrait-baseline-acceptance.md",
+      "发布 D-P5-PORTRAIT-3、X-P5-PORTRAIT-4、A-P5-PORTRAIT-5、V-P5-PORTRAIT-6、M-P5-PORTRAIT-7 后续任务卡",
+      "冻结第一期核心展示维度：预测性别、预测年龄段、八大消费群体、预测消费能力、城市等级、抖音兴趣 TopN、PLS bridge、evidence 和 riskFlags",
+      "冻结长尾维度默认折叠：地域、城市、品牌偏好、品类偏好、触点互动、手机相关、兴趣长尾等，只能作为长尾画像 / 调试详情展示",
+      "验收结论：single_product_portrait_rule_baseline 可进入 A/V 联调，但不得声明已训练模型或泛化效果"
+    ]
+  },
+  {
+    ver: "0.56",
+    date: "2026-07-05",
+    current: false,
+    title: "M-P5-PORTRAIT-1 单品画像映射规则 baseline 实现",
+    items: [
+      "M-P5-PORTRAIT-1 经 model 域实现并标记 done，新增 apps/model/src/single-product-portrait.ts、single-product-portrait-smoke.ts、single-product-portrait-contract-test.ts",
+      "实现 source parser（xlsx）、portrait CSV parser、feature extractor、rule engine、calibration、platform portrait export 与可选 PLS bridge",
+      "输出固定风险 baseline_not_trained_model、single_anchor_only、manual_rule_weight，并报告 csv_source_row_anomaly",
+      "验证：typecheck 通过，single-product-portrait-contract-test 输出 ok: true / failures: []，single-product-portrait-smoke 生成 5 款差异化商品画像",
+      "总控复核补齐 npm run single-product-portrait 专用脚本并修正 README 命令示例；复验单 SKU CLI 可运行",
+      "10A326100109 不在 103 款商品表中，输出 anchor_product_attributes_missing，未伪造属性；规则权重与 TGI 基准仍需用户 / X 拍板"
+    ]
+  },
+  {
+    ver: "0.55",
+    date: "2026-07-05",
+    current: false,
+    title: "X-P5-PORTRAIT-0 单品画像映射算法口径冻结",
+    items: [
+      "X-P5-PORTRAIT-0 经总控执行并标记 done，新增 docs/single-product-portrait-algorithm-contract.md",
+      "冻结第一期为 single_product_portrait_rule_baseline：规则驱动 + 单锚点校准，不声明已训练模型或泛化能力",
+      "确认用户提供的单款信息表和 10A326100109 单品画像为算法专题真源；Kimi 两份文档作为参考方案，不作为已验证源码",
+      "发布 M-P5-PORTRAIT-1 todo，实现单品画像映射规则 baseline，并要求报告 CSV 异常行、evidence、riskFlags 和 PLS bridge 覆盖"
+    ]
+  },
+  {
     ver: "0.54",
     date: "2026-07-04",
-    current: true,
+    current: false,
     title: "X-P4-TOOLS-6 工具模块第一期总体验收通过",
     items: [
       "X-P4-TOOLS-6 经总控验收标记 done，工具模块第一期形成 Tool Registry、Local Runner、标准数据包、Admin Import、Data Management 和 ToolsWorkbench 的可追溯闭环",

@@ -14,6 +14,13 @@
     "contract-test": "../server/node_modules/.bin/tsx src/contract-test.ts",
     "account-fit-contract-test": "../server/node_modules/.bin/tsx src/account-fit-contract-test.ts",
     "validate-tags": "../server/node_modules/.bin/tsx src/cli.ts validate-tags",
+    "single-product-portrait": "../server/node_modules/.bin/tsx src/cli.ts single-product-portrait",
+    "single-product-portrait-smoke": "../server/node_modules/.bin/tsx src/single-product-portrait-smoke.ts",
+    "single-product-portrait-contract-test": "../server/node_modules/.bin/tsx src/single-product-portrait-contract-test.ts",
     "typecheck": "../server/node_modules/.bin/tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@types/node": "^26.1.0",
+    "xlsx": "^0.18.5"
   }
 }

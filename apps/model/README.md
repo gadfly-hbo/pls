@@ -76,6 +76,54 @@ npm run contract-test
 
 `toProductChannelFitProfile()` bridges the prediction output into the P2 `ProductChannelFit` chain.
 
+## P5-PORTRAIT Single Product Portrait Mapping Baseline
+
+`src/single-product-portrait.ts` implements a rule-driven, explainable baseline that maps a single product's attributes (gender, category, fit, fabric, FAB, IP/collaboration, function) to a platform-style portrait table with `labelType / label / share / TGI`.
+
+Input truth (user-provided local files):
+
+- `/Users/huangbo/Downloads/单款信息表.xlsx` — 103 product rows, 25 attribute fields.
+- `/Users/huangbo/Downloads/10A326100109画像数据（单款商品人群画像）.csv` — single-anchor platform portrait, 25 dimensions.
+
+Run smoke:
+
+```bash
+npm run single-product-portrait-smoke
+```
+
+Run contract tests:
+
+```bash
+npm run single-product-portrait-contract-test
+```
+
+CLI:
+
+```bash
+# all 103 products
+npm run single-product-portrait
+
+# single SKU
+npm run single-product-portrait -- --sku 101524108206
+
+# custom paths
+npm run single-product-portrait -- --xlsx /path/to/单款信息表.xlsx --csv /path/to/10A326100109画像数据.csv --output /tmp/portrait.json
+```
+
+Output:
+
+- `SingleProductPortraitPrediction` with `platformPortraitRows`, `dimensionSummaries`, `explanationSources`, `riskFlags`.
+- Fixed risk flags: `baseline_not_trained_model`, `single_anchor_only`, `manual_rule_weight`.
+- `csv_source_row_anomaly` is reported because the source CSV has one malformed 6-field row.
+- Optional `plsBridge` maps whitelisted platform labels to existing PLS `profile-taxonomy-v0.md` tagIds; unmapped labels are reported explicitly.
+
+Limitations:
+
+- Only one product (`10A326100109`) has a real platform portrait, so this is a single-anchor rule baseline, not a trained model.
+- TGI values are `null` when no platform population benchmark is available.
+- PLS bridge coverage is intentionally low because most platform long-tail labels are not mapped to the P0 taxonomy.
+- The anchor SKU is not present in the 103-row product table, so the run reports `anchor_product_attributes_missing`.
+
 ## C3 Follow-Up
 
 See `../../docs/model-c3-prep.md` for `unmappedInputTokens` handling, P1 time-split data requirements, and A adapter contract test expectations.

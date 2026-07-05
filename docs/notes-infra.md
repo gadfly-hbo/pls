@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-04（X-P4-TOOLS-6 与 /learn 规则复核收尾，docs/wiki.html v0.54）
+最近更新：2026-07-05（X-P5-PORTRAIT-2 单品画像 baseline 总体验收，docs/wiki.html v0.57）
 
 进度：
 
@@ -92,10 +92,20 @@
 - 已完成 V-P4-TOOLS-5 总控复核；`docs/wiki.html` 已升级到 v0.53，并将 V-P4-TOOLS-5 标记为 done。ToolsWorkbench 已接入工具目录、运行配置、dry-run、运行详情、artifact 预览、import dry-run 和确认导入 UI；总控复核真实 API adapter 的 `data.tools` / `data.runs` / `data.run` 解包、artifact content、admin token、`Idempotency-Key` 和 workspace header。
 - 已完成 X-P4-TOOLS-6 工具模块第一期总体验收；`docs/wiki.html` 已升级到 v0.54，并将 X-P4-TOOLS-6 标记为 done。临时 workspace `ws_tools_import_1783176743243` 验证 profile-extract 与 business-aggregate import dry-run、confirm import、auditId、batch、dataVersion、qualityReport 和 Data Management 读回；验收确认工具模块不提供任意 shell / 任意 SQL，不绕过 Admin API、confirmText、Idempotency-Key、admin token 或 `db_admin_audit`。
 - 本 session 按 `/learn` 沉淀复核 SOP 复核并最小修订 `AGENTS.md` §五：将 `Idempotency-Key` 要求收窄为受控写入 / 正式执行接口中后端要求的场景，并明确 Hono 统一响应 HTTP 层级为 `{ code, requestId, generatedAt, data: ... }`，避免把工具页真实联调经验过度泛化为错误全局规则。
+- 已完成 X-P5-PORTRAIT-0 单品画像映射算法口径冻结；新增 `docs/single-product-portrait-algorithm-contract.md`，`docs/wiki.html` 已升级到 v0.55，并将 X-P5-PORTRAIT-0 标记为 done、发布 M-P5-PORTRAIT-1 todo。
+- X-P5-PORTRAIT-0 结论：用户提供的 `单款信息表.xlsx` 和 `10A326100109画像数据（单款商品人群画像）.csv` 是本算法专题数据真源；Kimi 两份 docx 作为参考方案，不作为已验证源码或已存在输出。
+- 单品画像映射第一期冻结为 `single_product_portrait_rule_baseline`：规则驱动 + 单锚点校准；当前只有 1 款商品具备真实画像 Y，不能声明已训练监督模型或泛化能力，输出必须保留 `baseline_not_trained_model`、`single_anchor_only`、`manual_rule_weight` 风险。
+- 数据预读结论：商品表为 103 款 / 25 字段；画像 CSV 为 25 个标签类型 / 约 2984 条可解析画像行，存在 1 行 6 字段异常，M-P5-PORTRAIT-1 必须报告 `csv_source_row_anomaly`，不得静默吞掉或自动改写。
+- 已完成 M-P5-PORTRAIT-1 总控复核：单品画像规则 baseline 实现通过，`docs/wiki.html` v0.56 已标记 M-P5-PORTRAIT-1 done；总控补齐 `npm run single-product-portrait` 专用脚本并修正 README 命令示例。
+- 已完成 X-P5-PORTRAIT-2 单品画像 baseline 总体验收；新增 `docs/p5-portrait-baseline-acceptance.md`，`docs/wiki.html` 已升级到 v0.57，并将 X-P5-PORTRAIT-2 标记为 done。
+- X-P5-PORTRAIT-2 结论：`single_product_portrait_rule_baseline` 可进入 A/V 联调，但仅能按“规则 baseline + 单锚点弱校准”展示，不得声明已训练模型或泛化效果。
+- P5-PORTRAIT 第一期开箱展示维度冻结为预测性别、预测年龄段、八大消费群体、预测消费能力、城市等级、抖音兴趣 TopN、PLS bridge、evidence 和 riskFlags；地域、城市、品牌偏好、品类偏好、触点互动、手机相关、兴趣长尾默认折叠。
+- 已发布 P5-PORTRAIT 后续任务卡：D-P5-PORTRAIT-3 样本包模板、X-P5-PORTRAIT-4 bridge 复核、A-P5-PORTRAIT-5 API 与 artifact、V-P5-PORTRAIT-6 工作台、M-P5-PORTRAIT-7 权重校准框架，当前均为 todo。
 
 下一步：
 
-- 以 `docs/wiki.html` v0.54 为当前任务状态真源；P2 主线、P2-UI、P3-DB、P3-DB-MGMT、P3-UI-QUALITY、P3-OVERVIEW 与 P4-TOOLS 第一期均已完成。
+- 以 `docs/wiki.html` v0.57 为当前任务状态真源；P5-PORTRAIT 当前进入产品化联调前置阶段。
+- P5-PORTRAIT 推荐下一步按顺序执行：D-P5-PORTRAIT-3 -> X-P5-PORTRAIT-4 -> A-P5-PORTRAIT-5 -> V-P5-PORTRAIT-6 -> M-P5-PORTRAIT-7。
 - P4-TOOLS 后续增强需另开新卡，优先考虑真实平台解析器 / SQL 导出解析器、tool-run 清理策略、admin token 获取方式和 `product_master` / `channel_entity` 物理表拍板。
 - 若后续继续增强总览，应另开新卡，优先考虑后端聚合 Overview API、预测列表读取 API、真实业务数据前置状态说明和模块级“最近更新时间”。
 - UI 总体验收已通过；若后续要求真实人货匹配详情链路演示，需要先通过受控导入 / 同步生成 channel entities 与 match 数据；当前 `ws_demo` 的 `/api/v0/channels/entities` 与 `/api/v0/matches/heatmap` 返回空数组。
@@ -115,6 +125,7 @@
 - P1-F 总体验收已通过；若后续新增页面重新以外链、iframe、静态 HTML 或截图承担主流程，需退回并重做产品化承接。
 - 旧归档文档中仍可能存在历史“红线/S0/S1”表述；当前执行入口以 `AGENTS.md`、`Orchestration.md`、`docs/data-safety-policy.md`、`docs/wiki.html` 当前任务卡和各域 notes 为准。
 - multipart `/batches` 幂等未纳入当前契约，未来若需要需设计文件摘要 + form fields hash。
+- P5-PORTRAIT 的平台画像长尾标签是否扩充 PLS taxonomy、平台大盘 TGI 基准如何获取、规则权重如何从更多真实画像样本校准，仍需后续 X / M / D 拍板。
 
 开放问题：
 
@@ -150,6 +161,9 @@
 - X-P3-OVERVIEW-2 收尾复验通过：`apps/web npm run lint`、`npm run build`、`npm run smoke`；`VITE_USE_MOCK=false npx playwright test e2e/overview.spec.ts`；`VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Data Management Workbench - Real Backend Smoke Test"`。`docs/wiki.html` 当时检查无 `todo` / `doing` 任务卡，版本为 v0.48。
 - X-P4-TOOLS-6 验证通过：`apps/server npm run typecheck`、`smoke:tools` 27/27、`smoke:tools-import` 33/33、profile-extract / business-aggregate validator、`apps/web npm run lint`、`npm run build`、`npm run smoke`、`VITE_USE_MOCK=false` Tools Workbench 定向 smoke 均通过；临时 workspace `ws_tools_import_1783176743243` 完成工具包导入闭环读回。
 - 本次 `/learn` 规则复核为文档规则修改，未运行代码测试；已只读复核 `AGENTS.md` §五、`docs/wiki.html` changelog v0.54 与 `docs/notes-infra.md` 当前状态，并复读修改后的相关段落。
+- X-P5-PORTRAIT-0 验证：只读解析两份 docx、`单款信息表.xlsx` 和 `10A326100109画像数据（单款商品人群画像）.csv`；新增 `docs/single-product-portrait-algorithm-contract.md`，更新 `docs/README.md` 和 `docs/wiki.html` v0.55。本卡未运行代码测试、未导入 SQLite、未执行 git 操作。
+- M-P5-PORTRAIT-1 总控复核验证：`apps/model npm run typecheck` 通过；`npm run contract-test` 通过；`npm run single-product-portrait-contract-test` 通过；`npm run single-product-portrait-smoke` 读取 103 款商品、25 个画像维度、报告 1 条 CSV 异常并生成 5 款差异化画像；`npm run single-product-portrait -- --sku 101524108206` 可运行。
+- X-P5-PORTRAIT-2 验证：新增 `docs/p5-portrait-baseline-acceptance.md`；更新 `docs/wiki.html` v0.57 和后续任务卡；本卡未改模型算法代码、未导入 SQLite、未执行 git 操作。
 
 ---
 
