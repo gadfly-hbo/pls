@@ -45,6 +45,21 @@
 | 目录 | 内容 |
 |---|---|
 | [backlog/](backlog/README.md) | 暂不开发但需要保留的方案池 |
+| [templates/](templates/) | CDI 任务 brief、回流、契约变更和总控审核模板 |
+
+---
+
+## CDI 模板规则
+
+新增跨域任务卡时，brief 必须声明使用 `docs/templates/DOMAIN_HANDOFF.template.md`。
+
+域 Agent 回流必须按 `docs/templates/HANDOFF_BACK.template.md`。
+
+涉及 schema、API、pipeline、taxonomy、model-output、DB 或 UI contract 变化时，必须附 `docs/templates/CONTRACT_CHANGE_REQUEST.template.md` 或在回流中说明无需变更契约的原因。
+
+X 总控终审按 `docs/templates/REVIEW_CHECKLIST.template.md`，并决定是否需要更新 `CONTEXT.md`、contract、ADR、notes 或 `docs/wiki.html` 任务状态。
+
+历史任务卡不强制回填；从下一张新增跨域任务卡开始执行。
 
 ---
 

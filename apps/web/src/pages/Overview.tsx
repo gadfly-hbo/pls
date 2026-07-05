@@ -82,7 +82,7 @@ export default function Overview({ goToView }: OverviewProps) {
     <div className="overview-workbench">
       <div className="page-header">
         <div className="page-header__info">
-          <h1 className="page-header__title">PLS 业务总览</h1>
+          <h1 className="page-header__title">PLS 总览</h1>
         </div>
         <p className="page-header__subtitle">快速查看数据可用性、业务模块状态及推荐的下一步行动</p>
       </div>
@@ -156,7 +156,7 @@ export default function Overview({ goToView }: OverviewProps) {
                   <h3 style={{ margin: '0 0 8px 0', color: 'var(--primary)', fontSize: 16 }}>推荐下一步</h3>
                   <div style={{ color: 'var(--foreground)', fontSize: 14 }}>
                     {channelCount === 0 ? '目前没有渠道实体数据，建议先完善渠道与账号基础信息。' :
-                     matchRowCount === 0 ? '已有实体数据，但尚未生成人货匹配报告，请前往人货匹配核心工作台查看或生成。' :
+                     matchRowCount === 0 ? '已有实体数据，但尚未生成货渠匹配报告，请前往货渠匹配查看或生成。' :
                      decisions.length === 0 ? '已有人货匹配结果，但尚未创建任何经营决策，请前往创建。' :
                      pendingDecisions.length > 0 ? `您有 ${pendingDecisions.length} 个经营决策待复盘或需调整，请前往经营飞轮处理。` :
                      '您的业务模块运转良好，可继续探索新品预测或监控经营飞轮。'}
@@ -229,7 +229,7 @@ export default function Overview({ goToView }: OverviewProps) {
 
               <div className="metric-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div className="flex-between">
-                  <span style={{ fontWeight: 600 }}>实体与账号画像</span>
+                  <span style={{ fontWeight: 600 }}>渠道画像</span>
                   <span className={`status-badge status-badge--${apHealth}`}>
                     {apHealth === 'success' ? '就绪' : '缺失'}
                   </span>
@@ -242,7 +242,7 @@ export default function Overview({ goToView }: OverviewProps) {
 
               <div className="metric-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div className="flex-between">
-                  <span style={{ fontWeight: 600 }}>人货匹配核心</span>
+                  <span style={{ fontWeight: 600 }}>货渠匹配</span>
                   <span className={`status-badge status-badge--${mcHealth}`}>
                     {mcHealth === 'success' ? '就绪' : '无数据'}
                   </span>

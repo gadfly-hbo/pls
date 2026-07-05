@@ -18,10 +18,10 @@ test.describe('Portrait Workbench Baseline Test', () => {
       }
     });
 
-    // 1. Navigate to '新品预测工作台'
+    // 1. Navigate to '新品预测'
     await page.goto('/');
-    await page.locator('button.app-nav__item', { hasText: '新品预测工作台' }).click();
-    await expect(page.getByRole('heading', { name: '新品预测工作台' })).toBeVisible({ timeout: 10000 });
+    await page.locator('button.app-nav__item', { hasText: '新品预测' }).click();
+    await expect(page.getByRole('heading', { name: '新品预测' })).toBeVisible({ timeout: 10000 });
 
     // 2. Fill required form fields and submit
     await page.getByLabel('商品 ID').fill('mock_sku_portrait_001');

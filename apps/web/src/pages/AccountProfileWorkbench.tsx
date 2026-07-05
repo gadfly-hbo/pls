@@ -132,7 +132,7 @@ export default function AccountProfileWorkbench() {
     <div className="account-workbench">
       <div className="page-header">
         <div className="page-header__info">
-          <h2 className="page-header__title">实体与账号画像</h2>
+          <h2 className="page-header__title">渠道画像</h2>
           <div style={{ color: 'var(--muted-foreground)', fontSize: 13 }}>
             选择店铺、账号或门店，查看画像分析与匹配建议
           </div>

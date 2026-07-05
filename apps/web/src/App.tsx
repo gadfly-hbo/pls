@@ -29,12 +29,12 @@ type ViewId = 'overview' | 'account-workbench' | 'match-core' | 'dashboard' | 'f
 type SubViewId = 'workbench' | 'readme';
 
 const NAV_ITEMS: { id: ViewId; label: string; shortLabel: string; icon: LucideIcon }[] = [
-  { id: 'overview', label: '业务总览', shortLabel: '总览', icon: Activity },
-  { id: 'account-workbench', label: '实体与账号画像', shortLabel: '画像', icon: Boxes },
-  { id: 'match-core', label: '人货匹配核心工作台', shortLabel: '匹配', icon: PackageSearch },
-  { id: 'dashboard', label: '新品预测工作台', shortLabel: '预测', icon: Sparkles },
+  { id: 'overview', label: 'PLS总览', shortLabel: '总览', icon: Activity },
+  { id: 'account-workbench', label: '渠道画像', shortLabel: '画像', icon: Boxes },
+  { id: 'match-core', label: '货渠匹配', shortLabel: '匹配', icon: PackageSearch },
+  { id: 'dashboard', label: '新品预测', shortLabel: '预测', icon: Sparkles },
   { id: 'flywheel', label: '经营飞轮', shortLabel: '飞轮', icon: GitBranch },
-  { id: 'tools', label: '工具工作台', shortLabel: '工具', icon: Wrench },
+  { id: 'tools', label: '工具管理', shortLabel: '工具', icon: Wrench },
   { id: 'data-management', label: '数据管理', shortLabel: '数据', icon: Database },
 ];
 

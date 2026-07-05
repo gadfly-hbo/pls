@@ -19,11 +19,11 @@ test('End-to-End Smoke Test for PLS', async ({ page }) => {
   // 1. Landing page is now Account Workbench (first module)
   await page.goto('/');
   await expect(page.getByText('PLS 工作台')).toBeVisible();
-  // Default view: 业务总览
+  // Default view: PLS总览
   await expect(page.getByText('快速查看数据可用性', { exact: false })).toBeVisible({ timeout: 10000 });
   
   // Navigate to Account Profile
-  await page.locator('button.app-nav__item', { hasText: '实体与账号画像' }).click();
+  await page.locator('button.app-nav__item', { hasText: '渠道画像' }).click();
   await expect(page.getByText('实体列表', { exact: true })).toBeVisible({ timeout: 10000 });
 
   // Verify native React dashboard F4 (analysis tab is default)
@@ -52,8 +52,8 @@ test('End-to-End Smoke Test for PLS', async ({ page }) => {
   const acCsvContent = fs.readFileSync(acPath, 'utf-8');
   expect(acCsvContent).toContain('skuId,accountId,fitScore,fitConfidence,qualityFlags,generatedAt,advice');
 
-  // 2. Navigate to 新品预测工作台 for Prediction -> Matches
-  await page.getByText('新品预测工作台', { exact: true }).click();
+  // 2. Navigate to 新品预测 for Prediction -> Matches
+  await page.getByText('新品预测', { exact: true }).click();
   // In Dashboard, fill a unique SKU ID and Title
   const uniqueSku = `e2e_sku_${Date.now()}`;
   await page.getByLabel('商品 ID').fill(uniqueSku);
@@ -69,7 +69,7 @@ test('End-to-End Smoke Test for PLS', async ({ page }) => {
   // 3. Go to Match Core Workbench
   const heatmapNav = page.getByText('进行核心人货匹配', { exact: true });
   await heatmapNav.click();
-  await expect(page.getByText('人货匹配决策工作台')).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('货渠匹配决策工作台')).toBeVisible({ timeout: 10000 });
 
   // 4. Click an entity in the list (sku-to-channel)
   await expect(page.getByText('匹配的实体列表')).toBeVisible();

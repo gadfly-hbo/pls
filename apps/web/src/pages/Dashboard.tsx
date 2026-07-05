@@ -84,7 +84,7 @@ export default function Dashboard({ currentSku, setCurrentSku, prediction, setPr
     <div className="prediction-workbench">
       <div className="page-header">
         <div className="page-header__info">
-          <h2 className="page-header__title">新品预测工作台</h2>
+          <h2 className="page-header__title">新品预测</h2>
           <div style={{ color: 'var(--muted-foreground)', fontSize: 13 }}>
             录入新品基础信息，预测潜客画像并衔接人货匹配
           </div>

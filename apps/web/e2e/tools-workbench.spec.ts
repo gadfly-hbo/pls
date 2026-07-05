@@ -5,8 +5,8 @@ test.describe('Tools Workbench', () => {
     await page.goto('/');
     
     // Navigate to Tools Workbench
-    await page.click('button[title="工具工作台"]');
-    await expect(page.locator('.page-header__title').first()).toHaveText('本地工具工作台');
+    await page.click('button[title="工具管理"]');
+    await expect(page.locator('.page-header__title').first()).toHaveText('本地工具管理');
     
     // Check tool catalog
     await expect(page.locator('text=画像提取').first()).toBeVisible();
@@ -57,7 +57,7 @@ test.describe('Tools Workbench', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');
     await page.click('button[aria-label="打开导航"]');
-    await page.click('button[title="工具工作台"]');
+    await page.click('button[title="工具管理"]');
     
     // Wait for animation
     await page.waitForTimeout(300);

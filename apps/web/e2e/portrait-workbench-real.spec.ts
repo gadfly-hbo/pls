@@ -81,7 +81,7 @@ test.describe('Portrait Workbench Real API Contract Test', () => {
     // 3. Navigate and run
     await page.goto('/');
     
-    await page.locator('button.app-nav__item', { hasText: '新品预测工作台' }).click();
+    await page.locator('button.app-nav__item', { hasText: '新品预测' }).click();
     await expect(page.getByRole('heading', { name: '单品画像预测' })).toBeVisible({ timeout: 10000 });
 
     await page.getByLabel('商品 ID').fill('mock_sku_portrait_001');

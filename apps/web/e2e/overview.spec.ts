@@ -16,7 +16,7 @@ test.describe('Overview Workbench', () => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto('/');
 
-      await expect(page.getByRole('heading', { name: 'PLS 业务总览' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('heading', { name: 'PLS 总览' })).toBeVisible({ timeout: 10000 });
       await expect(page.getByRole('heading', { name: '系统与数据状态' })).toBeVisible();
       await expect(page.getByRole('heading', { name: '关键指标' })).toBeVisible();
       await expect(page.getByRole('heading', { name: '模块状态' })).toBeVisible();

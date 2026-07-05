@@ -217,7 +217,7 @@ export default function MatchCoreWorkbench({ goToFlywheel }: { goToFlywheel?: (i
 
       {/* Top Toolbar */}
       <div className="toolbar">
-        <h2 className="toolbar__label" style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>人货匹配决策工作台</h2>
+        <h2 className="toolbar__label" style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>货渠匹配决策工作台</h2>
 
         <div className="segmented-control">
           <button

@@ -163,7 +163,7 @@ export default function ToolsWorkbench() {
     <div className="account-workbench">
       <div className="page-header">
         <div className="page-header__info">
-          <h2 className="page-header__title">本地工具工作台</h2>
+          <h2 className="page-header__title">本地工具管理</h2>
           <div style={{ color: 'var(--muted-foreground)', fontSize: 13 }}>
             执行本地提取与聚合任务，生成标准数据包
           </div>
