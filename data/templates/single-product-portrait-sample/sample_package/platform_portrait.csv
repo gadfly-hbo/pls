@@ -1,0 +1,7 @@
+skuId,sourceProductKey,labelType,label,share,tgi,source,sourceType,sourceBatchId,dataVersion,timeWindow,qualityFlags
+mock_sku_portrait_001,mock_style_001,预测性别,女,0.72,128.4,mock_single_product_portrait_sample,mock_sample,mock_portrait_sample_batch_20260705,v_mock_20260705,2026-06-01/2026-06-30,mock_sample
+mock_sku_portrait_001,mock_style_001,预测年龄段,25-34,0.46,116.2,mock_single_product_portrait_sample,mock_sample,mock_portrait_sample_batch_20260705,v_mock_20260705,2026-06-01/2026-06-30,mock_sample
+mock_sku_portrait_001,mock_style_001,八大消费群体,都市白领,0.34,,mock_single_product_portrait_sample,mock_sample,mock_portrait_sample_batch_20260705,v_mock_20260705,2026-06-01/2026-06-30,mock_sample;platform_benchmark_missing
+mock_sku_portrait_001,mock_style_001,预测消费能力,中高,0.39,109.8,mock_single_product_portrait_sample,mock_sample,mock_portrait_sample_batch_20260705,v_mock_20260705,2026-06-01/2026-06-30,mock_sample
+mock_sku_portrait_001,mock_style_001,城市等级,新一线,0.31,104.5,mock_single_product_portrait_sample,mock_sample,mock_portrait_sample_batch_20260705,v_mock_20260705,2026-06-01/2026-06-30,mock_sample
+mock_sku_portrait_001,mock_style_001,抖音视频观看兴趣分类,穿搭,0.28,121.0,mock_single_product_portrait_sample,mock_sample,mock_portrait_sample_batch_20260705,v_mock_20260705,2026-06-01/2026-06-30,mock_sample

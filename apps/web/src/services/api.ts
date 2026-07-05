@@ -1,4 +1,4 @@
-import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord, DbOverview, DbTableInfo, DbSchemaInfo, DbSampleInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbOperationDryRunResult, DbOperationExecuteResult } from '../types';
+import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord, DbOverview, DbTableInfo, DbSchemaInfo, DbSampleInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbOperationDryRunResult, DbOperationExecuteResult, ToolRun, SingleProductPortraitPrediction } from '../types';
 
 // Feature flag for local mock vs real backend
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
@@ -26,6 +26,7 @@ const db = {
   predictions: [] as ProductProfile[],
   matches: [] as MatchResult[],
   decisions: [] as any[], // DecisionRecord not directly imported here to avoid cycle or just any
+  toolRuns: [] as ToolRun[],
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -431,7 +432,74 @@ export const api = {
         }
       ],
       qualityFlags: [],
-      unmappedInputTokens: []
+      unmappedInputTokens: [],
+      riskFlags: ['baseline_not_trained_model', 'single_anchor_only', 'manual_rule_weight'],
+      bridgeCoverageRate: 0.85,
+      unmappedPlatformLabels: ['某些长尾品牌偏好', '长尾品类偏好'],
+      evidence: [
+        {
+          sourceField: 'styleKeywords',
+          sourceValue: 'minimal',
+          ruleId: 'rule_style_minimal',
+          targetLabelType: 'style',
+          targetLabel: 'style.minimal',
+          effect: 'increase',
+          weight: 0.8,
+          rationale: '基于款式特征 "minimal" 匹配核心风格'
+        },
+        {
+          sourceField: 'priceBand',
+          sourceValue: 'mid',
+          ruleId: 'rule_price_mid',
+          targetLabelType: '消费能力',
+          targetLabel: 'price.mid',
+          effect: 'increase',
+          weight: 0.6,
+          rationale: '基于价格带映射中端消费能力'
+        }
+      ],
+      dimensionSummaries: [
+        {
+          labelType: '预测性别',
+          topLabels: [{ label: 'gender.female', share: 0.95, tgi: null, confidence: 0.9 }],
+          qualityFlags: []
+        },
+        {
+          labelType: '预测年龄段',
+          topLabels: [{ label: 'demo.age_25_34', share: 0.79, tgi: null, confidence: 0.8 }, { label: 'demo.age_18_24', share: 0.15, tgi: null, confidence: 0.3 }],
+          qualityFlags: []
+        },
+        {
+          labelType: '八大消费群体',
+          topLabels: [{ label: 'group.white_collar', share: 0.65, tgi: null, confidence: 0.7 }],
+          qualityFlags: []
+        },
+        {
+          labelType: '预测消费能力',
+          topLabels: [{ label: 'price.mid', share: 0.65, tgi: null, confidence: 0.6 }],
+          qualityFlags: []
+        },
+        {
+          labelType: '城市等级',
+          topLabels: [{ label: 'city.tier_1_2', share: 0.55, tgi: null, confidence: 0.5 }],
+          qualityFlags: []
+        },
+        {
+          labelType: '抖音视频观看兴趣分类',
+          topLabels: [{ label: 'interest.fashion', share: 0.8, tgi: null, confidence: 0.8 }, { label: 'interest.lifestyle', share: 0.6, tgi: null, confidence: 0.6 }],
+          qualityFlags: []
+        },
+        {
+          labelType: '地域',
+          topLabels: [{ label: 'region.east', share: 0.5, tgi: null, confidence: 0.4 }],
+          qualityFlags: []
+        },
+        {
+          labelType: '品牌偏好',
+          topLabels: [{ label: 'brand.fast_fashion', share: 0.4, tgi: null, confidence: 0.4 }],
+          qualityFlags: []
+        }
+      ]
     };
     db.predictions.push(newPrediction);
     return { code: 'ok', data: newPrediction };
@@ -1075,6 +1143,10 @@ export const api = {
       const res = await fetchApi<{ run: import('../types').ToolRun }>(`/tools/runs/${runId}`);
       return { code: 'ok', data: res.data.run };
     }
+    const run = db.toolRuns.find(r => r.runId === runId);
+    if (run) {
+      return { code: 'ok', data: run };
+    }
     return {
       code: 'ok',
       data: {
@@ -1135,6 +1207,142 @@ export const api = {
         errors: []
       }
     };
+  },
+
+  runSingleProductPortrait: async (params: { skuId: string; packageId: string }) => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<{ run: ToolRun }>('/tools/runs', {
+        method: 'POST',
+        body: JSON.stringify({ toolId: 'single-product-portrait', parameters: params })
+      });
+      return { code: 'ok', data: res.data.run };
+    }
+    const runId = `run_${Date.now()}`;
+    const newRun: ToolRun = {
+      runId,
+      toolId: 'single-product-portrait',
+      workspaceId: 'ws_demo',
+      status: 'succeeded',
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      inputPath: '',
+      outputDir: '',
+      parameters: params,
+      artifacts: [
+        { artifactId: 'prediction.json', name: 'prediction.json', type: 'application/json', path: 'artifacts/prediction.json' }
+      ],
+      warnings: [],
+      errors: []
+    };
+    db.toolRuns.push(newRun);
+    
+    // Auto-populate mock DB so Heatmap works in E2E tests
+    if (!db.products.find(p => p.skuId === params.skuId)) {
+      db.products.push({ skuId: params.skuId, productName: `E2E Product ${params.skuId}`, productKey: params.skuId, brand: 'Mock', gender: '女', category: 'T恤', season: 'Q3', year: 2026, status: 'draft', tags: [] } as any);
+    }
+    const fakePredId = `pred_${Date.now()}`;
+    db.predictions.push({ predictionId: fakePredId, skuId: params.skuId, generatedAt: new Date().toISOString() } as any);
+    api.createMatches(fakePredId).catch(() => {});
+    
+    return { code: 'ok', data: newRun };
+  },
+
+
+
+  getToolArtifact: async (runId: string, artifactPath: string) => {
+    if (!USE_MOCK) {
+      const res = await fetch(`/api/v0/tools/runs/${runId}/artifacts/${artifactPath}`, {
+        headers: { 
+          'X-PLS-Workspace': 'ws_demo',
+          'Authorization': 'Bearer pls-p0-demo-token'
+        }
+      });
+      if (!res.ok) throw new Error('Failed to fetch artifact');
+      const data = await res.json() as SingleProductPortraitPrediction;
+      return { code: 'ok', data };
+    }
+    
+    // Return mock artifact
+    const mockPrediction: SingleProductPortraitPrediction = {
+      skuId: "mock_sku_101",
+      generatedAt: new Date().toISOString(),
+      modelVersion: "single-product-portrait-rule-baseline-0.1",
+      modelPath: "rule_baseline",
+      sourceType: "derived",
+      anchorSkuId: "10A326100109",
+      inputCoverage: {
+        requiredFieldCoverage: 1,
+        optionalSignalCoverage: 0.5,
+        usedFields: ["gender", "category"],
+        missingFields: []
+      },
+      platformPortraitRows: [],
+      dimensionSummaries: [
+        {
+          labelType: '预测性别',
+          topLabels: [{ label: 'gender.female', share: 0.95, tgi: null, confidence: 0.9 }],
+          qualityFlags: []
+        },
+        {
+          labelType: '预测年龄段',
+          topLabels: [{ label: 'demo.age_25_34', share: 0.79, tgi: 120, confidence: 0.8 }, { label: 'demo.age_18_24', share: 0.15, tgi: 100, confidence: 0.5 }],
+          qualityFlags: []
+        },
+        {
+          labelType: '八大消费群体',
+          topLabels: [{ label: 'group.white_collar', share: 0.65, tgi: null, confidence: 0.7 }],
+          qualityFlags: []
+        },
+        {
+          labelType: '预测消费能力',
+          topLabels: [{ label: 'price.mid', share: 0.65, tgi: null, confidence: 0.6 }],
+          qualityFlags: []
+        },
+        {
+          labelType: '城市等级',
+          topLabels: [{ label: 'city.tier_1_2', share: 0.55, tgi: null, confidence: 0.5 }],
+          qualityFlags: []
+        },
+        {
+          labelType: '抖音视频观看兴趣分类',
+          topLabels: [{ label: 'interest.fashion', share: 0.8, tgi: null, confidence: 0.8 }],
+          qualityFlags: []
+        },
+        {
+          labelType: '地域',
+          topLabels: [{ label: 'region.east', share: 0.5, tgi: null, confidence: 0.4 }],
+          qualityFlags: []
+        },
+        {
+          labelType: '品牌偏好',
+          topLabels: [{ label: 'brand.fast_fashion', share: 0.4, tgi: null, confidence: 0.4 }],
+          qualityFlags: []
+        }
+      ],
+      plsBridge: {
+        predictedProfileTags: [
+          { tagId: 'gender.female', score: 0.95, confidence: 0.9, source: '' }
+        ],
+        unmappedPlatformLabels: [
+          { labelType: '品牌偏好', label: '某些长尾品牌偏好', reason: 'unmapped' }
+        ],
+        bridgeCoverageRate: 0.85
+      },
+      riskFlags: ['baseline_not_trained_model', 'single_anchor_only', 'manual_rule_weight'],
+      explanationSources: [
+        {
+          sourceField: 'styleKeywords',
+          sourceValue: 'minimal',
+          ruleId: 'rule_style_minimal',
+          targetLabelType: 'style',
+          targetLabel: 'style.minimal',
+          effect: 'increase',
+          weight: 0.8,
+          rationale: '基于款式特征 "minimal" 匹配核心风格'
+        }
+      ]
+    };
+    return { code: 'ok', data: mockPrediction };
   },
 
   executeToolRun: async (toolId: string, payload: any) => {

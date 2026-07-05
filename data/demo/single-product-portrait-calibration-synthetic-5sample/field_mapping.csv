@@ -1,0 +1,9 @@
+sourceObject,sourceField,targetObject,targetField,mappingRule,required,confidence,owner,version
+product_attributes,skuId,SingleProductPortraitInput.product,skuId,direct,true,1.0,D,0.1
+product_attributes,sourceProductKey,SingleProductPortraitInput.product,sourceProductKey,direct,true,1.0,D,0.1
+product_attributes,gender,SingleProductPortraitInput.product,gender,direct,true,1.0,D,0.1
+product_attributes,category,SingleProductPortraitInput.product,category,direct,true,1.0,D,0.1
+product_attributes,fabric,SingleProductPortraitInput.product,fabric,direct,false,0.9,D,0.1
+product_attributes,fab,SingleProductPortraitInput.product,fab,direct,false,0.9,D,0.1
+platform_portrait,labelType,PlatformPortraitRow,labelType,platform_passthrough,true,1.0,D,0.1
+platform_portrait,label,PlatformPortraitRow,label,platform_passthrough,true,1.0,D,0.1

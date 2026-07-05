@@ -1,55 +1,71 @@
 import React, { useState } from 'react';
 import { api } from '../services/api';
-import type { SKU, ProductProfile } from '../types';
+import type { SingleProductPortraitPrediction } from '../types';
 import { translateTag } from '../utils/translate';
 
 interface Props {
-  currentSku: SKU | null;
-  setCurrentSku: (s: SKU) => void;
-  prediction: ProductProfile | null;
-  setPrediction: (p: ProductProfile | null) => void;
+  currentSku: string | null;
+  setCurrentSku: (s: string) => void;
+  prediction: SingleProductPortraitPrediction | null;
+  setPrediction: (p: SingleProductPortraitPrediction | null) => void;
   goToHeatmap: () => void;
 }
 
 export default function Dashboard({ currentSku, setCurrentSku, prediction, setPrediction, goToHeatmap }: Props) {
   const [loading, setLoading] = useState(false);
+  const [showLongTail, setShowLongTail] = useState(false);
   const [formData, setFormData] = useState({
-    skuId: 'mock_sku_101',
-    title: '',
-    categoryLv1: 'apparel',
-    categoryLv2: 'dress',
-    season: 'spring_summer',
-    styleKeywords: 'minimal, commute',
-    priceBand: 'mid'
+    skuId: 'mock_sku_portrait_001',
+    packageId: 'sample'
   });
+  const [runStatus, setRunStatus] = useState<string | null>(null);
+  const [runWarnings, setRunWarnings] = useState<string[]>([]);
+  const [runErrors, setRunErrors] = useState<string[]>([]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setRunStatus('Starting tool run...');
+    setRunWarnings([]);
+    setRunErrors([]);
+    setPrediction(null);
+    setCurrentSku(formData.skuId);
+    
     try {
-      const keywords = formData.styleKeywords.split(',').map(k => k.trim());
-      // 1. Create Product
-      const prodRes = await api.createProduct({
+      const runRes = await api.runSingleProductPortrait({
         skuId: formData.skuId,
-        title: formData.title,
-        categoryLv1: formData.categoryLv1,
-        categoryLv2: formData.categoryLv2,
-        season: formData.season,
-        attributes: {
-          styleKeywords: keywords,
-          priceBand: formData.priceBand
-        }
+        packageId: formData.packageId
       });
-      setCurrentSku(prodRes.data);
-
-      // 2. Create Prediction
-      const predRes = await api.createPrediction(prodRes.data.skuId);
-      setPrediction(predRes.data);
-    } catch (err) {
+      
+      let run = runRes.data;
+      setRunStatus(`Run ${run.status}`);
+      
+      // Poll if running
+      while (run.status === 'running' || run.status === 'queued') {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const checkRes = await api.getToolRun(run.runId);
+        run = checkRes.data;
+        setRunStatus(`Run ${run.status}`);
+      }
+      
+      if (run.warnings?.length) {
+        setRunWarnings(run.warnings);
+      }
+      if (run.errors?.length) {
+        setRunErrors(run.errors);
+      }
+      
+      if (run.status === 'succeeded') {
+        setRunStatus('Fetching artifact...');
+        const artifactRes = await api.getToolArtifact(run.runId, 'prediction.json');
+        setPrediction(artifactRes.data);
+      }
+    } catch (err: any) {
       console.error(err);
-      alert('Error creating prediction');
+      setRunErrors([err.message || 'Error running tool']);
     } finally {
       setLoading(false);
+      setRunStatus(null);
     }
   };
 
@@ -58,16 +74,11 @@ export default function Dashboard({ currentSku, setCurrentSku, prediction, setPr
   };
 
   const handleGoToHeatmap = async () => {
-    if (prediction) {
-      await api.createMatches(prediction.predictionId);
-    }
+    // skip for now or create matches using something else
     goToHeatmap();
   };
 
-  /** Average confidence across top segments */
-  const avgConfidence = prediction && prediction.topSegments.length > 0
-    ? prediction.topSegments.reduce((sum, s) => sum + s.confidence, 0) / prediction.topSegments.length
-    : 0;
+  const coreDimensions = new Set(['预测性别', '预测年龄段', '八大消费群体', '预测消费能力', '城市等级', '抖音视频观看兴趣分类']);
 
   return (
     <div className="prediction-workbench">
@@ -83,47 +94,40 @@ export default function Dashboard({ currentSku, setCurrentSku, prediction, setPr
       <div className="prediction-workbench__body predict-workbench">
         {/* Left: Compact Input Form */}
         <div className="predict-form">
-        <h3 className="predict-form__title">录入新品</h3>
-        <p className="predict-form__desc">提供基础信息，预测商品潜客画像及渠道匹配。</p>
+        <h3 className="predict-form__title">单品画像预测</h3>
+        <p className="predict-form__desc">输入商品 ID 和受控样本包 ID，运行特征提取与先验规则。</p>
         <form onSubmit={handleSubmit}>
           <div className="form-item">
-            <label>商品 ID</label>
-            <input name="skuId" className="form-control" required value={formData.skuId} onChange={handleChange} placeholder="例：虚拟商品_101" />
+            <label htmlFor="skuId">商品 ID</label>
+            <input id="skuId" name="skuId" className="form-control" required value={formData.skuId} onChange={handleChange} placeholder="例：mock_sku_101" />
           </div>
           <div className="form-item">
-            <label>商品名称</label>
-            <input name="title" className="form-control" required value={formData.title} onChange={handleChange} placeholder="例：新款法式连衣裙" />
-          </div>
-          <div className="form-item">
-            <label>二级类目</label>
-            <select name="categoryLv2" className="form-control" value={formData.categoryLv2} onChange={handleChange}>
-              <option value="dress">连衣裙</option>
-              <option value="tops">上衣</option>
-              <option value="bottoms">下装</option>
-            </select>
-          </div>
-          <div className="form-item">
-            <label>季节</label>
-            <select name="season" className="form-control" value={formData.season} onChange={handleChange}>
-              <option value="spring_summer">春夏</option>
-              <option value="autumn_winter">秋冬</option>
-            </select>
-          </div>
-          <div className="form-item">
-            <label>设计风格 (逗号分隔)</label>
-            <input name="styleKeywords" className="form-control" required value={formData.styleKeywords} onChange={handleChange} />
-          </div>
-          <div className="form-item">
-            <label>价格带</label>
-            <select name="priceBand" className="form-control" value={formData.priceBand} onChange={handleChange}>
-              <option value="low">低端</option>
-              <option value="mid">中端</option>
-              <option value="premium">高端</option>
-            </select>
+            <label htmlFor="packageId">受控样本包 ID</label>
+            <input id="packageId" name="packageId" className="form-control" required value={formData.packageId} onChange={handleChange} placeholder="例：sample" />
           </div>
           <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
-            {loading ? '预测中...' : '开始预测画像'}
+            {loading ? '运行中...' : '开始预测画像'}
           </button>
+          
+          {runStatus && <div style={{ marginTop: 12, fontSize: 13, color: 'var(--muted)' }}>{runStatus}</div>}
+          
+          {runErrors.length > 0 && (
+            <div className="alert-banner alert-banner--error" style={{ marginTop: 12 }}>
+              ⚠️ 运行失败：
+              <ul style={{ margin: 0, paddingLeft: 20 }}>
+                {runErrors.map((err, i) => <li key={i}>{err}</li>)}
+              </ul>
+            </div>
+          )}
+          
+          {runWarnings.length > 0 && (
+            <div className="alert-banner alert-banner--warning" style={{ marginTop: 12 }}>
+              ⚠️ 警告：
+              <ul style={{ margin: 0, paddingLeft: 20 }}>
+                {runWarnings.map((warn, i) => <li key={i}>{warn}</li>)}
+              </ul>
+            </div>
+          )}
         </form>
         </div>
 
@@ -141,7 +145,7 @@ export default function Dashboard({ currentSku, setCurrentSku, prediction, setPr
             <div className="predict-result__header">
               <div className="predict-result__header-info">
                 <h2 className="predict-result__header-title">
-                  预测画像结果 {currentSku && `(${currentSku.title})`}
+                  预测画像结果 {currentSku && `(${currentSku})`}
                 </h2>
                 <div className="predict-result__header-meta">
                   <span className="status-badge status-badge--neutral">
@@ -150,14 +154,6 @@ export default function Dashboard({ currentSku, setCurrentSku, prediction, setPr
                   <span className="status-badge status-badge--neutral">
                     {new Date(prediction.generatedAt).toLocaleString()}
                   </span>
-                  {prediction.topSegments.length > 0 && (
-                    <span className="status-badge status-badge--success">
-                      Top: {prediction.topSegments[0].name}
-                    </span>
-                  )}
-                  <span className={`status-badge ${avgConfidence >= 0.7 ? 'status-badge--success' : 'status-badge--warning'}`}>
-                    平均置信度: {(avgConfidence * 100).toFixed(0)}%
-                  </span>
                 </div>
               </div>
               <button className="btn btn-primary" onClick={handleGoToHeatmap}>
@@ -165,83 +161,127 @@ export default function Dashboard({ currentSku, setCurrentSku, prediction, setPr
               </button>
             </div>
 
-            {/* Quality Flags Warning */}
-            {prediction.qualityFlags.length > 0 && (
+            {/* Risk Flags Warning */}
+            {prediction.riskFlags && prediction.riskFlags.length > 0 && (
               <div className="alert-banner alert-banner--warning">
-                ⚠️ 注意：该商品画像置信度受限（{prediction.qualityFlags.join(', ')}）
+                ⚠️ 注意：该结果为基于规则的预测 baseline，非已训练模型。
+                包含的风险标记：{prediction.riskFlags.join(', ')}
               </div>
             )}
 
             {/* Prediction Summary Metrics */}
             <div className="metric-grid">
               <div className="metric-card metric-card--compact">
-                <div className="metric-title">Top 人群包数量</div>
-                <div className="metric-value">{prediction.topSegments.length}</div>
+                <div className="metric-title">PLS Bridge 覆盖率</div>
+                <div className="metric-value">
+                  {prediction.plsBridge ? `${(prediction.plsBridge.bridgeCoverageRate * 100).toFixed(0)}%` : '-'}
+                </div>
                 <div className="metric-sub">
-                  <span>核心标签数</span>
-                  <span>{prediction.predictedProfileTags.length}</span>
+                  <span title={prediction.plsBridge?.unmappedPlatformLabels.map(l => l.label).join(', ')}>
+                    未映射长尾: {prediction.plsBridge?.unmappedPlatformLabels.length || 0}
+                  </span>
                 </div>
               </div>
               <div className="metric-card metric-card--compact">
-                <div className="metric-title">平均置信度</div>
-                <div className="metric-value">{(avgConfidence * 100).toFixed(0)}%</div>
-                <div className="metric-sub">
-                  <span>Top 1 置信度</span>
-                  <span>{prediction.topSegments.length > 0 ? `${(prediction.topSegments[0].confidence * 100).toFixed(0)}%` : '-'}</span>
-                </div>
-              </div>
-              <div className="metric-card metric-card--compact">
-                <div className="metric-title">质量标记</div>
-                <div className="metric-value" style={{ fontSize: 15 }}>
-                  {prediction.qualityFlags.length === 0 ? '无异常' : prediction.qualityFlags.join(', ')}
-                </div>
-                <div className="metric-sub">
-                  <span>模型路径</span>
-                  <span>{prediction.source}</span>
+                <div className="metric-title">核心标签映射数</div>
+                <div className="metric-value">
+                  {prediction.plsBridge?.predictedProfileTags.length || 0}
                 </div>
               </div>
             </div>
 
-            {/* Top 3 Segments */}
-            <div className="panel">
-              <h3 className="panel__title">前三名目标人群包</h3>
-              <div className="segment-grid">
-                {prediction.topSegments.map(seg => (
-                  <div key={seg.segmentId} className="segment-card">
-                    <div className="segment-card__header">
-                      <span className="segment-card__rank">第 {seg.rank} 名</span>
-                      <span className={`status-badge ${seg.confidence >= 0.7 ? 'status-badge--success' : 'status-badge--warning'}`}>
-                        置信度: {(seg.confidence * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                    <div className="segment-card__name">{seg.name}</div>
-                    <div>
-                      <div className="segment-card__drivers-label">核心驱动</div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                        {seg.drivers.map(d => <span key={d} className="tag" style={{ margin: 0 }}>{translateTag(d)}</span>)}
+            {/* Portrait Dimensions */}
+            {prediction.dimensionSummaries && prediction.dimensionSummaries.length > 0 ? (
+              <div className="panel">
+                <h3 className="panel__title">画像维度分布</h3>
+                <div className="dimension-list">
+                  {prediction.dimensionSummaries.filter(d => coreDimensions.has(d.labelType)).map(dim => (
+                    <div key={dim.labelType} className="dimension-item" style={{ marginBottom: 12 }}>
+                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>{dim.labelType}</div>
+                      <div className="score-bar-list">
+                        {dim.topLabels.map(tag => (
+                          <div key={tag.label} className="score-bar">
+                            <span className="score-bar__label">{translateTag(tag.label)}</span>
+                            <div className="score-bar__track">
+                              <div className="score-bar__fill" style={{ width: `${Math.min((tag.share || 0) * 100, 100)}%` }} />
+                            </div>
+                            <span className="score-bar__value">{((tag.share || 0) * 100).toFixed(1)}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+                  ))}
 
-            {/* Tag Distribution (Score Bars) */}
-            <div className="panel">
-              <h3 className="panel__title">核心标签分布</h3>
-              <div className="score-bar-list">
-                {prediction.predictedProfileTags.map(tag => (
-                  <div key={tag.tagId} className="score-bar">
-                    <span className="score-bar__label">{translateTag(tag.tagId)}</span>
-                    <div className="score-bar__track">
-                      <div className="score-bar__fill" style={{ width: `${Math.min(tag.score * 100, 100)}%` }} />
+                  {/* Long Tail Folding */}
+                  {prediction.dimensionSummaries.some(d => !coreDimensions.has(d.labelType)) && (
+                    <div style={{ marginTop: 16 }}>
+                      <button 
+                        className="btn" 
+                        style={{ background: 'var(--panel2)', border: '1px solid var(--border)', fontSize: 13, padding: '4px 12px' }}
+                        onClick={() => setShowLongTail(!showLongTail)}
+                      >
+                        {showLongTail ? '收起长尾画像' : '展开长尾画像 (地域、品牌偏好等)'}
+                      </button>
+                      
+                      {showLongTail && (
+                        <div style={{ marginTop: 16, borderTop: '1px dashed var(--border)', paddingTop: 16 }}>
+                          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>注：以下长尾维度为锚点弱先验或平台原始长尾，仅供参考。</div>
+                          {prediction.dimensionSummaries.filter(d => !coreDimensions.has(d.labelType)).map(dim => (
+                            <div key={dim.labelType} className="dimension-item" style={{ marginBottom: 12 }}>
+                              <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>{dim.labelType}</div>
+                              <div className="score-bar-list">
+                                {dim.topLabels.map(tag => (
+                                  <div key={tag.label} className="score-bar">
+                                    <span className="score-bar__label">{translateTag(tag.label)}</span>
+                                    <div className="score-bar__track">
+                                      <div className="score-bar__fill" style={{ width: `${Math.min((tag.share || 0) * 100, 100)}%` }} />
+                                    </div>
+                                    <span className="score-bar__value">{((tag.share || 0) * 100).toFixed(1)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <span className="score-bar__value">{(tag.score * 100).toFixed(1)}</span>
-                    <span className="score-bar__confidence">±{(tag.confidence * 100).toFixed(0)}%</span>
-                  </div>
-                ))}
+                  )}
+                </div>
               </div>
-            </div>
+            ) : null}
+
+            {/* Evidence */}
+            {prediction.explanationSources && prediction.explanationSources.length > 0 && (
+              <div className="panel">
+                <h3 className="panel__title">预测证据 (Evidence)</h3>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="data-table" style={{ fontSize: 13, width: '100%', minWidth: 600, textAlign: 'left', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ padding: '8px 4px' }}>来源字段</th>
+                        <th style={{ padding: '8px 4px' }}>提取值</th>
+                        <th style={{ padding: '8px 4px' }}>映射维度</th>
+                        <th style={{ padding: '8px 4px' }}>目标标签</th>
+                        <th style={{ padding: '8px 4px' }}>权重</th>
+                        <th style={{ padding: '8px 4px' }}>说明</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {prediction.explanationSources.map((ev, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '8px 4px' }}>{ev.sourceField}</td>
+                          <td style={{ padding: '8px 4px' }}>{ev.sourceValue}</td>
+                          <td style={{ padding: '8px 4px' }}>{ev.targetLabelType}</td>
+                          <td style={{ padding: '8px 4px' }}>{translateTag(ev.targetLabel)}</td>
+                          <td style={{ padding: '8px 4px' }}>{ev.weight}</td>
+                          <td style={{ padding: '8px 4px', color: 'var(--muted)' }}>{ev.rationale}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </>
         )}
         </div>

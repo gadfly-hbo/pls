@@ -1,6 +1,10 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import * as XLSX from "xlsx";
 import { loadAllowedTagIds, type ProductProfileDraft, type ProfileTagScore, type SegmentDraft } from "./baseline.js";
+import {
+  defaultSingleProductPortraitRuleWeights,
+  type SingleProductPortraitRuleWeights,
+} from "./single-product-portrait-weights.js";
 
 export const SINGLE_PRODUCT_PORTRAIT_MODEL_VERSION = "single-product-portrait-rule-baseline-0.1";
 export const ANCHOR_SKU_ID = "10A326100109";
@@ -68,6 +72,7 @@ export interface SingleProductPortraitInput {
     outputTopNPerDimension?: number;
     includeLongTailDimensions?: boolean;
     bridgeToPlsTaxonomy?: boolean;
+    weights?: SingleProductPortraitRuleWeights;
   };
 }
 
@@ -237,14 +242,17 @@ export function parsePortraitCsv(filePath: string): ParsedPortraitAnchor {
   const anomalyRows: ParsedPortraitAnchor["anomalyRows"] = [];
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const line = lines[i]!;
     if (i === 0 && line.includes("标签类型")) continue; // skip header
     const fields = line.split(",");
     if (fields.length !== 4) {
       anomalyRows.push({ rowIndex: i, raw: line, fieldCount: fields.length });
       continue;
     }
-    const [labelType, label, shareStr, tgiStr] = fields;
+    const labelType = fields[0]!;
+    const label = fields[1]!;
+    const shareStr = fields[2]!;
+    const tgiStr = fields[3]!;
     rows.push({
       labelType: labelType.trim(),
       label: label.trim(),
@@ -454,102 +462,116 @@ function evidence(
   return { sourceField, sourceValue, ruleId, targetLabelType, targetLabel, effect, weight, rationale };
 }
 
-function applyBaseRules(features: ProductFeatures, priors: DimensionPrior[]): RawPrediction[] {
+function applyBaseRules(
+  features: ProductFeatures,
+  priors: DimensionPrior[],
+  weights: SingleProductPortraitRuleWeights = defaultSingleProductPortraitRuleWeights(),
+): RawPrediction[] {
   const predictions: RawPrediction[] = [];
   const gender = features.gender;
   const category = features.category;
+  const genderWeights = weights.gender;
 
   // Gender base distribution
-  const femalePrior = gender === "女" ? 0.72 : gender === "男" ? 0.28 : 0.5;
+  const femalePrior = gender === "女" ? genderWeights.femalePrior : gender === "男" ? 1 - genderWeights.femalePrior : genderWeights.neutralPrior;
   predictions.push({
     labelType: "预测性别",
     label: "女",
     score: femalePrior,
     tgi: null,
-    evidence: [evidence("性别修正", gender, "gender-base", "预测性别", "女", "set_prior", 0.4, `Gender prior based on product gender=${gender}.`)],
+    evidence: [evidence("性别修正", gender, "gender-base", "预测性别", "女", "set_prior", genderWeights.evidenceWeight, `Gender prior based on product gender=${gender}.`)],
   });
   predictions.push({
     labelType: "预测性别",
     label: "男",
     score: 1 - femalePrior,
     tgi: null,
-    evidence: [evidence("性别修正", gender, "gender-base", "预测性别", "男", "set_prior", 0.4, `Complementary gender share.`)],
+    evidence: [evidence("性别修正", gender, "gender-base", "预测性别", "男", "set_prior", genderWeights.evidenceWeight, `Complementary gender share.`)],
   });
 
   // Age base distribution: category-driven prior
-  const agePrior = buildAgePrior(category, gender, features.fitType, features.fabricSignals, features.styleKeywords);
+  const agePrior = buildAgePrior(category, gender, features.fitType, features.fabricSignals, features.styleKeywords, weights.agePrior);
   for (const [label, score, rationale] of agePrior) {
     predictions.push({
       labelType: "预测年龄段",
       label,
       score,
       tgi: null,
-      evidence: [evidence("品类", category, "age-category-prior", "预测年龄段", label, "set_prior", 0.25, rationale)],
+      evidence: [evidence("品类", category, "age-category-prior", "预测年龄段", label, "set_prior", weights.agePrior.evidenceWeight, rationale)],
     });
   }
 
   // Spending power base
-  const spendingPrior = buildSpendingPrior(features.fabricSignals, features.styleKeywords, features.functionSignals);
+  const spendingPrior = buildSpendingPrior(features.fabricSignals, features.styleKeywords, features.functionSignals, weights.spendingPrior);
   for (const [label, score, rationale] of spendingPrior) {
     predictions.push({
       labelType: "预测消费能力",
       label,
       score,
       tgi: null,
-      evidence: [evidence("面料/FAB", features.fabric, "spending-prior", "预测消费能力", label, "set_prior", 0.25, rationale)],
+      evidence: [evidence("面料/FAB", features.fabric, "spending-prior", "预测消费能力", label, "set_prior", weights.spendingPrior.evidenceWeight, rationale)],
     });
   }
 
   // City tier base
-  const cityPrior = buildCityPrior(features.styleKeywords, features.category);
+  const cityPrior = buildCityPrior(features.styleKeywords, features.category, weights.cityPrior);
   for (const [label, score, rationale] of cityPrior) {
     predictions.push({
       labelType: "城市等级",
       label,
       score,
       tgi: null,
-      evidence: [evidence("风格/品类", features.styleKeywords.join(","), "city-prior", "城市等级", label, "set_prior", 0.25, rationale)],
+      evidence: [evidence("风格/品类", features.styleKeywords.join(","), "city-prior", "城市等级", label, "set_prior", weights.cityPrior.evidenceWeight, rationale)],
     });
   }
 
   // Consumer group base
-  const groupPrior = buildConsumerGroupPrior(features.styleKeywords, features.fabricSignals, features.functionSignals, gender);
+  const groupPrior = buildConsumerGroupPrior(features.styleKeywords, features.fabricSignals, features.functionSignals, gender, weights.consumerGroupPrior);
   for (const [label, score, rationale] of groupPrior) {
     predictions.push({
       labelType: "八大消费群体",
       label,
       score,
       tgi: null,
-      evidence: [evidence("风格/面料/功能", features.styleKeywords.join(","), "consumer-group-prior", "八大消费群体", label, "set_prior", 0.25, rationale)],
+      evidence: [evidence("风格/面料/功能", features.styleKeywords.join(","), "consumer-group-prior", "八大消费群体", label, "set_prior", weights.consumerGroupPrior.evidenceWeight, rationale)],
     });
   }
 
   // Life stage base
-  const lifeStagePrior = buildLifeStagePrior(features.styleKeywords, features.category, gender, features.fabricSignals);
+  const lifeStagePrior = buildLifeStagePrior(features.styleKeywords, features.category, gender, features.fabricSignals, weights.lifeStagePrior);
   for (const [label, score, rationale] of lifeStagePrior) {
     predictions.push({
       labelType: "预测人生阶段",
       label,
       score,
       tgi: null,
-      evidence: [evidence("风格/品类", features.styleKeywords.join(","), "life-stage-prior", "预测人生阶段", label, "set_prior", 0.25, rationale)],
+      evidence: [evidence("风格/品类", features.styleKeywords.join(","), "life-stage-prior", "预测人生阶段", label, "set_prior", weights.lifeStagePrior.evidenceWeight, rationale)],
     });
   }
 
   return predictions;
 }
 
-function buildAgePrior(category: string, gender: string, fitType: string, fabricSignals: string[], styleKeywords: string[]): Array<[string, number, string]> {
-  let base: Record<string, number> = { "18-19": 0.05, "20-23": 0.18, "24-30": 0.35, "31-35": 0.22, "36-40": 0.12, "41-45": 0.05, "46-50": 0.02, "51-60": 0.01 };
+function buildAgePrior(
+  category: string,
+  gender: string,
+  fitType: string,
+  fabricSignals: string[],
+  styleKeywords: string[],
+  weights: SingleProductPortraitRuleWeights["agePrior"],
+): Array<[string, number, string]> {
+  let base: Record<string, number> = { ...weights.base };
 
-  if (["短袖T恤", "卫衣", "POLO衫"].includes(category)) base = shiftAge(base, -1);
-  if (["开襟毛衫", "长袖衬衫", "茄克"].includes(category)) base = shiftAge(base, 1);
-  if (["半裙", "牛仔长裤"].includes(category)) base = shiftAge(base, -0.5);
+  const categoryShift = weights.categoryShifts[category];
+  if (categoryShift !== undefined) base = shiftAge(base, categoryShift);
 
-  if (fitType.includes("修身") || styleKeywords.includes("显瘦")) base = boostAge(base, "24-30", 0.08);
-  if (styleKeywords.includes("学院") || styleKeywords.includes("休闲")) base = boostAge(base, "20-23", 0.08);
-  if (styleKeywords.includes("通勤")) base = boostAge(base, "24-30", 0.06);
-  if (fabricSignals.includes("品质保暖") || fabricSignals.includes("品质亲肤")) base = boostAge(base, "31-35", 0.06);
+  for (const boost of weights.fitBoosts) {
+    const match =
+      (boost.condition === "fitType" && fitType.includes(boost.value)) ||
+      (boost.condition === "styleKeyword" && styleKeywords.includes(boost.value)) ||
+      (boost.condition === "fabricSignal" && fabricSignals.includes(boost.value));
+    if (match) base = boostAge(base, boost.label, boost.amount);
+  }
 
   const entries = Object.entries(base);
   const total = entries.reduce((sum, [, v]) => sum + v, 0);
@@ -575,15 +597,20 @@ function boostAge(dist: Record<string, number>, label: string, amount: number): 
   return result;
 }
 
-function buildSpendingPrior(fabricSignals: string[], styleKeywords: string[], functionSignals: string[]): Array<[string, number, string]> {
-  let high = 0.25;
-  let mid = 0.45;
-  let low = 0.3;
+function buildSpendingPrior(
+  fabricSignals: string[],
+  styleKeywords: string[],
+  functionSignals: string[],
+  weights: SingleProductPortraitRuleWeights["spendingPrior"],
+): Array<[string, number, string]> {
+  let high = weights.base.high;
+  let mid = weights.base.mid;
+  let low = weights.base.low;
 
-  if (fabricSignals.includes("环保品质") || fabricSignals.includes("品质亲肤") || fabricSignals.includes("品质保暖")) high += 0.12;
-  if (styleKeywords.includes("高级")) high += 0.08;
-  if (functionSignals.includes("科技功能") || functionSignals.includes("功能户外")) mid += 0.08;
-  if (styleKeywords.includes("休闲") || styleKeywords.includes("基础")) low += 0.08;
+  if (fabricSignals.includes("环保品质") || fabricSignals.includes("品质亲肤") || fabricSignals.includes("品质保暖")) high += weights.fabricHighBoost;
+  if (styleKeywords.includes("高级")) high += weights.styleHighBoost;
+  if (functionSignals.includes("科技功能") || functionSignals.includes("功能户外")) mid += weights.functionMidBoost;
+  if (styleKeywords.includes("休闲") || styleKeywords.includes("基础")) low += weights.styleLowBoost;
 
   const total = high + mid + low;
   return [
@@ -593,12 +620,16 @@ function buildSpendingPrior(fabricSignals: string[], styleKeywords: string[], fu
   ];
 }
 
-function buildCityPrior(styleKeywords: string[], category: string): Array<[string, number, string]> {
-  let high = 0.45;
-  let low = 0.55;
-  if (styleKeywords.includes("通勤") || styleKeywords.includes("高级") || styleKeywords.includes("设计感")) high += 0.12;
-  if (styleKeywords.includes("休闲") || styleKeywords.includes("学院")) low += 0.08;
-  if (["茄克", "长袖衬衫"].includes(category)) high += 0.05;
+function buildCityPrior(
+  styleKeywords: string[],
+  category: string,
+  weights: SingleProductPortraitRuleWeights["cityPrior"],
+): Array<[string, number, string]> {
+  let high = weights.base.high;
+  let low = weights.base.low;
+  if (styleKeywords.includes("通勤") || styleKeywords.includes("高级") || styleKeywords.includes("设计感")) high += weights.styleHighBoost;
+  if (styleKeywords.includes("休闲") || styleKeywords.includes("学院")) low += weights.styleLowBoost;
+  if (["茄克", "长袖衬衫"].includes(category)) high += weights.categoryHighBoost;
   const total = high + low;
   return [
     ["一线", high * 0.35 / total, "Style/city tier signal"],
@@ -611,68 +642,62 @@ function buildCityPrior(styleKeywords: string[], category: string): Array<[strin
   ];
 }
 
-function buildConsumerGroupPrior(styleKeywords: string[], fabricSignals: string[], functionSignals: string[], gender: string): Array<[string, number, string]> {
-  const groups: Record<string, number> = {
-    "GenZ": 0.12,
-    "新锐白领": 0.22,
-    "精致妈妈": 0.15,
-    "都市蓝领": 0.12,
-    "小镇青年": 0.14,
-    "资深中产": 0.1,
-    "都市银发": 0.05,
-    "小镇中老年": 0.1,
-  };
+function buildConsumerGroupPrior(
+  styleKeywords: string[],
+  fabricSignals: string[],
+  functionSignals: string[],
+  gender: string,
+  weights: SingleProductPortraitRuleWeights["consumerGroupPrior"],
+): Array<[string, number, string]> {
+  const groups: Record<string, number> = { ...weights.base };
 
-  if (styleKeywords.includes("通勤") || styleKeywords.includes("设计感")) groups["新锐白领"] += 0.1;
-  if (fabricSignals.includes("亲肤品质") || fabricSignals.includes("品质保暖")) groups["精致妈妈"] += 0.1;
-  if (styleKeywords.includes("学院") || styleKeywords.includes("休闲")) groups["GenZ"] += 0.08;
-  if (functionSignals.includes("功能户外") || styleKeywords.includes("工装")) groups["都市蓝领"] += 0.08;
-  if (styleKeywords.includes("复古") || styleKeywords.includes("街头")) groups["小镇青年"] += 0.06;
-  if (styleKeywords.includes("高级")) groups["资深中产"] += 0.06;
-  if (gender === "男") groups["都市蓝领"] += 0.04;
+  for (const boost of weights.boosts) {
+    const match =
+      (boost.type === "styleKeyword" && styleKeywords.includes(boost.value)) ||
+      (boost.type === "fabricSignal" && fabricSignals.includes(boost.value)) ||
+      (boost.type === "functionSignal" && functionSignals.includes(boost.value)) ||
+      (boost.type === "gender" && gender === boost.value);
+    if (match) groups[boost.group] = (groups[boost.group] ?? 0) + boost.amount;
+  }
 
   const total = Object.values(groups).reduce((sum, v) => sum + v, 0);
   return Object.entries(groups).map(([label, score]) => [label, score / total, "Style/fabric/function consumer group signal"]);
 }
 
-function buildLifeStagePrior(styleKeywords: string[], category: string, gender: string, fabricSignals: string[]): Array<[string, number, string]> {
-  const stages: Record<string, number> = {
-    "单身": 0.2,
-    "新婚": 0.15,
-    "二人世界": 0.2,
-    "家有小学生": 0.1,
-    "家有中学生": 0.1,
-    "家有婴幼儿": 0.1,
-    "成熟期": 0.1,
-    "养老期": 0.05,
-  };
+function buildLifeStagePrior(
+  styleKeywords: string[],
+  category: string,
+  gender: string,
+  fabricSignals: string[],
+  weights: SingleProductPortraitRuleWeights["lifeStagePrior"],
+): Array<[string, number, string]> {
+  const stages: Record<string, number> = { ...weights.base };
 
-  if (styleKeywords.includes("通勤") || styleKeywords.includes("设计感")) stages["二人世界"] += 0.08;
-  if (fabricSignals.some((s: string) => s.includes("亲肤"))) stages["家有婴幼儿"] += 0.06;
-  if (styleKeywords.includes("学院") || styleKeywords.includes("休闲")) stages["单身"] += 0.06;
-  if (gender === "男" && ["茄克", "长袖衬衫"].includes(category)) stages["成熟期"] += 0.05;
+  for (const boost of weights.boosts) {
+    const match =
+      (boost.type === "styleKeyword" && styleKeywords.includes(boost.value)) ||
+      (boost.type === "fabricSignal" && fabricSignals.some((s: string) => s.includes(boost.value))) ||
+      (boost.type === "categoryGender" && gender === "男" && ["茄克", "长袖衬衫"].includes(category));
+    if (match) stages[boost.stage] = (stages[boost.stage] ?? 0) + boost.amount;
+  }
 
   const total = Object.values(stages).reduce((sum, v) => sum + v, 0);
   return Object.entries(stages).map(([label, score]) => [label, score / total, "Style/category life stage signal"]);
 }
 
-function applyStyleRules(features: ProductFeatures, predictions: RawPrediction[]): RawPrediction[] {
+function applyStyleRules(
+  features: ProductFeatures,
+  predictions: RawPrediction[],
+  weights: SingleProductPortraitRuleWeights = defaultSingleProductPortraitRuleWeights(),
+): RawPrediction[] {
   const newPredictions = [...predictions];
 
-  // Map style keywords to interest dimensions
-  const interestMappings: Array<{ keyword: string; labelType: string; label: string; weight: number }> = [
-    { keyword: "运动", labelType: "抖音视频观看兴趣分类", label: "运动", weight: 0.25 },
-    { keyword: "户外", labelType: "抖音视频观看兴趣分类", label: "户外", weight: 0.2 },
-    { keyword: "科技", labelType: "抖音视频观看兴趣分类", label: "科技", weight: 0.2 },
-    { keyword: "设计感", labelType: "抖音视频观看兴趣分类", label: "创意", weight: 0.18 },
-    { keyword: "复古", labelType: "抖音视频观看兴趣分类", label: "时尚", weight: 0.15 },
-    { keyword: "通勤", labelType: "抖音视频观看兴趣分类", label: "职场", weight: 0.15 },
-    { keyword: "甜美", labelType: "抖音视频观看兴趣分类", label: "美妆", weight: 0.12 },
-    { keyword: "高级", labelType: "抖音视频观看兴趣分类", label: "汽车", weight: 0.1 },
-  ];
-
-  for (const { keyword, labelType, label, weight } of interestMappings) {
-    if (features.styleKeywords.includes(keyword) || features.functionSignals.includes("科技功能") || features.ipSignals.includes("科技国潮")) {
+  for (const { keyword, labelType, label, weight } of weights.interestMappings) {
+    if (
+      features.styleKeywords.includes(keyword) ||
+      features.functionSignals.includes("科技功能") ||
+      features.ipSignals.includes("科技国潮")
+    ) {
       newPredictions.push({
         labelType,
         label,
@@ -684,72 +709,66 @@ function applyStyleRules(features: ProductFeatures, predictions: RawPrediction[]
   }
 
   // Fit type -> age/scene signals
-  if (features.fitType.includes("修身") || features.fitType.includes("紧身")) {
-    newPredictions.push({
-      labelType: "预测年龄段",
-      label: "24-30",
-      score: 0.1,
-      tgi: null,
-      evidence: [evidence("版型", features.fitType, "fit->age", "预测年龄段", "24-30", "increase", 0.1, "修身版型倾向24-30岁职场人群")],
-    });
-  }
-  if (features.fitType.includes("宽松") || features.fitType.includes("阔腿")) {
-    newPredictions.push({
-      labelType: "预测年龄段",
-      label: "20-23",
-      score: 0.08,
-      tgi: null,
-      evidence: [evidence("版型", features.fitType, "fit->age", "预测年龄段", "20-23", "increase", 0.08, "宽松版型倾向年轻休闲人群")],
-    });
+  for (const rule of weights.fitToAgeRules) {
+    if (features.fitType.includes(rule.fitPattern)) {
+      newPredictions.push({
+        labelType: "预测年龄段",
+        label: rule.label,
+        score: rule.score,
+        tgi: null,
+        evidence: [evidence("版型", features.fitType, "fit->age", "预测年龄段", rule.label, "increase", rule.evidenceWeight, rule.rationale)],
+      });
+    }
   }
 
   return newPredictions;
 }
 
-function applyIpFunctionRules(features: ProductFeatures, predictions: RawPrediction[]): RawPrediction[] {
+function applyIpFunctionRules(
+  features: ProductFeatures,
+  predictions: RawPrediction[],
+  weights: SingleProductPortraitRuleWeights = defaultSingleProductPortraitRuleWeights(),
+): RawPrediction[] {
   const newPredictions = [...predictions];
 
-  if (features.ipSignals.includes("科技国潮") || features.functionSignals.includes("科技功能")) {
-    newPredictions.push({
-      labelType: "抖音视频观看兴趣分类",
-      label: "科技",
-      score: 0.25,
-      tgi: null,
-      evidence: [evidence("IP/功能", features.ipCollaboration || features.specialFunctionOrMaterial, "ip->interest", "抖音视频观看兴趣分类", "科技", "increase", 0.25, "航天/科技IP或功能材质提升科技兴趣")],
-    });
-    newPredictions.push({
-      labelType: "八大消费群体",
-      label: "GenZ",
-      score: 0.1,
-      tgi: null,
-      evidence: [evidence("IP/功能", features.ipCollaboration || features.specialFunctionOrMaterial, "ip->group", "八大消费群体", "GenZ", "increase", 0.1, "科技国潮吸引GenZ")],
-    });
-  }
+  for (const rule of weights.ipFunctionRules) {
+    const match = rule.matchAny.some((m) =>
+      (m.feature === "ipSignal" && features.ipSignals.includes(m.value)) ||
+      (m.feature === "functionSignal" && features.functionSignals.includes(m.value))
+    );
+    if (!match) continue;
 
-  if (features.functionSignals.includes("功能户外")) {
+    const sourceField = rule.label === "户外" ? "功能" : rule.label === "时尚" ? "IP" : "IP/功能";
+    const sourceValue = features.ipCollaboration || features.specialFunctionOrMaterial || "";
     newPredictions.push({
-      labelType: "抖音视频观看兴趣分类",
-      label: "户外",
-      score: 0.2,
+      labelType: rule.labelType,
+      label: rule.label,
+      score: rule.weight,
       tgi: null,
-      evidence: [evidence("功能", features.specialFunctionOrMaterial, "function->interest", "抖音视频观看兴趣分类", "户外", "increase", 0.2, "三防/防护功能提升户外兴趣")],
-    });
-  }
-
-  if (features.ipSignals.includes("潮流联名")) {
-    newPredictions.push({
-      labelType: "抖音视频观看兴趣分类",
-      label: "时尚",
-      score: 0.18,
-      tgi: null,
-      evidence: [evidence("IP", features.ipCollaboration, "ip->interest", "抖音视频观看兴趣分类", "时尚", "increase", 0.18, "IP联名提升时尚兴趣")],
+      evidence: [
+        evidence(
+          sourceField,
+          sourceValue,
+          `ip-function-${rule.label}-${rule.labelType}`,
+          rule.labelType,
+          rule.label,
+          "increase",
+          rule.weight,
+          `IP/function signal boosts ${rule.labelType} ${rule.label}.`,
+        ),
+      ],
     });
   }
 
   return newPredictions;
 }
 
-function fillRemainingDimensions(predictions: RawPrediction[], anchor: ParsedPortraitAnchor, topNPerDimension: number): RawPrediction[] {
+function fillRemainingDimensions(
+  predictions: RawPrediction[],
+  anchor: ParsedPortraitAnchor,
+  topNPerDimension: number,
+  weights: SingleProductPortraitRuleWeights = defaultSingleProductPortraitRuleWeights(),
+): RawPrediction[] {
   const existing = new Set(predictions.map((p) => `${p.labelType}::${p.label}`));
   const anchorRows = [...anchor.rows];
 
@@ -772,9 +791,20 @@ function fillRemainingDimensions(predictions: RawPrediction[], anchor: ParsedPor
       result.push({
         labelType,
         label: row.label,
-        score: row.share * 0.3, // weak prior only
+        score: row.share * weights.anchorWeakPrior.multiplier, // weak prior only
         tgi: row.tgi,
-        evidence: [evidence("anchor", ANCHOR_SKU_ID, "anchor-weak-prior", labelType, row.label, "set_prior", 0.1, `No direct rule for ${labelType}; weak prior from anchor.`)],
+        evidence: [
+          evidence(
+            "anchor",
+            ANCHOR_SKU_ID,
+            "anchor-weak-prior",
+            labelType,
+            row.label,
+            "set_prior",
+            weights.anchorWeakPrior.evidenceWeight,
+            `No direct rule for ${labelType}; weak prior from anchor.`,
+          ),
+        ],
       });
       existing.add(`${labelType}::${row.label}`);
     }
@@ -866,9 +896,7 @@ const PLS_BRIDGE_MAP: Array<{ labelType: string; label: string; tagId: string; c
   { labelType: "城市等级", label: "六线", tagId: "demo.city_lower_tier", confidence: 0.55 },
   { labelType: "抖音视频观看兴趣分类", label: "运动", tagId: "style.sporty", confidence: 0.55 },
   { labelType: "抖音视频观看兴趣分类", label: "时尚", tagId: "style.trendy", confidence: 0.55 },
-  { labelType: "抖音视频观看兴趣分类", label: "创意", tagId: "style.trendy", confidence: 0.5 },
   { labelType: "抖音视频观看兴趣分类", label: "户外", tagId: "style.sporty", confidence: 0.55 },
-  { labelType: "抖音视频观看兴趣分类", label: "科技", tagId: "style.street", confidence: 0.5 },
 ];
 
 function buildPlsBridge(rows: PlatformPortraitRow[], allowedTagIds: Set<string>): SingleProductPortraitPrediction["plsBridge"] {
@@ -926,6 +954,7 @@ export function predictSingleProductPortrait(
     outputTopNPerDimension: input.options?.outputTopNPerDimension ?? 10,
     includeLongTailDimensions: input.options?.includeLongTailDimensions ?? true,
     bridgeToPlsTaxonomy: input.options?.bridgeToPlsTaxonomy ?? true,
+    weights: input.options?.weights ?? defaultSingleProductPortraitRuleWeights(),
   };
 
   const requiredFields = ["skuId", "gender", "category"] as const;
@@ -972,11 +1001,11 @@ export function predictSingleProductPortrait(
   const features = extractFeatures(parsedProduct);
   const priors = anchorPriors(anchor);
 
-  let predictions = applyBaseRules(features, priors);
-  predictions = applyStyleRules(features, predictions);
-  predictions = applyIpFunctionRules(features, predictions);
+  let predictions = applyBaseRules(features, priors, options.weights);
+  predictions = applyStyleRules(features, predictions, options.weights);
+  predictions = applyIpFunctionRules(features, predictions, options.weights);
   if (options.includeLongTailDimensions) {
-    predictions = fillRemainingDimensions(predictions, anchor, options.outputTopNPerDimension);
+    predictions = fillRemainingDimensions(predictions, anchor, options.outputTopNPerDimension, options.weights);
   }
 
   const platformPortraitRows = calibrate(predictions, anchor, options.outputTopNPerDimension);
@@ -1077,6 +1106,7 @@ export interface RunSingleProductOptions {
   outputTopNPerDimension?: number;
   includeLongTailDimensions?: boolean;
   bridgeToPlsTaxonomy?: boolean;
+  weights?: SingleProductPortraitRuleWeights;
 }
 
 export interface AnchorBacktestResult {
@@ -1113,6 +1143,7 @@ export function runSingleProductPortrait(options: RunSingleProductOptions): RunS
       outputTopNPerDimension: options.outputTopNPerDimension,
       includeLongTailDimensions: options.includeLongTailDimensions,
       bridgeToPlsTaxonomy: options.bridgeToPlsTaxonomy,
+      weights: options.weights,
     }));
   }
 
@@ -1125,6 +1156,7 @@ export function runSingleProductPortrait(options: RunSingleProductOptions): RunS
       outputTopNPerDimension: 3,
       includeLongTailDimensions: true,
       bridgeToPlsTaxonomy: false,
+      weights: options.weights,
     });
 
     const predictedTopLabels = anchorPrediction.dimensionSummaries

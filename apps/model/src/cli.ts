@@ -11,6 +11,7 @@ import {
   validateDemoTagIds,
 } from "./baseline.js";
 import { runSingleProductPortrait } from "./single-product-portrait.js";
+import { runSmallSampleRuleCalibration } from "./single-product-portrait-calibration.js";
 
 const [command, ...args] = process.argv.slice(2);
 
@@ -61,6 +62,9 @@ if (command === "predict") {
   const skuId = getArg("--sku");
   const outputPath = getArg("--output");
   printJson(runSingleProductPortrait({ xlsxPath, csvPath, skuId, outputPath }));
+} else if (command === "single-product-portrait-calibrate") {
+  const packagePath = getArg("--package") ?? "../../data/templates/single-product-portrait-sample/sample_package";
+  printJson(runSmallSampleRuleCalibration({ packagePath }));
 } else {
-  throw new Error("Usage: cli.ts <predict|match|backtest|validate-tags|segment-calibration|token-governance|single-product-portrait> [--sku ...] [--mode demo|cutoff] [--input path] [--cutoff timeWindow] [--xlsx path] [--csv path] [--output path]");
+  throw new Error("Usage: cli.ts <predict|match|backtest|validate-tags|segment-calibration|token-governance|single-product-portrait|single-product-portrait-calibrate> [--sku ...] [--mode demo|cutoff] [--input path] [--cutoff timeWindow] [--xlsx path] [--csv path] [--output path] [--package path]");
 }

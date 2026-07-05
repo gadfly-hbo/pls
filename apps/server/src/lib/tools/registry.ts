@@ -8,6 +8,7 @@ import {
 } from "./types.js";
 import { resolve } from "node:path";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { executeSingleProductPortrait } from "./single-product-portrait.js";
 
 function sampleProfileExtractParameters(): Record<string, unknown> {
   return {
@@ -126,6 +127,33 @@ export const TOOL_REGISTRY: Record<string, RegisteredTool> = {
       packageType: "profile-extract",
     },
     execute: executeSampleProfileExtract,
+  },
+  "single-product-portrait": {
+    definition: {
+      toolId: "single-product-portrait",
+      name: "Single Product Portrait Prediction",
+      category: "single_product_portrait",
+      version: "0.1.0",
+      riskLevel: "L1",
+      description:
+        "Runs the single-product portrait rule baseline against a controlled sample package and produces a derived prediction artifact. Does not read arbitrary local files or write to business portrait tables.",
+      inputFormats: ["controlled-package"],
+      outputFormats: ["json", "markdown"],
+      parameterSchema: {
+        type: "object",
+        properties: {
+          skuId: { type: "string", description: "SKU id present in the controlled package product_attributes.jsonl" },
+          packageId: { type: "string", description: "Controlled package id (default: sample). Maps to data/templates/single-product-portrait-<packageId>/sample_package/" },
+          outputTopNPerDimension: { type: "number", description: "Top N labels per dimension (default: 10, max: 50)" },
+          includeLongTailDimensions: { type: "boolean", description: "Include long-tail anchor dimensions (default: true)" },
+          bridgeToPlsTaxonomy: { type: "boolean", description: "Map platform labels to PLS taxonomy (default: true)" },
+        },
+        required: ["skuId"],
+      } as unknown as { type: string; properties: Record<string, unknown>; required: string[] },
+      runner: "single-product-portrait",
+      plannedArtifacts: ["artifacts/prediction.json", "artifacts/report.md"],
+    },
+    execute: executeSingleProductPortrait,
   },
 };
 

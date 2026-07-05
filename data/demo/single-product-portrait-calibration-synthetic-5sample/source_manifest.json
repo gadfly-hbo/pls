@@ -1,0 +1,38 @@
+{
+  "packageType": "single-product-portrait-sample",
+  "packageVersion": "0.1",
+  "sourceBatchId": "synthetic_portrait_calibration_batch_20260705",
+  "dataVersion": "v_synthetic_20260705",
+  "generatedAt": "2026-07-05T00:00:00.000Z",
+  "source": "synthetic_single_product_portrait_calibration",
+  "sourceType": "synthetic_fixture",
+  "workspaceId": "ws_demo",
+  "timeWindows": ["2026-06-01/2026-06-30"],
+  "allowedLabelTypes": [
+    "预测性别",
+    "预测年龄段",
+    "八大消费群体",
+    "预测消费能力",
+    "城市等级",
+    "抖音视频观看兴趣分类"
+  ],
+  "inputSources": [
+    {
+      "sourceId": "synthetic_portrait_calibration_v1",
+      "sourceName": "Synthetic portrait calibration fixture",
+      "sourceType": "synthetic_fixture",
+      "description": "5 synthetic samples used only to exercise the M-P5-PORTRAIT-7 calibration framework. Not real platform data."
+    }
+  ],
+  "entityCounts": {
+    "productAttributes": 5,
+    "platformPortraitRows": 30,
+    "fieldMappingRows": 8,
+    "abnormalRows": 0
+  },
+  "calibrationReadiness": {
+    "minimumValidProducts": 5,
+    "currentValidProducts": 5,
+    "readyForSmallSampleCalibration": true
+  }
+}

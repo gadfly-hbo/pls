@@ -1,0 +1,23 @@
+{
+  "packageType": "single-product-portrait-sample",
+  "sourceBatchId": "mock_portrait_sample_batch_20260705",
+  "dataVersion": "v_mock_20260705",
+  "generatedAt": "2026-07-05T00:00:00.000Z",
+  "productAttributeCount": 1,
+  "validProductCount": 1,
+  "platformPortraitRowCount": 6,
+  "fieldMappingRowCount": 8,
+  "abnormalRowCount": 0,
+  "missingRequiredAttributeCount": 0,
+  "unboundPortraitRowCount": 0,
+  "labelTypeCount": 6,
+  "timeWindows": ["2026-06-01/2026-06-30"],
+  "qualityFlags": ["mock_sample", "insufficient_real_samples_for_calibration"],
+  "calibrationReadiness": {
+    "minimumValidProducts": 5,
+    "currentValidProducts": 1,
+    "missingValidProducts": 4,
+    "readyForSmallSampleCalibration": false
+  },
+  "shareable": true
+}

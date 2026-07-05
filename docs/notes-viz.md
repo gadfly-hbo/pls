@@ -6,6 +6,7 @@
 
 进度：
 
+- `V-P5-PORTRAIT-6` (单品画像预测工作台接入) 已由 X 总控复核通过并标记 done：修复了 `getToolArtifact` 解包错误，使其支持真实后端的 raw JSON 响应；修正了 e2e 契约拦截响应中冗余的 `{code, data}`；修正了默认表单和 E2E 的受控样本 SKU 为 `mock_sku_portrait_001`；针对严格模式改进了 E2E 选择器范围。在 `api.ts` 本地 Mock 中补充了工具预测时顺带生成 `matches` 和 `products` 的级联写入，以修复产品级端到端 Smoke E2E 中的下游断言超时。目前 `npm run smoke` 与 `VITE_USE_MOCK=false npx playwright test e2e/portrait-workbench-real.spec.ts` 均跑通验证，全量接入真实 Tool API。
 - `X-P4-TOOLS-6` 已完成并通过总控验收：工具工作台与后端 Tools API、标准数据包、Admin Import 和 Data Management 形成第一期闭环。总体验收复验 `apps/web npm run lint`、`npm run build`、`npm run smoke` 通过，`VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Tools Workbench"` 通过；正式导入闭环由后端 `smoke:tools-import` 在临时 workspace `ws_tools_import_1783176743243` 覆盖，未在 `ws_demo` 上执行破坏性导入。
 - `V-P4-TOOLS-5` (Tools 模块前端) 已由 X 总控二次验收通过并回流：修复了真实 API 联调阶段发现的各类契约解包、Header（Idempotency-Key / X-PLS-Workspace 等）问题，以及在 `ToolsWorkbench.tsx` 中的状态校验兼容问题。拆分并扩充了 Playwright Smoke 测试，现在 `smoke-real.spec.ts` 能够完整执行真实工具（Sample Profile Extract）加载、执行、产物预览及 Dry-run 验证的全流程，而 `tools-workbench.spec.ts` 独立维持对 Mock 分支的验证。消除所有 unused 变量警告，并落实 `AGENTS.md` 前后端对接与 E2E 测试防坑铁律的沉淀。
 - `V-P3-UI-QUALITY-1` 已完成：重构 `App.tsx` 为统一 AppShell（品牌、导航、workspace badge、主题切换），桌面导航支持 flex-wrap，768px 以下切换 hamburger 展开面板，390px 隐藏 env-badge 防止文字重叠。重写 `index.css` 为统一 Design Token 结构（`--header-height`, `--page-padding`, `--sidebar-width` 等布局 token），合并为 1024/768/390 三档断点。
@@ -78,6 +79,8 @@
 - **Playwright 严格模式导致的导航选择器冲突**：在 V-P3-OVERVIEW-1 中引入总览页面时，页面内展示的模块名称（如“数据管理”、“人货匹配核心工作台”）与左侧/顶部导航菜单的文本完全一致，这导致原先通过 `getByText('数据管理', { exact: true })` 实现的 E2E 测试因为匹配到两个元素而触发 strict mode violation 失败。今后凡涉及应用级全局导航或公共操作的 E2E 定位，应优先使用带有结构语义的 locator（如 `locator('button.app-nav__item', { hasText: '...' })`），以提升测试面对内容变更时的鲁棒性。
 - **Playwright 本地端口复用注意**：`apps/web/playwright.config.ts` 使用固定端口 5175 且 `reuseExistingServer: false`。真实 API 模式下多个 Playwright 命令并行运行时，可能出现 `Port 5175 is already in use` 的 dev server 日志；即使测试复用已启动服务通过，收尾和 CI 复验仍应优先串行执行真实 API Playwright 命令，避免端口竞争造成误判。
 - **Real API E2E 与 Mock 数据的污染隔离**：在编写定向 `VITE_USE_MOCK=false` 的 Playwright E2E 冒烟测试时，切记不可在断言和定位器中混杂仅前端本地存在的 Mock 数据（如“生意参谋人群提取”）。在 V-P4-TOOLS-5 返修中，正是因为隔离不彻底导致 Real 验证被强行失败。以后所有涉及后端的 real 验证，必须仅针对真实后端注册的数据（如 “Sample Profile Extract”）或使用动态断言进行操作。
+- **Hono Wrapper 与原生 JSON 响应的区别（fetchApi 的局限）**：在接入 `single-product-portrait` 时踩坑发现，尽管大多数后端 API 返回 `{ code, data }` 的统一结构，但 `/api/v0/tools/runs/:runId/artifacts/:artifactId` 是直接返回 `prediction.json` 裸文件的。如果滥用前端的 `fetchApi` 自动解包，会导致拿到 `undefined` 从而使整个页面挂掉。这进一步强化了前文“强制 Adapter 隔离层对齐”的铁律：不同性质的路由接口（数据接口 vs 产物文件下载）必须使用匹配的请求与解析方式。
+- **级联数据与多端测试的 Mock 漂移**：在 P5 的 E2E 测试修复中发现，因删除了旧的同步匹配逻辑，`single-product-portrait` 只返回画像。然而全局 Smoke 测试（`smoke.spec.ts`）后续步骤依然期待生成 `matches` 并前往匹配工作台查看实体列表。如果不在 `runSingleProductPortrait` 的 Mock 逻辑中补偿性地初始化 `db.matches` 和 `db.products`，将会导致完全无关的下游测试因空列表而 timeout。这提醒我们在升级核心组件架构或请求流时，必须全局审视现有 `db.*` 内存 Mock 数据的完整性链条，严防“修改上游毁掉下游 Mock 上下文”的级联灾难。
 
 ---
 

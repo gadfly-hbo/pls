@@ -12,6 +12,14 @@ _Avoid_: SKU table, product fixture
 A controlled audience, style, price, occasion, intent, or channel tag used consistently across imported profiles, model outputs, and explanations.
 _Avoid_: label, crowd word, arbitrary tag
 
+**Platform Portrait**:
+An external platform's audience profile shape preserved in its original dimensions and labels before any PLS taxonomy projection.
+_Avoid_: profile tag, normalized taxonomy output
+
+**Taxonomy Bridge**:
+A controlled projection from an external platform portrait label into an existing PLS Profile Tag, with confidence and explicit unmapped handling.
+_Avoid_: taxonomy expansion, label rewrite
+
 **Channel Entity**:
 A sellable or audience-bearing channel object such as shop, account, live room, content account, city, trade area, or store.
 _Avoid_: channel when the object is actually a shop or account

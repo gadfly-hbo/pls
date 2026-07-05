@@ -17,6 +17,9 @@
     "single-product-portrait": "../server/node_modules/.bin/tsx src/cli.ts single-product-portrait",
     "single-product-portrait-smoke": "../server/node_modules/.bin/tsx src/single-product-portrait-smoke.ts",
     "single-product-portrait-contract-test": "../server/node_modules/.bin/tsx src/single-product-portrait-contract-test.ts",
+    "single-product-portrait-calibrate": "../server/node_modules/.bin/tsx src/cli.ts single-product-portrait-calibrate",
+    "single-product-portrait-calibration-contract-test": "../server/node_modules/.bin/tsx src/single-product-portrait-calibration-contract-test.ts",
+    "single-product-portrait-calibration-smoke": "../server/node_modules/.bin/tsx src/single-product-portrait-calibration-smoke.ts",
     "typecheck": "../server/node_modules/.bin/tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

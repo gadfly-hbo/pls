@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-04（X-P4-TOOLS-6 工具模块第一期总体验收通过）
+最近更新：2026-07-05（D-P5-PORTRAIT-3 单品画像真实样本包模板总控审核通过）
 
 进度：
 
@@ -11,6 +11,9 @@
 - D-P4-TOOLS-2 已新增 `data/templates/profile-extract/`，冻结 `profile-extract` 数据包结构、sample package、README 和 validator。
 - D-P4-TOOLS-3 已新增 `data/templates/business-aggregate/`，冻结 `business-aggregate` 数据包结构、sample package、README 和 validator。
 - X-P4-TOOLS-6 已完成并通过总控验收：临时 workspace `ws_tools_import_1783176743243` 完成 `profile-extract` 与 `business-aggregate` 工具包 import dry-run、confirm import、batch、dataVersion、qualityReport 和 Data Management 读回验证；未对 `ws_demo` 执行破坏性正式导入。
+- D-P5-PORTRAIT-3 已完成并经总控审核通过：新增 `data/templates/single-product-portrait-sample/`，冻结后续 5-20 款真实单品画像样本的标准包结构、mock sample、README 和 validator。
+- `single-product-portrait-sample` 样本包要求每个画像样本必须绑定可追溯 `skuId + sourceProductKey` 和商品属性；不允许只有画像无商品属性。
+- D-P5-PORTRAIT-3 mock sample 标记为 `mock_sample`，只作为 contract 示例，不伪装真实画像、商品属性或平台大盘基准；未新增 taxonomy tagId，未连接生产平台或 SQL，未导入主 workspace。
 - 两个 P4 工具模板样例均标记为 `mock_sample`；未读取用户未指定的本地文件，未连接生产 SQL，未新增 taxonomy tagId 或 DB schema。
 - 清库前 dry-run 影响范围：5707 行，其中包含 2503 行 protected system table 历史和 `douyin_*` user_authorized 数据。
 - rebuild 通过 Admin API `POST /api/v0/admin/database/rebuild` 执行，confirmText 为 `RESET ws_demo`；未手工删除主库，未绕过 `db_admin_audit`。
@@ -27,6 +30,7 @@
 - 若重放数据，优先从 `data/demo/` 或 `data/p1/douyin-bi/` 的仓库真源执行；本地临时 `v2_20260704_xp1f6` 不在仓库完整真源内，只保留在快照中。
 - `smoke:admin-dangerous` 需要后续改造，避免继续假设主库存在 `v1_20260703` 数据；真实 delete-version 覆盖应继续使用临时 workspace。
 - P4 工具模块第一期已验收通过；后续数据域重点是接入真实平台解析器 / SQL 导出解析器、设计 tool-run 清理策略，以及在 X 拍板后决定 `product_master` / `channel_entity` 是否成为物理顶层表。
+- P5 单品画像后续如进入 M-P5-PORTRAIT-7 小样本规则校准，需要至少 5 款真实有效单品画像样本；当前模板 sample 只有 1 款 mock contract 示例，不计入真实校准，仍缺 5 款真实有效样本。
 
 阻塞：
 
@@ -40,6 +44,8 @@
 - API smoke 中依赖主库历史数据的断言需要拆分为空库 smoke 与带 fixture smoke。
 - `ProductMaster` / `ChannelEntity` 是否成为物理 SQLite 顶层表，仍需 X 总控拍板；D-P4-TOOLS-3 只冻结包契约和 adapter 输入。
 - 三方平台 HTML/CSV/XLSX 画像解析器、业务 SQL 导出解析器尚未实现；当前 sample package 仍为 `mock_sample`。
+- 单品画像平台大盘 TGI 基准仍缺失；`platform_portrait.csv` 允许 `tgi` 留空，不得用 `0` 替代“暂无大盘基准”。
+- `docs/wiki.html` 当前未包含 D-P5-PORTRAIT-3 任务卡状态；本次 notes 按用户提供 brief 和总控审核通过事实记录，未修改 wiki。
 
 验证：
 
@@ -59,6 +65,7 @@
   - `apps/server npm run smoke:tools` 通过 27/27。
   - `apps/server npm run smoke:tools-import` 通过 33/33；临时 workspace 为 `ws_tools_import_1783176743243`，覆盖 profile-extract / business-aggregate dry-run、confirm import、Data Management versions、quality reports 和 import batches。
   - `apps/web npm run lint`、`npm run build`、`npm run smoke` 通过；`VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Tools Workbench"` 通过。
+- D-P5-PORTRAIT-3 收尾复验（2026-07-05）：`node data/templates/single-product-portrait-sample/scripts/validate-single-product-portrait-sample.mjs data/templates/single-product-portrait-sample/sample_package` 通过，0 warnings。
 
 ---
 
@@ -183,3 +190,16 @@
 - validator 校验必填文件、manifest/quality row counts、引用完整性、upsert key 唯一性、`tagId` 白名单、质量规则完整性。
 - 校验命令：`node data/templates/business-aggregate/scripts/validate-business-aggregate-package.mjs data/templates/business-aggregate/sample_package`。
 - 尚未实现生产 SQL 连接、离线导出解析器、A 域 import adapter、DB migration 或 UI 工具工作台。
+
+## D-P5-PORTRAIT-3 沉淀
+
+- 模板目录固定为 `data/templates/single-product-portrait-sample/`。
+- 标准包目录结构为 `source_manifest.json`、`product_attributes.jsonl`、`platform_portrait.csv`、`field_mapping.csv`、`quality_report.json`、`report.md`。
+- `product_attributes.jsonl` 必须保留 `skuId`、`sourceProductKey`、`gender`、`category`、`source`、`sourceType`、`sourceBatchId`、`dataVersion`、`timeWindow`、`qualityFlags`；画像样本必须通过 `skuId + sourceProductKey` 绑定商品属性。
+- `platform_portrait.csv` 保留平台回流画像形态：`labelType`、`label`、`share`、`tgi`、`source`、`sourceType`、`sourceBatchId`、`dataVersion`、`timeWindow`、`qualityFlags`；`share` 为 0-1 小数，`tgi` 可留空表示暂无大盘基准，不能用 0 代替。
+- `source_manifest.json.allowedLabelTypes` 冻结第一期核心展示维度集合：`预测性别`、`预测年龄段`、`八大消费群体`、`预测消费能力`、`城市等级`、`抖音视频观看兴趣分类`；新增长尾平台维度时必须先声明并在 `report.md` 说明展示处理，不代表新增 PLS taxonomy tagId。
+- validator 校验必填文件、商品属性必填、画像 CSV 行结构、标签类型集合、画像行绑定、异常行计数、样本计数、`source/timeWindow` 一致性和 quality report 一致性。
+- 校验命令：`node data/templates/single-product-portrait-sample/scripts/validate-single-product-portrait-sample.mjs data/templates/single-product-portrait-sample/sample_package`。
+- M-P5-PORTRAIT-7 消费方式：按 `skuId + sourceProductKey` join `product_attributes.jsonl` 与 `platform_portrait.csv`；商品属性作为规则特征，平台画像行作为校准目标，`quality_report.json` 作为门禁元数据。
+- 小样本规则校准门槛仍为至少 5 款真实有效商品画像样本；当前 mock sample 只有 1 款 contract 示例，不能计入真实校准能力声明。
+- 本卡未新增 taxonomy tagId，未连接生产平台或 SQL，未导入主 workspace，未编造真实画像、商品属性或平台大盘基准。

@@ -1,0 +1,23 @@
+{
+  "packageType": "single-product-portrait-sample",
+  "sourceBatchId": "synthetic_portrait_calibration_batch_20260705",
+  "dataVersion": "v_synthetic_20260705",
+  "generatedAt": "2026-07-05T00:00:00.000Z",
+  "productAttributeCount": 5,
+  "validProductCount": 5,
+  "platformPortraitRowCount": 178,
+  "fieldMappingRowCount": 8,
+  "abnormalRowCount": 0,
+  "missingRequiredAttributeCount": 0,
+  "unboundPortraitRowCount": 0,
+  "labelTypeCount": 6,
+  "timeWindows": ["2026-06-01/2026-06-30"],
+  "qualityFlags": ["synthetic_fixture"],
+  "calibrationReadiness": {
+    "minimumValidProducts": 5,
+    "currentValidProducts": 5,
+    "missingValidProducts": 0,
+    "readyForSmallSampleCalibration": true
+  },
+  "shareable": false
+}

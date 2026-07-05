@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-04（X-P4-TOOLS-6 工具模块第一期总体验收通过）
+最近更新：2026-07-05（A-P5-PORTRAIT-5 单品画像预测 API 与 artifact 存储通过）
 
 进度：
 
@@ -21,6 +21,8 @@
 - **A-P4-TOOLS-1 已完成并经总控 mark done**：新增工具注册表、本地 runner、运行记录与 artifact 查询 API；注册一个 L1 样例工具 `sample-profile-extract`；工具输出统一写入 `data/local/tool-runs/<runId>/`；总控修复 run / artifact 查询的 workspace 隔离缺口后，`smoke:tools` 27/27 通过。
 - **A-P4-TOOLS-4 已完成并经总控 mark done**：将 `profile-extract` / `business-aggregate` 工具输出包接入 Admin Import / Data Management 闭环；新增 `apps/server/src/lib/import-tool-packages.ts`、扩展 `/tools/runs/:runId/import-dry-run` 与 `/tools/runs/:runId/import`、注册 `profile_extract` / `business_aggregate` 数据源 adapter；dry-run 返回统一 `OperationImpact`，导入复用 admin token / Idempotency-Key / confirmText / audit 全套约束。总控补强 import-dry-run / import 的 workspace 隔离后，`smoke:tools-import` 33/33 通过，`smoke:tools` 回归 27/27 通过。
 - **X-P4-TOOLS-6 已完成并经总控 mark done**：工具模块第一期总体验收通过，确认 Tool Registry、Local Runner、artifact 管理、profile-extract / business-aggregate 标准包、Admin Import、Data Management 和 ToolsWorkbench 已形成闭环；临时 workspace `ws_tools_import_1783176743243` 覆盖 import dry-run、confirm import、auditId、batch、dataVersion、qualityReport 和 Data Management 读回。
+- **A-P5-PORTRAIT-5 已完成并经总控 mark done**：注册 `single-product-portrait` L1 工具，前端通过 `POST /api/v0/tools/runs` 传 `toolId=single-product-portrait` 与 `skuId/packageId` 触发预测，结果只写 `data/local/tool-runs/<runId>/artifacts/prediction.json` 和 `report.md`。artifact 保留 `sourceFiles`、平台画像、风险、证据和 PLS bridge；run/artifact 查询沿用 tools workspace 隔离。
+- **A-P5-PORTRAIT-5 总控修正项已关闭**：`platform_portrait.csv` 按 `skuId + sourceProductKey` 过滤，防止多 SKU 样本包串画像；`prediction.json` 顶层已写入 `sourceFiles`，供 V/A 机器读取来源 lineage。
 - 应用侧数据准入按项目级放行口径；taxonomy gate 未变。
 
 关键决策（A-P3-DB-6 三轮返工）：
@@ -39,6 +41,7 @@
 
 - P3-DB-MGMT 当前全组已完成；后续若新增数据管理增强，需另开任务卡。
 - App 后续可优先承接：临时 workspace / tool-run 清理策略、更细粒度 admin 权限 / token 获取方式、真实平台解析器和真实用户授权数据包模板。
+- P5-PORTRAIT 后续由 V-P5-PORTRAIT-6 接入 `single-product-portrait` tool artifact；A 侧真实样本包导入需等 D / X 另开任务。
 
 阻塞：
 
@@ -89,6 +92,13 @@
   - `apps/server npm run smoke:tools-import` 通过 33/33；临时 workspace `ws_tools_import_1783176743243` 覆盖临时 workspace 初始化、data_source seed、样例包 staging、profile-extract / business-aggregate dry-run、跨 workspace 拦截、错误 confirmText、无 admin token、正式导入、Data Management 版本 / 质量报告 / batch 查询。
   - `apps/web npm run lint`、`npm run build`、`npm run smoke` 通过。
   - `VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Tools Workbench"` 通过。
+- A-P5-PORTRAIT-5 总控复核（2026-07-05）：
+  - `apps/server npm run typecheck` 通过。
+  - `apps/model npm run typecheck` 通过。
+  - `apps/model npm run single-product-portrait-contract-test` 通过。
+  - `apps/server npm run smoke:single-product-portrait` 通过 39/39，覆盖成功、未知 SKU、异常 CSV、workspace 隔离、缺参、非法 packageId、`sourceFiles` 和多 SKU 过滤。
+  - `apps/server npm run smoke:tools` 通过 27/27。
+  - 本地 localhost smoke 在沙箱内触发 `fetch EPERM`，升级权限后通过。
 - ws_demo 当前状态（A-P3-DB-MGMT-1 smoke 执行后）：已导入 demo + douyin-bi，business rows > 0；A-P3-DB-MGMT-3 wrapper 使用独立临时 workspace，不污染 `ws_demo`。
 
 ---
@@ -141,3 +151,7 @@
 - **工具模块运行目录、workspace 与 DB 隔离**：A-P4-TOOLS-1 把工具运行输出限定在 `data/local/tool-runs/<runId>/`，只写文件系统，不写入业务表；失败运行仍保留 `run_manifest.json` + `quality_report.json` + errors。总控复核时补强 run / artifact 查询的 `workspaceId` 校验，避免跨 workspace 读取运行记录或产物。
 - **Hono 子路由含参与具体路由顺序同样重要**：`tools.get("/:toolId")` 若放在 `tools.get("/runs")` 之前，`/runs` 会被 `/:toolId` 吃掉。教训：子路由内同样遵循“具体路由在前，通用参数路由在后”。
 - **artifact 路径遍历防御在路由层之外也需做**：虽然 Hono 对未编码的 `../` 路径直接 404，但编码后的 `%2F..` 会进入 handler，因此 `isSafeArtifactId` 必须显式拒绝 `..` / `//` / 绝对路径。
+- **受控样本包 adapter 必须按绑定键过滤**：`single-product-portrait` 工具消费 `product_attributes.jsonl` + `platform_portrait.csv` 时，不能把所有画像行作为 anchor 丢给当前 SKU。必须按 `skuId + sourceProductKey` 过滤，否则多 SKU 样本包会串画像。`loadPackageAnchor` 应接受 filter 参数，无匹配画像行时显式失败。
+- **artifact 机器可读产物必须保留来源 lineage**：`prediction.json` 不仅要有人工可读的 `report.md`，顶层也要写 `sourceFiles` 数组，让下游 V/A 读取时不丢失数据来源和版本信息。
+- **跨包引用 model 源码会触发 server 的 `noUncheckedIndexedAccess`**：`apps/server/tsconfig.json` 纳入 `../model/src/single-product-portrait.ts` 后，model 文件内 `const [a, b] = fields` 这种解构会被推断为 `string | undefined`。修复只能是 model 侧加 `fields[0]!` 或默认值，因为 server 的 strict 配置比 model 更严格。契约测试和 smoke 回归可验证行为无变化。
+- **工具 dry-run 的 plannedArtifacts 应来自工具定义**：`sample-profile-extract` 的 `outputFormats` 推导出的 `aggregate_profile.json` 不适用于新工具。为 `single-product-portrait` 注册 `plannedArtifacts: ["artifacts/prediction.json", "artifacts/report.md"]` 后，`planDryRun` 改为优先使用定义字段，避免 dry-run 与实际产物不一致。

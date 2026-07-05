@@ -57,6 +57,63 @@ export interface Segment {
   drivers: string[];
 }
 
+export interface PortraitEvidence {
+  sourceField: string;
+  sourceValue: string;
+  ruleId: string;
+  targetLabelType: string;
+  targetLabel: string;
+  effect: "increase" | "decrease" | "set_prior";
+  weight: number;
+  rationale: string;
+}
+
+export interface PlatformPortraitRow {
+  labelType: string;
+  label: string;
+  share: number | null;
+  tgi: number | null;
+  source: string;
+  confidence: number;
+  evidence: PortraitEvidence[];
+  qualityFlags: string[];
+}
+
+export interface ProfileTagScore {
+  tagId: string;
+  score: number;
+  confidence: number;
+  source: string;
+}
+
+export interface SingleProductPortraitPrediction {
+  skuId: string;
+  generatedAt: string;
+  modelVersion: string;
+  modelPath: string;
+  sourceType: string;
+  anchorSkuId: string;
+  inputCoverage: {
+    requiredFieldCoverage: number;
+    optionalSignalCoverage: number;
+    usedFields: string[];
+    missingFields: string[];
+  };
+  platformPortraitRows: PlatformPortraitRow[];
+  dimensionSummaries: Array<{
+    labelType: string;
+    topLabels: Array<{ label: string; share: number | null; tgi: number | null; confidence: number }>;
+    qualityFlags: string[];
+  }>;
+  plsBridge?: {
+    predictedProfileTags: ProfileTagScore[];
+    unmappedPlatformLabels: Array<{ labelType: string; label: string; reason: string }>;
+    bridgeCoverageRate: number;
+  };
+  riskFlags: string[];
+  explanationSources: PortraitEvidence[];
+}
+
 export interface ProductProfile {
   predictionId: string;
   workspaceId: string;
@@ -72,6 +129,15 @@ export interface ProductProfile {
   topSegments: Segment[];
   qualityFlags: string[];
   unmappedInputTokens: string[];
+  riskFlags?: string[];
+  evidence?: PortraitEvidence[];
+  dimensionSummaries?: Array<{
+    labelType: string;
+    topLabels: Array<{ label: string; share: number | null; tgi: number | null; confidence: number }>;
+    qualityFlags: string[];
+  }>;
+  bridgeCoverageRate?: number;
+  unmappedPlatformLabels?: string[];
 }
 
 export interface ChannelProfile {

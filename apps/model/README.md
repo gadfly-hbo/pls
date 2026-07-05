@@ -95,6 +95,7 @@ Run contract tests:
 
 ```bash
 npm run single-product-portrait-contract-test
+npm run single-product-portrait-calibration-contract-test
 ```
 
 CLI:
@@ -123,6 +124,52 @@ Limitations:
 - TGI values are `null` when no platform population benchmark is available.
 - PLS bridge coverage is intentionally low because most platform long-tail labels are not mapped to the P0 taxonomy.
 - The anchor SKU is not present in the 103-row product table, so the run reports `anchor_product_attributes_missing`.
+
+## M-P5-PORTRAIT-7 Rule Weight Calibration Framework
+
+`src/single-product-portrait-calibration.ts` implements a small-sample, leave-one-out validation framework for rule weights. It consumes the D-P5-PORTRAIT-3 sample package format (`source_manifest.json`, `product_attributes.jsonl`, `platform_portrait.csv`, `quality_report.json`) and reports per-dimension metrics.
+
+Run calibration:
+
+```bash
+# default mock/sample package (will report not_enough_labeled_samples)
+npm run single-product-portrait-calibrate
+
+# synthetic 5-sample fixture (exercises the framework)
+npm run single-product-portrait-calibrate -- --package ../../data/demo/single-product-portrait-calibration-synthetic-5sample
+```
+
+Run smoke:
+
+```bash
+npm run single-product-portrait-calibration-smoke
+```
+
+Weight config:
+
+- `src/single-product-portrait-weights.ts` exposes `SingleProductPortraitRuleWeights` and `defaultSingleProductPortraitRuleWeights()`.
+- All baseline scalar weights are configurable without changing rule logic:
+  - gender prior (`femalePrior`, `neutralPrior`) and evidence weight
+  - age / spending / city / consumer-group / life-stage base distributions and boosts
+  - interest mapping weights
+  - IP/function rule weights
+  - fit->age rule weights (`fitToAgeRules`)
+  - anchor weak-prior multiplier
+- Pass custom weights via `SingleProductPortraitInput.options.weights` or `runSmallSampleRuleCalibration({ weights })`.
+
+Metrics:
+
+- `anchorTopLabelOverlap@3`: held-out top-3 actual vs predicted label overlap per dimension.
+- `dimensionCoverageRate`: predicted dimensions / actual dimensions.
+- `closedDimensionMassError`: deviation of closed-dimension share sums from 1.
+- `evidenceCoverageRate`: fraction of predicted rows with evidence.
+- `bridgeCoverageRate`: fraction of platform labels mapped to PLS taxonomy.
+
+Gating:
+
+- If fewer than 5 valid samples are available, the framework returns `status: "not_enough_labeled_samples"` and does **not** emit aggregate metrics.
+- `mock_sample` packages are explicitly flagged and never treated as real calibration evidence.
+- `baseline_not_trained_model` is preserved; the framework does not train neural networks.
 
 ## C3 Follow-Up
 

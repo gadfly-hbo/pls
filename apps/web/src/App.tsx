@@ -16,7 +16,7 @@ import {
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
-import type { SKU, ProductProfile } from './types';
+import type { SingleProductPortraitPrediction } from './types';
 import Dashboard from './pages/Dashboard';
 import MatchCoreWorkbench from './pages/MatchCoreWorkbench';
 import AccountProfileWorkbench from './pages/AccountProfileWorkbench';
@@ -43,8 +43,8 @@ const DATA_VERSION = 'empty';
 
 function App() {
   const [currentView, setCurrentView] = useState<ViewId>('overview');
-  const [currentSku, setCurrentSku] = useState<SKU | null>(null);
-  const [prediction, setPrediction] = useState<ProductProfile | null>(null);
+  const [currentSku, setCurrentSku] = useState<string | null>(null);
+  const [prediction, setPrediction] = useState<SingleProductPortraitPrediction | null>(null);
   const [flywheelDecisionId, setFlywheelDecisionId] = useState<string | undefined>();
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [sidebarOpen, setSidebarOpen] = useState(true);

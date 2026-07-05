@@ -68,7 +68,7 @@ export function planDryRun(opts: RunOptions): { ok: true; plan: DryRunPlan } | {
 
   const runId = `dry_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const outputDir = runDirPath(runId);
-  const plannedArtifacts = tool.definition.outputFormats.map((format) =>
+  const plannedArtifacts = tool.definition.plannedArtifacts ?? tool.definition.outputFormats.map((format) =>
     format === "json"
       ? "artifacts/aggregate_profile.json"
       : format === "markdown"

@@ -12,7 +12,7 @@ export interface ToolParameterSchema {
 export interface ToolDefinition {
   toolId: string;
   name: string;
-  category: "profile_extract" | "business_aggregate" | "format_convert";
+  category: "profile_extract" | "business_aggregate" | "format_convert" | "single_product_portrait";
   version: string;
   riskLevel: "L1" | "L2" | "L3";
   description: string;
@@ -21,6 +21,7 @@ export interface ToolDefinition {
   parameterSchema: ToolParameterSchema;
   runner: string;
   packageType?: string;
+  plannedArtifacts?: string[];
 }
 
 export interface ToolArtifact {

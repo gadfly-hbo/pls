@@ -1,0 +1,38 @@
+{
+  "packageType": "single-product-portrait-sample",
+  "packageVersion": "0.1",
+  "sourceBatchId": "mock_portrait_sample_batch_20260705",
+  "dataVersion": "v_mock_20260705",
+  "generatedAt": "2026-07-05T00:00:00.000Z",
+  "source": "mock_single_product_portrait_sample",
+  "sourceType": "mock_sample",
+  "workspaceId": "ws_demo",
+  "timeWindows": ["2026-06-01/2026-06-30"],
+  "allowedLabelTypes": [
+    "预测性别",
+    "预测年龄段",
+    "八大消费群体",
+    "预测消费能力",
+    "城市等级",
+    "抖音视频观看兴趣分类"
+  ],
+  "inputSources": [
+    {
+      "sourceId": "mock_single_product_portrait_sample_v1",
+      "sourceName": "Mock single product portrait sample package",
+      "sourceType": "mock_sample",
+      "description": "Contract-only sample. Not a real platform portrait export."
+    }
+  ],
+  "entityCounts": {
+    "productAttributes": 1,
+    "platformPortraitRows": 6,
+    "fieldMappingRows": 8,
+    "abnormalRows": 0
+  },
+  "calibrationReadiness": {
+    "minimumValidProducts": 5,
+    "currentValidProducts": 1,
+    "readyForSmallSampleCalibration": false
+  }
+}

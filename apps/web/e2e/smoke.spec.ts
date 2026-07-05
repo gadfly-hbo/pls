@@ -56,8 +56,8 @@ test('End-to-End Smoke Test for PLS', async ({ page }) => {
   await page.getByText('新品预测工作台', { exact: true }).click();
   // In Dashboard, fill a unique SKU ID and Title
   const uniqueSku = `e2e_sku_${Date.now()}`;
-  await page.locator('input[name="skuId"]').fill(uniqueSku);
-  await page.locator('input[name="title"]').fill(`E2E 测试款 ${uniqueSku}`);
+  await page.getByLabel('商品 ID').fill(uniqueSku);
+  await page.getByLabel('受控样本包 ID').fill('sample');
 
   // there should be a button to generate prediction and matches
   const startBtn = page.getByText('开始预测画像', { exact: true });
