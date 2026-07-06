@@ -1,0 +1,30 @@
+{
+  "packageType": "channel-profile-object-library",
+  "source": "mock_channel_object_library_sample",
+  "sourceType": "mock_sample",
+  "sourceBatchId": "batch_channel_object_library_mock_20260706",
+  "dataVersion": "v_channel_object_library_mock_20260706",
+  "generatedAt": "2026-07-06T00:00:00Z",
+  "timeWindows": ["2026-06-01/2026-06-30"],
+  "targetObjectTypes": [
+    "platform",
+    "trade_area",
+    "store",
+    "account",
+    "marketing_event",
+    "business_scenario"
+  ],
+  "entityCounts": {
+    "basicTemplates": 6,
+    "channelObjects": 6,
+    "bindings": 4,
+    "audienceProfiles": 3,
+    "productFitProfiles": 2,
+    "fieldDictionary": 17
+  },
+  "admissionPolicy": "user_authorized_full_passthrough",
+  "notes": [
+    "This is a mock contract sample and must not be used as real channel evidence.",
+    "No taxonomy tagId is introduced by this package."
+  ]
+}

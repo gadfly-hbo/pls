@@ -9,6 +9,7 @@ import {
   NEW_PRODUCT_DDL,
   FLYWHEEL_DDL,
   ADMIN_DDL,
+  CHANNEL_OBJECT_LIBRARY_DDL,
 } from "./schema.js";
 
 const ALL_DDL = [
@@ -21,6 +22,7 @@ const ALL_DDL = [
   NEW_PRODUCT_DDL,
   FLYWHEEL_DDL,
   ADMIN_DDL,
+  CHANNEL_OBJECT_LIBRARY_DDL,
 ].join("\n");
 
 function extractNames(ddl: string, type: "table" | "view"): string[] {

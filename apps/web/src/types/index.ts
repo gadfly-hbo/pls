@@ -331,6 +331,94 @@ export interface DecisionRecord {
   feedback?: FeedbackRecord;
 }
 
+export interface ChannelObject {
+  workspaceId: string;
+  objectType: 'platform' | 'trade_area' | 'store' | 'account' | 'marketing_event' | 'business_scenario';
+  sourceStableKey: string;
+  keySource: 'provided' | 'source_system_id' | 'generated_from_name';
+  canonicalObjectKey: string;
+  objectVersionId: string;
+  dataVersion: string;
+  sourceBatchId: string;
+  generatedAt: string;
+  timeWindow: string;
+  displayName: string;
+  platformName?: string | null;
+  platformType?: string | null;
+  entityStatus: string;
+  targetObject: string;
+  entityAttributes: Record<string, unknown>;
+  possibleDuplicate: boolean;
+  duplicateCandidateKeys: string[];
+  manualReviewStatus: 'unreviewed' | 'confirmed_duplicate' | 'confirmed_distinct' | 'needs_more_data';
+  qualityFlags: string[];
+  source: string;
+  sourceType: string;
+}
+
+export interface AudienceProfile {
+  profileId: string;
+  canonicalObjectKey: string;
+  profileStage: string;
+  source: string;
+  sourceBatchId: string;
+  dataVersion: string;
+  generatedAt: string;
+  timeWindow: string | null;
+  sampleSize: number | null;
+  confidence: number;
+  tags: Array<{ tagId: string; score: number; confidence?: number; source?: string }>;
+  unmappedFields: string[];
+  qualityFlags: string[];
+  benchmarkTags?: Array<{ dimension: string; optionLabel: string; sharePercent: number }>;
+  performanceMetrics?: {
+    followerCount?: number;
+    engagementRate?: number;
+    conversionRate?: number;
+    trafficIndex?: number;
+    conversionIndex?: number;
+  };
+  interactionPreference?: string[];
+}
+
+export interface ProductFitProfile {
+  profileId: string;
+  canonicalObjectKey: string;
+  source: string;
+  sourceBatchId: string;
+  dataVersion: string;
+  generatedAt: string;
+  timeWindow: string | null;
+  sampleSize: number | null;
+  confidence: number;
+  fitCategories: string[];
+  fitPriceBands: string[];
+  fitStyles: string[];
+  fitOccasions: string[];
+  fitLaunchTypes: string[];
+  evidence: Array<{ field: string; value: string; rationale: string }>;
+  qualityFlags: string[];
+}
+
+export interface ChannelObjectBinding {
+  bindingId: string;
+  bindingType: string;
+  fromCanonicalObjectKey: string;
+  toCanonicalObjectKey: string;
+  sourceBatchId: string;
+  dataVersion: string;
+  generatedAt: string;
+  qualityFlags: string[];
+}
+
+export interface ChannelObjectAnalysisView {
+  selectedChannelEntityIds: string[];
+  selectedMarketingEventId?: string;
+  selectedBusinessScenarioId?: string;
+  skuIds: string[];
+  generatedMatchResults: MatchResult[];
+}
+
 export interface DbMigrationStatus {
   total: number;
   applied: number;

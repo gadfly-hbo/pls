@@ -22,15 +22,18 @@ test('End-to-End Smoke Test for PLS', async ({ page }) => {
   // Default view: PLS总览
   await expect(page.getByText('快速查看数据可用性', { exact: false })).toBeVisible({ timeout: 10000 });
   
-  // Navigate to Account Profile
+  // Navigate to 渠道画像 (Channel Object Library, migrated from AccountProfileWorkbench)
   await page.locator('button.app-nav__item', { hasText: '渠道画像' }).click();
-  await expect(page.getByText('实体列表', { exact: true })).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('h2.workbench-sidebar__title').first()).toHaveText('渠道画像');
 
-  // Verify native React dashboard F4 (analysis tab is default)
-  await expect(page.getByText('有效数据样本量')).toBeVisible();
+  // Select an account object and verify audience profile tab
+  await page.locator('.entity-list-item__name', { hasText: '森马官方直播间' }).first().click();
+  await page.locator('.segmented-control button:has-text("人群画像")').first().click();
+  await expect(page.getByText('人群画像标签')).toBeVisible();
+  await expect(page.getByText('样本量')).toBeVisible();
 
-  // Go to F5 tab
-  const comparisonTab = page.getByText('号货匹配决策');
+  // Go to 匹配分析 tab
+  const comparisonTab = page.getByText('匹配分析');
   await comparisonTab.click();
 
   const analyzeBtn = page.getByText('分析匹配度');

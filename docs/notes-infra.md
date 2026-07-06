@@ -2,10 +2,16 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-05（infra 收尾：A-P5-PORTRAIT-5 后端工具链维持通过；当前 wiki 为 v0.62）
+最近更新：2026-07-06（X-P6-CHANNEL-0：渠道画像 2.0 总控契约冻结；当前 wiki 任务已新增 P6 渠道画像任务卡）
 
 进度：
 
+- `docs/channel-profile-2.0-plan.md` 已从草案收口为 P6 总控冻结契约，作为 D/M/A/V 后续渠道画像对象库、活动/场景、导入、匹配权重和 UI 边界的共同真源。
+- X-P6-CHANNEL-0 冻结 6 类对象库：平台、商圈、店铺、账号、活动、场景；线上层级为平台 -> 线上店铺 -> 账号，线下层级为商圈 -> 线下门店。
+- 活动 / 场景作为长期对象库，可绑定任意渠道实体但不改变实体归属层级；组合渠道包第一期只作为分析视图，不作为长期对象落库。
+- 第一期只做 AudienceProfile + ProductFitProfile；流量画像、转化画像、运营约束作为后续扩展，不进入 P6 第一期验收。
+- 第一期开工权重冻结：`baseScore = 0.7 * audienceFit + 0.3 * productFit`；活动 / 场景只做权重调节，不生成独立 eventScore / scenarioScore。
+- P2 既有 `livestream_room` / `content_account` 不要求删除或迁移历史数据；P6 新增主路径收敛到 `account`，用 `contentFormats` / `accountKind` 保留来源差异。
 - `docs/wiki.html` 当前 changelog `v0.62` 为 current；本 session P5 主线已完成 D-P5-PORTRAIT-3、X-P5-PORTRAIT-4、A-P5-PORTRAIT-5、V-P5-PORTRAIT-6、M-P5-PORTRAIT-7。
 - infra 域本 session 关键交付为 A-P5-PORTRAIT-5：注册 `single-product-portrait` 工具，通过 `POST /api/v0/tools/runs` 运行受控样本包，生成 derived artifact `prediction.json` / `report.md`，不写主业务画像表。
 - `single-product-portrait` 工具边界：只消费 `data/templates/single-product-portrait-<packageId>/sample_package/` 受控样本包；前端 / 调用方不得传任意本地文件路径。
@@ -23,6 +29,7 @@
 
 下一步：
 
+- D/M/A/V 可按 wiki 中 D-P6-CHANNEL-1、M-P6-CHANNEL-2、A-P6-CHANNEL-3、V-P6-CHANNEL-4 复制 brief 开工；必须先读 `docs/channel-profile-2.0-plan.md`。
 - 如需真实 P5 样本进入系统，应继续按 D-P5 样本包标准进入，后续再开 A/D 任务实现受控导入或真实解析器。
 - 如需将单品画像结果写入主业务 portrait 表，必须另开任务卡设计 schema、幂等、audit、回滚和前端展示边界；当前 artifact 不等于业务表落库。
 - `data/local/tool-runs/` 会累积 derived artifacts，清理策略仍需单独任务。

@@ -2,6 +2,29 @@
 
 ## 0. 当前状态
 
+最近更新：2026-07-06（M-P6-CHANNEL-2 渠道画像 2.0 商品适配与活动/场景权重匹配契约总控审核通过）
+
+进度：
+
+- 新增 `apps/model/src/channel-entity-fit.ts`：定义 `ChannelEntityFit` contract、`audienceFit`、`productFit`、`baseScore`、`contextWeightAdjustments` 与 `contextAdjustedScore`。
+- 冻结 `baseScore = 0.7 * audienceFit + 0.3 * productFit`；缺少 `ProductFitProfile` 时降级为 `audienceFit` 并标记 `missing_product_fit_profile`。
+- 活动/场景只作为 `baseScore` 的权重乘数调节，不生成独立 `eventScore` / `scenarioScore`。
+- 新增 `apps/model/src/channel-entity-fit-contract-test.ts`，覆盖 6 个最小场景。
+- 新增 `docs/model-p6-channel-entity-fit-contract.md` 记录公式、权重、降级策略、drivers、质量标记与测试覆盖；已纳入 `docs/README.md` 文档索引。
+
+本次验证：
+
+- `apps/model npm run typecheck` 通过。
+- `npm run channel-entity-fit-contract-test` 通过，6 个场景 `failures: []`。
+- `npm run contract-test`、`npm run account-fit-contract-test` 回归通过。
+
+阻塞/开放：
+
+- 当前为第一期 contract baseline，不是已训练模型；正式 fit formula 需用户 / X 总控拍板后替换。
+- 活动/场景规则映射目前为最小集合，后续扩展需回流 X 总控。
+
+### 上一轮状态（M-P5-PORTRAIT-7）
+
 最近更新：2026-07-05（M-P5-PORTRAIT-7 规则权重校准框架总控验收通过）
 
 进度：
@@ -41,6 +64,15 @@
 - 后续若进入 grid-search / 自动调权，必须新增独立任务卡和防过拟合验证口径，不能复用本卡结论宣称权重已校准。
 
 ---
+
+## M-P6-CHANNEL-2 收尾记录
+
+- 决策：`audienceFit` 采用维度加权 Jaccard，`productFit` 采用商品 DNA / 标签与渠道 `ProductFitProfile` 字段匹配的加权平均。
+- 决策：第一期固定 `baseScore = 0.7 * audienceFit + 0.3 * productFit`；缺少 `ProductFitProfile` 时降级为 `audienceFit` 并输出 `missing_product_fit_profile`。
+- 决策：活动/场景只作为 `baseScore` 的权重乘数调节，不生成独立 `eventScore` / `scenarioScore`；`contextAdjustedScore = baseScore * clamp(combinedAdjustment, 0.9, 1.3)`。
+- 决策：`contextDrivers` 只解释生效规则对排序的影响，未命中商品信号的规则标记 `active: false` 但不影响分数。
+- 踩坑：若把活动/场景权重直接加到维度权重里重新计算 `audienceFit`，会在渠道缺少该维度时反而降低分数；因此改为在 `baseScore` 上乘以乘数，只对商品-场景对齐部分加权。
+- 风险：当前活动/场景规则映射为最小集合，传统节日、平台大促、新品首发、会员复购等规则需用户 / X 总控确认后固化；未确认的规则不应直接用于生产排序。
 
 ## 模型域原则
 

@@ -19,6 +19,7 @@
     "smoke:admin-empty": "node scripts/smoke-admin-empty.mjs",
     "smoke:admin-imported": "node scripts/smoke-admin-imported.mjs",
     "smoke:admin-summary": "node scripts/smoke-admin-summary.mjs",
+    "smoke:channel-object-library": "node scripts/smoke-channel-object-library.mjs",
     "smoke:tools": "node scripts/smoke-tools.mjs",
     "smoke:tools-import": "node scripts/smoke-tools-import.mjs",
     "smoke:single-product-portrait": "node scripts/smoke-single-product-portrait.mjs",

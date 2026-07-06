@@ -3,7 +3,7 @@ import { api } from '../services/api';
 import type { DbOverview, DecisionRecord, DbDataVersion, DbImportJob, DbAuditEvent } from '../types';
 
 interface OverviewProps {
-  goToView: (view: 'overview' | 'account-workbench' | 'match-core' | 'dashboard' | 'flywheel' | 'data-management') => void;
+  goToView: (view: 'overview' | 'channel-objects' | 'match-core' | 'dashboard' | 'flywheel' | 'data-management') => void;
 }
 
 export default function Overview({ goToView }: OverviewProps) {
@@ -163,7 +163,7 @@ export default function Overview({ goToView }: OverviewProps) {
                   </div>
                 </div>
                 <button className="btn btn--primary" onClick={() => {
-                  if (channelCount === 0) goToView('account-workbench');
+                  if (channelCount === 0) goToView('channel-objects');
                   else if (matchRowCount === 0) goToView('match-core');
                   else if (decisions.length === 0 || pendingDecisions.length > 0) goToView('flywheel');
                   else goToView('dashboard');
@@ -237,7 +237,7 @@ export default function Overview({ goToView }: OverviewProps) {
                 <div style={{ fontSize: 13, color: 'var(--muted-foreground)', flex: 1 }}>
                   {apHealth === 'success' ? `已加载 ${channelCount} 个实体` : '无实体画像数据'}
                 </div>
-                <button className="btn" onClick={() => goToView('account-workbench')}>进入</button>
+                <button className="btn" onClick={() => goToView('channel-objects')}>进入</button>
               </div>
 
               <div className="metric-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

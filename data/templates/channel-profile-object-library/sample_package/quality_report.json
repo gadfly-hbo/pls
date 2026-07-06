@@ -1,0 +1,76 @@
+{
+  "packageType": "channel-profile-object-library",
+  "sourceBatchId": "batch_channel_object_library_mock_20260706",
+  "dataVersion": "v_channel_object_library_mock_20260706",
+  "generatedAt": "2026-07-06T00:00:01Z",
+  "source": "mock_channel_object_library_sample",
+  "sourceType": "mock_sample",
+  "timeWindows": ["2026-06-01/2026-06-30"],
+  "rowCounts": {
+    "basicTemplates": 6,
+    "channelObjects": 6,
+    "bindings": 4,
+    "audienceProfiles": 3,
+    "productFitProfiles": 2,
+    "fieldDictionary": 17
+  },
+  "objectTypeCounts": {
+    "platform": 1,
+    "trade_area": 1,
+    "store": 1,
+    "account": 1,
+    "marketing_event": 1,
+    "business_scenario": 1
+  },
+  "qualityRuleCounts": {
+    "missing_parent_reference": 0,
+    "generated_key_needs_review": 1,
+    "manual_entity_without_profile": 1,
+    "possible_duplicate": 1,
+    "unapproved_tag_id": 0,
+    "invalid_object_type": 0,
+    "event_or_scenario_as_channel_entity": 0,
+    "missing_profile_lineage": 0
+  },
+  "failureExamples": [
+    {
+      "ruleId": "missing_parent_reference",
+      "severity": "blocking",
+      "exampleObjectType": "store",
+      "exampleCanonicalObjectKey": "store:missing_parent_demo",
+      "message": "offline_store references trade_area:unknown_trade_area that is absent from package and target workspace."
+    },
+    {
+      "ruleId": "generated_key_needs_review",
+      "severity": "warning",
+      "exampleObjectType": "business_scenario",
+      "exampleCanonicalObjectKey": "business_scenario:new_product_launch:mock_style",
+      "message": "sourceStableKey was generated from displayName/scenarioType and requires manual review."
+    },
+    {
+      "ruleId": "possible_duplicate",
+      "severity": "warning",
+      "exampleObjectType": "account",
+      "exampleCanonicalObjectKey": "account:mock_account_douyin_style",
+      "duplicateCandidateKeys": ["account:mock_account_douyin_style_alt"],
+      "message": "Possible duplicate found by name/platform similarity; import must not auto-merge."
+    }
+  ],
+  "profileCoverage": {
+    "channelEntityCount": 4,
+    "audienceProfileCount": 3,
+    "productFitProfileCount": 2,
+    "manualEntityWithoutProfileCount": 1
+  },
+  "mappingCoverageRate": 0.88,
+  "minSampleSize": 320,
+  "qualityFlags": ["mock_sample", "generated_key_needs_review", "possible_duplicate", "manual_entity_without_profile"],
+  "blockingIssues": [],
+  "warnings": [
+    "Template sample only; no A-domain import adapter or DB schema is implemented in this task.",
+    "Marketing events and business scenarios are not ChannelEntity rows.",
+    "Possible duplicates are hints only and must not trigger automatic merging."
+  ],
+  "shareable": true,
+  "admissionPolicy": "user_authorized_full_passthrough"
+}

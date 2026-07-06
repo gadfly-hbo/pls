@@ -1,0 +1,15 @@
+{
+  "packageType": "channel-profile-object-library",
+  "runId": "run_channel_object_library_blocking_20260706",
+  "toolId": "build-channel-profile-object-library-package",
+  "toolVersion": "0.1.0",
+  "workspaceId": "ws_demo",
+  "createdAt": "2026-07-06T00:00:00Z",
+  "status": "succeeded",
+  "inputMode": "mock_blocking_sample",
+  "importAdapter": {
+    "packageType": "channel-profile-object-library-blocking",
+    "dryRunRequired": true,
+    "confirmText": "IMPORT CHANNEL OBJECT LIBRARY batch_channel_object_library_blocking_20260706"
+  }
+}

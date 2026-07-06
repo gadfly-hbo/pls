@@ -3,7 +3,13 @@ import { resolve, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import type { OperationImpact } from "./dangerous-ops.js";
+import {
+  dryRunChannelObjectLibrary,
+  executeChannelObjectLibrary,
+} from "./import-channel-object-library.js";
 
+// ---------------------------------------------------------------------------
+// Types
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -33,6 +39,7 @@ export interface DryRunResult {
   packageType: string;
   source: string;
   sourceType: string;
+  sourceBatchId?: string | null;
   batchId: string | null;
   dataVersion: string | null;
   timeWindow: string | null;
@@ -59,7 +66,7 @@ export interface VersionInfo {
 
 const REPO_ROOT = resolve(import.meta.dirname, "../../../../");
 
-interface PackageConfig {
+export interface PackageConfig {
   type: string;
   source: string;
   sourceType: string;
@@ -81,13 +88,25 @@ const PACKAGES: Record<string, PackageConfig> = {
     sourceType: "mock",
     basePath: "data/demo",
   },
+  "channel-profile-object-library": {
+    type: "channel-profile-object-library",
+    source: "mock_channel_object_library_sample",
+    sourceType: "mock_sample",
+    basePath: "data/templates/channel-profile-object-library/sample_package",
+  },
+  "channel-profile-object-library-blocking": {
+    type: "channel-profile-object-library-blocking",
+    source: "mock_channel_object_library_blocking",
+    sourceType: "mock_sample",
+    basePath: "data/templates/channel-profile-object-library/blocking_package",
+  },
 };
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function readJsonl(filePath: string): Array<Record<string, SqlVal>> {
+export function readJsonl(filePath: string): Array<Record<string, SqlVal>> {
   const text = readFileSync(filePath, "utf-8");
   return text
     .split("\n")
@@ -142,6 +161,11 @@ function manifestToTableName(name: string): string {
 /** Convert a dry-run result into the standardized OperationImpact shape. */
 export function toImportImpact(dry: DryRunResult): OperationImpact {
   const affectedTables = dry.tables.map((t) => manifestToTableName(t.name));
+  const requiredConfirmText =
+    dry.packageType === "channel-profile-object-library" ||
+    dry.packageType === "channel-profile-object-library-blocking"
+      ? `IMPORT CHANNEL OBJECT LIBRARY ${dry.sourceBatchId ?? "unknown"}`
+      : `IMPORT ${dry.packageType}`;
   return {
     operation: "import",
     targetType: "package",
@@ -153,7 +177,7 @@ export function toImportImpact(dry: DryRunResult): OperationImpact {
     containsUserAuthorized: dry.sourceType === "user_authorized",
     containsSystemHistory: false,
     warnings: [...dry.warnings, ...dry.errors],
-    requiredConfirmText: `IMPORT ${dry.packageType}`,
+    requiredConfirmText,
   };
 }
 
@@ -639,6 +663,7 @@ export function dryRun(packageType: string): DryRunResult {
   if (!pkg) throw new Error(`unknown package type: ${packageType}`);
   if (pkg.type === "douyin-bi") return dryRunDouyinBi(pkg);
   if (pkg.type === "demo") return dryRunDemo(pkg);
+  if (pkg.type === "channel-profile-object-library" || pkg.type === "channel-profile-object-library-blocking") return dryRunChannelObjectLibrary(pkg);
   throw new Error(`dry run not implemented for package type: ${packageType}`);
 }
 
@@ -672,6 +697,8 @@ export function executeImport(
       result = executeDouyinBi(db, workspaceId, pkg);
     } else if (pkg.type === "demo") {
       result = executeDemo(db, workspaceId, pkg);
+    } else if (pkg.type === "channel-profile-object-library" || pkg.type === "channel-profile-object-library-blocking") {
+      result = executeChannelObjectLibrary(db, workspaceId, pkg);
     } else {
       throw new Error(`import not implemented for package type: ${packageType}`);
     }

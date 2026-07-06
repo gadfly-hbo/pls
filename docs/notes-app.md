@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-05（A-P5-PORTRAIT-5 单品画像预测 API 与 artifact 存储通过）
+最近更新：2026-07-06（A-P6-CHANNEL-3 渠道画像对象库后端通过总控复核）
 
 进度：
 
@@ -23,6 +23,7 @@
 - **X-P4-TOOLS-6 已完成并经总控 mark done**：工具模块第一期总体验收通过，确认 Tool Registry、Local Runner、artifact 管理、profile-extract / business-aggregate 标准包、Admin Import、Data Management 和 ToolsWorkbench 已形成闭环；临时 workspace `ws_tools_import_1783176743243` 覆盖 import dry-run、confirm import、auditId、batch、dataVersion、qualityReport 和 Data Management 读回。
 - **A-P5-PORTRAIT-5 已完成并经总控 mark done**：注册 `single-product-portrait` L1 工具，前端通过 `POST /api/v0/tools/runs` 传 `toolId=single-product-portrait` 与 `skuId/packageId` 触发预测，结果只写 `data/local/tool-runs/<runId>/artifacts/prediction.json` 和 `report.md`。artifact 保留 `sourceFiles`、平台画像、风险、证据和 PLS bridge；run/artifact 查询沿用 tools workspace 隔离。
 - **A-P5-PORTRAIT-5 总控修正项已关闭**：`platform_portrait.csv` 按 `skuId + sourceProductKey` 过滤，防止多 SKU 样本包串画像；`prediction.json` 顶层已写入 `sourceFiles`，供 V/A 机器读取来源 lineage。
+- **A-P6-CHANNEL-3 已完成并经总控 mark done**：已修复 `missing_parent_reference` 为 blocking、正式 import 前拦截 dry-run blocking errors、对象库列表分页对齐 api-contract.md 通用契约、新增负向 smoke fixture 与 `smoke:channel-object-library` 脚本；`docs/api-contract.md` §10.5 与 `docs/notes-app.md` 已同步。
 - 应用侧数据准入按项目级放行口径；taxonomy gate 未变。
 
 关键决策（A-P3-DB-6 三轮返工）：
@@ -39,8 +40,7 @@
 
 下一步：
 
-- P3-DB-MGMT 当前全组已完成；后续若新增数据管理增强，需另开任务卡。
-- App 后续可优先承接：临时 workspace / tool-run 清理策略、更细粒度 admin 权限 / token 获取方式、真实平台解析器和真实用户授权数据包模板。
+- A-P6-CHANNEL-3 已通过总控复核；后续 V-P6 接真实 API 时按 `docs/api-contract.md` §10.5 和实际 route/schema 对齐。
 - P5-PORTRAIT 后续由 V-P5-PORTRAIT-6 接入 `single-product-portrait` tool artifact；A 侧真实样本包导入需等 D / X 另开任务。
 
 阻塞：
@@ -99,7 +99,14 @@
   - `apps/server npm run smoke:single-product-portrait` 通过 39/39，覆盖成功、未知 SKU、异常 CSV、workspace 隔离、缺参、非法 packageId、`sourceFiles` 和多 SKU 过滤。
   - `apps/server npm run smoke:tools` 通过 27/27。
   - 本地 localhost smoke 在沙箱内触发 `fetch EPERM`，升级权限后通过。
-- ws_demo 当前状态（A-P3-DB-MGMT-1 smoke 执行后）：已导入 demo + douyin-bi，business rows > 0；A-P3-DB-MGMT-3 wrapper 使用独立临时 workspace，不污染 `ws_demo`。
+- A-P6-CHANNEL-3 返工验证（2026-07-06）：
+  - `apps/server npm run typecheck` 通过。
+  - `apps/server npm run schema:check` 通过（`ws_demo` valid，2 applied / 0 pending / 0 failed）。
+  - `apps/server npm run smoke:channel-object-library` dry-run mode 通过 19/19，覆盖 blocking package dry-run 与正式 import 400 拒绝。
+  - `PLS_ADMIN_SMOKE_MODE=imported npm run smoke:channel-object-library` 通过 46/46，使用独立临时 workspace，未清理或重建 `ws_demo`。
+  - `apps/server npm run smoke:admin-empty` 全通过 131/131。
+  - `apps/server npm run smoke:admin-imported` 全通过 157/157。
+- ws_demo 当前状态：A-P6-CHANNEL-3 开发与 smoke 过程中被直接写入了 object-library 测试数据（15 行）。`smoke:admin-empty` / `smoke:admin-imported` 使用独立临时 workspace，不污染 `ws_demo`；是否 rebuild `ws_demo` 需用户确认。
 
 ---
 

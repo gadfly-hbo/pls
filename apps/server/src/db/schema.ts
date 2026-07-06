@@ -813,6 +813,194 @@ CREATE INDEX IF NOT EXISTS idx_review_decision ON strategy_review(workspace_id, 
 `;
 
 // ============================================================================
+// A-P6-CHANNEL-3: Channel Profile 2.0 object library.
+// Stores ChannelEntity, MarketingEvent, BusinessScenario, their bindings,
+// audience profiles and product-fit profiles as append-only versioned rows.
+// Latest projections are provided by *_latest views; data_version preserves
+// history for audit and replay.
+// ============================================================================
+export const CHANNEL_OBJECT_LIBRARY_DDL = `
+CREATE TABLE IF NOT EXISTS channel_object (
+  workspace_id TEXT NOT NULL REFERENCES workspace(workspace_id),
+  object_type TEXT NOT NULL,
+  source_stable_key TEXT NOT NULL,
+  key_source TEXT NOT NULL,
+  canonical_object_key TEXT NOT NULL,
+  object_version_id TEXT NOT NULL,
+  data_version TEXT NOT NULL,
+  source_batch_id TEXT NOT NULL,
+  generated_at TEXT NOT NULL,
+  time_window TEXT,
+  display_name TEXT,
+  platform_name TEXT,
+  platform_type TEXT,
+  entity_status TEXT NOT NULL DEFAULT 'active',
+  target_object TEXT NOT NULL,
+  entity_attributes TEXT NOT NULL DEFAULT '{}',
+  possible_duplicate INTEGER NOT NULL DEFAULT 0,
+  duplicate_candidate_keys TEXT NOT NULL DEFAULT '[]',
+  manual_review_status TEXT NOT NULL DEFAULT 'unreviewed',
+  quality_flags TEXT NOT NULL DEFAULT '[]',
+  source TEXT,
+  source_type TEXT,
+  raw TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (workspace_id, canonical_object_key, data_version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_channel_object_type ON channel_object(workspace_id, object_type);
+CREATE INDEX IF NOT EXISTS idx_channel_object_batch ON channel_object(workspace_id, source_batch_id);
+CREATE INDEX IF NOT EXISTS idx_channel_object_key ON channel_object(workspace_id, canonical_object_key);
+
+CREATE TABLE IF NOT EXISTS channel_object_binding (
+  workspace_id TEXT NOT NULL REFERENCES workspace(workspace_id),
+  binding_id TEXT NOT NULL,
+  binding_type TEXT NOT NULL,
+  from_canonical_object_key TEXT NOT NULL,
+  to_canonical_object_key TEXT NOT NULL,
+  source_batch_id TEXT NOT NULL,
+  data_version TEXT NOT NULL,
+  generated_at TEXT NOT NULL,
+  quality_flags TEXT NOT NULL DEFAULT '[]',
+  raw TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (workspace_id, binding_id, data_version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_channel_binding_from ON channel_object_binding(workspace_id, from_canonical_object_key);
+CREATE INDEX IF NOT EXISTS idx_channel_binding_to ON channel_object_binding(workspace_id, to_canonical_object_key);
+CREATE INDEX IF NOT EXISTS idx_channel_binding_batch ON channel_object_binding(workspace_id, source_batch_id);
+
+CREATE TABLE IF NOT EXISTS audience_profile (
+  workspace_id TEXT NOT NULL REFERENCES workspace(workspace_id),
+  profile_id TEXT NOT NULL,
+  canonical_object_key TEXT NOT NULL,
+  profile_stage TEXT NOT NULL DEFAULT 'channel_audience',
+  source TEXT NOT NULL,
+  source_batch_id TEXT NOT NULL,
+  data_version TEXT NOT NULL,
+  generated_at TEXT NOT NULL,
+  time_window TEXT NOT NULL,
+  sample_size INTEGER,
+  confidence REAL NOT NULL,
+  tags TEXT NOT NULL DEFAULT '[]',
+  unmapped_fields TEXT NOT NULL DEFAULT '[]',
+  quality_flags TEXT NOT NULL DEFAULT '[]',
+  raw TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (workspace_id, profile_id, data_version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_audience_profile_object ON audience_profile(workspace_id, canonical_object_key);
+CREATE INDEX IF NOT EXISTS idx_audience_profile_batch ON audience_profile(workspace_id, source_batch_id);
+
+CREATE TABLE IF NOT EXISTS product_fit_profile (
+  workspace_id TEXT NOT NULL REFERENCES workspace(workspace_id),
+  profile_id TEXT NOT NULL,
+  canonical_object_key TEXT NOT NULL,
+  source TEXT NOT NULL,
+  source_batch_id TEXT NOT NULL,
+  data_version TEXT NOT NULL,
+  generated_at TEXT NOT NULL,
+  time_window TEXT,
+  sample_size INTEGER,
+  confidence REAL NOT NULL,
+  fit_categories TEXT NOT NULL DEFAULT '[]',
+  fit_price_bands TEXT NOT NULL DEFAULT '[]',
+  fit_styles TEXT NOT NULL DEFAULT '[]',
+  fit_occasions TEXT NOT NULL DEFAULT '[]',
+  fit_launch_types TEXT NOT NULL DEFAULT '[]',
+  evidence TEXT NOT NULL DEFAULT '[]',
+  quality_flags TEXT NOT NULL DEFAULT '[]',
+  raw TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (workspace_id, profile_id, data_version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_fit_object ON product_fit_profile(workspace_id, canonical_object_key);
+CREATE INDEX IF NOT EXISTS idx_product_fit_batch ON product_fit_profile(workspace_id, source_batch_id);
+
+CREATE VIEW IF NOT EXISTS channel_object_latest AS
+SELECT workspace_id, object_type, source_stable_key, key_source, canonical_object_key, object_version_id,
+       data_version, source_batch_id, generated_at, time_window, display_name, platform_name, platform_type,
+       entity_status, target_object, entity_attributes, possible_duplicate, duplicate_candidate_keys,
+       manual_review_status, quality_flags, source, source_type, raw, created_at
+FROM (
+  SELECT *,
+         ROW_NUMBER() OVER (
+           PARTITION BY workspace_id, canonical_object_key
+           ORDER BY generated_at DESC, rowid DESC
+         ) AS _latest_rank
+  FROM channel_object
+) WHERE _latest_rank = 1;
+
+CREATE VIEW IF NOT EXISTS channel_object_binding_latest AS
+SELECT workspace_id, binding_id, binding_type, from_canonical_object_key, to_canonical_object_key,
+       source_batch_id, data_version, generated_at, quality_flags, raw, created_at
+FROM (
+  SELECT *,
+         ROW_NUMBER() OVER (
+           PARTITION BY workspace_id, binding_id
+           ORDER BY generated_at DESC, rowid DESC
+         ) AS _latest_rank
+  FROM channel_object_binding
+) WHERE _latest_rank = 1;
+
+CREATE VIEW IF NOT EXISTS audience_profile_latest AS
+SELECT workspace_id, profile_id, canonical_object_key, profile_stage, source, source_batch_id, data_version,
+       generated_at, time_window, sample_size, confidence, tags, unmapped_fields, quality_flags, raw, created_at
+FROM (
+  SELECT *,
+         ROW_NUMBER() OVER (
+           PARTITION BY workspace_id, canonical_object_key, profile_stage
+           ORDER BY generated_at DESC, rowid DESC
+         ) AS _latest_rank
+  FROM audience_profile
+) WHERE _latest_rank = 1;
+
+CREATE VIEW IF NOT EXISTS product_fit_profile_latest AS
+SELECT workspace_id, profile_id, canonical_object_key, source, source_batch_id, data_version, generated_at,
+       time_window, sample_size, confidence, fit_categories, fit_price_bands, fit_styles, fit_occasions,
+       fit_launch_types, evidence, quality_flags, raw, created_at
+FROM (
+  SELECT *,
+         ROW_NUMBER() OVER (
+           PARTITION BY workspace_id, canonical_object_key
+           ORDER BY generated_at DESC, rowid DESC
+         ) AS _latest_rank
+  FROM product_fit_profile
+) WHERE _latest_rank = 1;
+
+CREATE VIEW IF NOT EXISTS channel_object_entity_latest AS
+SELECT workspace_id, canonical_object_key AS channel_entity_id, object_type AS entity_type,
+       source_stable_key AS source_entity_key, display_name, platform_type, platform_name,
+       (entity_attributes ->> 'parentCanonicalObjectKey') AS parent_entity_id,
+       '[]' AS entity_path, entity_status,
+       (entity_attributes ->> 'storeId') AS shop_id,
+       CASE WHEN object_type = 'account' THEN source_stable_key ELSE NULL END AS account_id,
+       (entity_attributes ->> 'accountKind') AS account_kind,
+       COALESCE(entity_attributes ->> 'contentFormats', '[]') AS content_format,
+       (entity_attributes ->> 'country') AS country,
+       (entity_attributes ->> 'province') AS province,
+       (entity_attributes ->> 'city') AS city,
+       (entity_attributes ->> 'district') AS district,
+       (entity_attributes ->> 'tradeArea') AS trade_area,
+       (entity_attributes ->> 'mallName') AS mall_name,
+       (entity_attributes ->> 'storeId') AS store_id,
+       (entity_attributes ->> 'storeFormat') AS store_format,
+       '[]' AS profile_tags,
+       '[]' AS benchmark_tags,
+       '{}' AS performance_metrics,
+       '[]' AS unmapped_profile_fields,
+       entity_attributes AS raw_business_fields,
+       source AS source_id,
+       source_batch_id, data_version, generated_at, time_window, source_type, quality_flags,
+       source_stable_key AS upsert_key, created_at, created_at AS updated_at
+FROM channel_object_latest
+WHERE object_type IN ('platform', 'trade_area', 'store', 'account');
+`;
+
+// ============================================================================
 // A-P3-DB-2: Admin system tables for schema migration tracking, admin audit
 // and data import job management.
 // ============================================================================

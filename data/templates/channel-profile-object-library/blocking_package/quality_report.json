@@ -1,0 +1,11 @@
+{
+  "packageType": "channel-profile-object-library",
+  "fixturePurpose": "negative_smoke_blocking_import",
+  "blockingIssues": [
+    "invalid_object_type",
+    "missing_parent_reference",
+    "unapproved_tag_id",
+    "missing_profile_lineage"
+  ],
+  "warnings": []
+}

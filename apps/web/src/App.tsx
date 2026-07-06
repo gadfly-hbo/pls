@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import {
   Activity,
   BarChart3,
-  Boxes,
   Database,
   GitBranch,
+  Library,
   Menu,
   Moon,
   PackageSearch,
@@ -19,18 +19,18 @@ import {
 import type { SingleProductPortraitPrediction } from './types';
 import Dashboard from './pages/Dashboard';
 import MatchCoreWorkbench from './pages/MatchCoreWorkbench';
-import AccountProfileWorkbench from './pages/AccountProfileWorkbench';
+import ChannelObjectLibrary from './pages/ChannelObjectLibrary';
 import FlywheelWorkbench from './pages/FlywheelWorkbench';
 import DataManagementWorkbench from './pages/DataManagementWorkbench';
 import Overview from './pages/Overview';
 import ToolsWorkbench from './pages/ToolsWorkbench';
 
-type ViewId = 'overview' | 'account-workbench' | 'match-core' | 'dashboard' | 'flywheel' | 'tools' | 'data-management';
+type ViewId = 'overview' | 'channel-objects' | 'match-core' | 'dashboard' | 'flywheel' | 'tools' | 'data-management';
 type SubViewId = 'workbench' | 'readme';
 
 const NAV_ITEMS: { id: ViewId; label: string; shortLabel: string; icon: LucideIcon }[] = [
   { id: 'overview', label: 'PLS总览', shortLabel: '总览', icon: Activity },
-  { id: 'account-workbench', label: '渠道画像', shortLabel: '画像', icon: Boxes },
+  { id: 'channel-objects', label: '渠道画像', shortLabel: '画像', icon: Library },
   { id: 'match-core', label: '货渠匹配', shortLabel: '匹配', icon: PackageSearch },
   { id: 'dashboard', label: '新品预测', shortLabel: '预测', icon: Sparkles },
   { id: 'flywheel', label: '经营飞轮', shortLabel: '飞轮', icon: GitBranch },
@@ -226,8 +226,8 @@ function App() {
               {currentView === 'overview' && (
                 <Overview goToView={navigateTo} />
               )}
-              {currentView === 'account-workbench' && (
-                <AccountProfileWorkbench />
+              {currentView === 'channel-objects' && (
+                <ChannelObjectLibrary />
               )}
               {currentView === 'match-core' && (
                 <MatchCoreWorkbench

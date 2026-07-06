@@ -1,0 +1,39 @@
+{
+  "packageType": "channel-profile-object-library",
+  "runId": "run_channel_object_library_mock_20260706",
+  "toolId": "build-channel-profile-object-library-package",
+  "toolVersion": "0.1.0",
+  "workspaceId": "ws_demo",
+  "createdAt": "2026-07-06T00:00:00Z",
+  "status": "succeeded",
+  "inputMode": "mock_sample",
+  "artifacts": [
+    "source_manifest.json",
+    "basic_templates.csv",
+    "channel_objects.jsonl",
+    "bindings.jsonl",
+    "audience_profiles.jsonl",
+    "product_fit_profiles.jsonl",
+    "field_dictionary.csv",
+    "quality_report.json",
+    "report.md"
+  ],
+  "importAdapter": {
+    "packageType": "channel-profile-object-library",
+    "targetObjects": [
+      "ChannelEntity",
+      "MarketingEvent",
+      "BusinessScenario",
+      "ChannelObjectBinding",
+      "AudienceProfile",
+      "ProductFitProfile"
+    ],
+    "dryRunRequired": true,
+    "confirmText": "IMPORT CHANNEL OBJECT LIBRARY batch_channel_object_library_mock_20260706",
+    "idempotencyScope": "workspaceId+packageType+sourceBatchId+dataVersion"
+  },
+  "warnings": [
+    "Mock sample only; not a real channel profile conclusion.",
+    "A-domain schema/import adapter is not implemented by D-P6-CHANNEL-1."
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "packageType": "channel-profile-object-library",
+  "source": "mock_channel_object_library_blocking",
+  "sourceType": "mock_sample",
+  "sourceBatchId": "batch_channel_object_library_blocking_20260706",
+  "dataVersion": "v_channel_object_library_blocking_20260706",
+  "generatedAt": "2026-07-06T00:00:00Z",
+  "timeWindows": ["2026-06-01/2026-06-30"],
+  "targetObjectTypes": ["platform", "account"],
+  "admissionPolicy": "user_authorized_full_passthrough",
+  "notes": ["Negative smoke fixture. Formal import must be blocked by dry-run errors."]
+}

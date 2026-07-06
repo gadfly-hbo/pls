@@ -70,7 +70,8 @@ const CODE_TABLES = new Set([
   "douyin_adjustment_advice", "douyin_summary_metric", "data_source",
   "channel_entity", "new_product_prediction", "decision_record", "action_record",
   "feedback_record", "strategy_review", "schema_migration", "db_admin_audit",
-  "data_import_job",
+  "data_import_job", "channel_object", "channel_object_binding",
+  "audience_profile", "product_fit_profile",
 ]);
 
 const SYSTEM_TABLES = new Set(["schema_migration", "db_admin_audit", "data_import_job"]);
@@ -79,7 +80,9 @@ const SYSTEM_TABLES = new Set(["schema_migration", "db_admin_audit", "data_impor
 function classifyTable(name: string): string {
   if (SYSTEM_TABLES.has(name)) return "admin";
   if (["workspace", "sku", "channel_profile", "wide_table_row", "batch", "idempotency_key"].includes(name)) return "core";
-  if (name.startsWith("douyin_") || name === "data_source" || name === "channel_entity") return "import";
+  if (name.startsWith("douyin_") || name === "data_source" || name === "channel_entity" ||
+      name === "channel_object" || name === "channel_object_binding" ||
+      name === "audience_profile" || name === "product_fit_profile") return "import";
   if (name === "prediction" || name === "new_product_prediction") return "prediction";
   if (name === "match_result") return "match";
   if (name === "task") return "task";
@@ -412,9 +415,24 @@ admin.post("/import-jobs", adminTokenRequired(), idempotencyMiddleware(), async 
     );
   }
 
-  const expectedConfirm = `IMPORT ${packageType}`;
+  let dry: ReturnType<typeof pkgDryRun>;
+  try {
+    dry = pkgDryRun(packageType);
+  } catch (err) {
+    return internalError(c, `import dry-run failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  const expectedConfirm = toImportImpact(dry).requiredConfirmText;
   if (body.confirmText !== expectedConfirm) {
-    return invalidInput(c, `confirmText required: must be exactly "${expectedConfirm}"`, "confirmText");
+    return invalidConfirmText(c, expectedConfirm);
+  }
+
+  // Reject formal import if dry-run has blocking errors. This keeps the
+  // confirmText contract but prevents corrupt/invalid packages from being
+  // written to the workspace.
+  const blockingErrors = dry.errors ?? [];
+  if (blockingErrors.length > 0) {
+    return invalidInput(c, `import blocked by dry-run errors: ${blockingErrors.join("; ")}`, "dryRun");
   }
 
   const db = openDb(wsId);

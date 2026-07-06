@@ -45,6 +45,10 @@ export const DROPPABLE_TABLES = new Set([
   "action_record",
   "feedback_record",
   "strategy_review",
+  "channel_object",
+  "channel_object_binding",
+  "audience_profile",
+  "product_fit_profile",
 ]);
 
 export const DROPPABLE_VIEWS = new Set([
@@ -58,6 +62,11 @@ export const DROPPABLE_VIEWS = new Set([
   "douyin_adjustment_advice_latest",
   "douyin_summary_metric_latest",
   "channel_entity_latest",
+  "channel_object_latest",
+  "channel_object_binding_latest",
+  "audience_profile_latest",
+  "product_fit_profile_latest",
+  "channel_object_entity_latest",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -472,12 +481,16 @@ export async function executeRebuild(workspaceId: string, skipSnapshot: boolean)
     const {
       SCHEMA_DDL, DOUYIN_BI_DDL, DOUYIN_BI_DDL_PART2, DOUYIN_BI_DDL_PART3,
       DATA_MANAGEMENT_DDL, CHANNEL_ENTITY_DDL, NEW_PRODUCT_DDL, FLYWHEEL_DDL,
+      CHANNEL_OBJECT_LIBRARY_DDL,
     } = await import("../db/schema.js");
     for (const view of [
       "match_result_latest", "douyin_account_latest", "douyin_account_benchmark_tag_latest",
       "douyin_account_report_latest", "douyin_product_latest", "douyin_product_account_fit_latest",
       "douyin_comparison_dimension_latest", "douyin_adjustment_advice_latest",
       "douyin_summary_metric_latest", "channel_entity_latest",
+      "channel_object_latest", "channel_object_binding_latest",
+      "audience_profile_latest", "product_fit_profile_latest",
+      "channel_object_entity_latest",
     ]) {
       try { db.exec(`DROP VIEW IF EXISTS ${view}`); } catch { /* ignore */ }
     }
@@ -489,6 +502,7 @@ export async function executeRebuild(workspaceId: string, skipSnapshot: boolean)
     db.exec(CHANNEL_ENTITY_DDL);
     db.exec(NEW_PRODUCT_DDL);
     db.exec(FLYWHEEL_DDL);
+    db.exec(CHANNEL_OBJECT_LIBRARY_DDL);
     db.close();
     steps.push({ step: "apply_migrations", status: "ok", detail: `${result.applied} applied, ${result.failed} failed (migration runner)` });
   } catch (err) {

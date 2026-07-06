@@ -27,6 +27,7 @@
   .light .cl-item li, .light .note-item .nt { color: #334155; }
   .light .note-item .ndel:hover { color: #dc2626; }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body {
     margin: 0; background: var(--bg); color: var(--fg);
     font-family: "PingFang SC","Noto Sans CJK SC","Helvetica Neue",Arial,sans-serif;
@@ -184,9 +185,9 @@
 
   <div class="tabs">
     <button class="tab active" data-view="dispatch">任务派发</button>
-    <button class="tab" data-view="hotfix">快修任务</button>
+    <button class="tab" data-view="hotfix" hidden>快修任务</button>
     <button class="tab" data-view="notes">随手记</button>
-    <button class="tab" data-view="prompts">常用 prompts</button>
+    <button class="tab" data-view="prompts" hidden>常用 prompts</button>
     <button class="tab" data-view="agentAssets">Agent 技能</button>
     <button class="tab" data-view="changelog">版本历史</button>
   </div>
@@ -200,7 +201,7 @@
     </details>
   </section>
 
-  <section id="hotfix" class="view">
+  <section id="hotfix" class="view" hidden>
     <p class="legend">快修任务由总控判定安全后发布。涉及原始数据、DMP、schema、接缝层的改动不走任意快修，必须进入任务派发。</p>
     <div id="hotfixGrid"></div>
   </section>
@@ -224,7 +225,7 @@
     <div id="noteList"></div>
   </section>
 
-  <section id="prompts" class="view">
+  <section id="prompts" class="view" hidden>
     <p class="legend">Session 开场/收尾通用 prompt。开场 prompt 已按 data / model / app / viz / infra 拆分，避免 agent 追问目标域。</p>
     <div id="promptList"></div>
     <script type="text/plain" id="src-resume-data"># PLS · Session 开场 SOP（data 域）
@@ -527,6 +528,212 @@ const DOMAINS = {
 };
 
 const TASKS = [
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-06 00:00",
+    title: "X-P6-CHANNEL-0：渠道画像 2.0 总控契约冻结",
+    brief: `目标：冻结渠道画像 2.0 的产品对象模型、第一期范围和跨域任务边界，作为 D/M/A/V 后续实现真源。
+
+前置：
+- 先读取 AGENTS.md、CONTEXT.md、Orchestration.md、docs/notes-infra.md。
+- 先读取 docs/channel-profile-2.0-plan.md、docs/p2-2-product-channel-schema.md、docs/api-contract.md 中 ChannelEntity 相关章节。
+
+范围：
+1. 复核并冻结 6 类对象库：平台、商圈、店铺、账号、活动、场景。
+2. 冻结层级：平台 -> 线上店铺 -> 账号；商圈 -> 线下门店。
+3. 冻结活动 / 场景为长期对象库，可绑定渠道实体但不改变归属层级。
+4. 冻结第一期只做 AudienceProfile + ProductFitProfile，不做流量、转化、运营约束。
+5. 冻结 matchScore = 0.7 * audienceFit + 0.3 * productFit，活动 / 场景只做权重调节。
+6. 冻结导入、版本、稳定 ID、重复治理和非目标。
+
+验收：
+- docs/channel-profile-2.0-plan.md 能作为 D/M/A/V 共同契约。
+- 明确第一期做什么、不做什么。
+- 不修改代码、不新增 schema。
+
+回流格式：
+- 说明总控契约是否需要调整。
+- 列出 D/M/A/V 下游任务的必须读取文件和验收口径。`
+  },
+  {
+    dom: "D",
+    status: "done",
+    created: "2026-07-06 00:01",
+    title: "D-P6-CHANNEL-1：渠道画像对象库导入模板与质量报告",
+    brief: `目标：为渠道画像 2.0 定义数据导入模板、字段字典、对象包格式和质量报告，让平台、商圈、店铺、账号、活动、场景可被稳定导入和追溯。
+
+前置：
+- 先读取 docs/channel-profile-2.0-plan.md。
+- 先读取 docs/data-spec.md、docs/p2-2-product-channel-schema.md、docs/tools-module-design.md。
+
+范围：
+1. 定义基础模板：单目标类型导入 platform / trade_area / store / account / marketing_event / business_scenario。
+2. 定义高级模板：渠道画像对象包，包含多类对象、父子层级、活动/场景绑定、人群画像、商品适配和质量报告。
+3. 定义 AudienceProfile 与 ProductFitProfile 的导入字段、来源、sampleSize、timeWindow、confidence、qualityFlags。
+4. 定义 sourceStableKey、keySource、canonicalObjectKey、objectVersionId、dataVersion 的数据要求。
+5. 定义重复风险提示：possible_duplicate、duplicateCandidateKeys、manualReviewStatus。
+6. 定义 dry-run 质量检查规则，包括 missing_parent_reference、generated_key_needs_review、manual_entity_without_profile。
+
+红线：
+- 不新增未冻结 taxonomy tagId。
+- 不把活动 / 场景当作渠道实体。
+- 不自动合并疑似重复对象。
+- 不伪造画像样本量、来源、时间窗口或商品适配结论。
+
+验证：
+- 提供模板样例或字段表时必须覆盖基础模板和高级模板。
+- 至少列出 3 个失败样例：缺父级、自动生成 key、疑似重复。
+
+回流格式：
+- 说明新增 / 修改文档。
+- 说明字段字典、质量报告和模板样例。
+- 明确需要 A 域实现的 import contract。`
+  },
+  {
+    dom: "M",
+    status: "done",
+    created: "2026-07-06 00:02",
+    title: "M-P6-CHANNEL-2：商品适配与活动/场景权重匹配契约",
+    brief: `目标：把渠道画像 2.0 的 ProductFitProfile 与活动/场景上下文纳入人货匹配算法，输出可解释的第一期 contract。
+
+前置：
+- 先读取 docs/channel-profile-2.0-plan.md。
+- 先读取 docs/model-plan.md、docs/model-p2-5-product-channel-fit-contract.md、docs/model-p2-8-new-product-prediction-contract.md。
+
+范围：
+1. 定义 audienceFit：商品预测人群画像 × 渠道人群画像。
+2. 定义 productFit：商品 DNA / 商品标签 × 渠道商品适配画像。
+3. 冻结 baseScore = 0.7 * audienceFit + 0.3 * productFit。
+4. 定义缺少 ProductFitProfile 时降级为 audienceFit，并追加 missing_product_fit_profile。
+5. 定义 MarketingEvent / BusinessScenario 的 contextWeightAdjustments，只调节权重，不生成独立 eventScore / scenarioScore。
+6. 定义 drivers 如何解释活动/场景对排序的影响。
+7. 定义最小 contract test 场景：有商品适配、缺商品适配、新品首发、会员复购、传统假日、平台大促。
+
+红线：
+- 不把活动 / 场景包装成独立渠道分数。
+- 不用低质量 ProductFitProfile 强行改变排序，必须体现 confidence 和 qualityFlags。
+- 不使用未定义的标签或伪造训练指标。
+
+验证：
+- 输出 contract / smoke 设计或实现时覆盖上述最小场景。
+- 保留原有 P0/P2 匹配兼容路径。
+
+回流格式：
+- 说明公式、权重、降级策略、drivers。
+- 说明新增质量标记和 contract test 覆盖。`
+  },
+  {
+    dom: "A",
+    status: "done",
+    created: "2026-07-06 00:03",
+    title: "A-P6-CHANNEL-3：渠道画像对象库 API / schema / import / latest view",
+    brief: `目标：为渠道画像 2.0 落地对象库后端能力，支持六类对象、历史版本、latest 查询、导入 dry-run/confirm 和绑定关系。
+
+前置：
+- 先读取 docs/channel-profile-2.0-plan.md。
+- 先读取 docs/api-contract.md、docs/pipeline-design.md、docs/p3-db-schema-migration-contract.md、docs/tools-module-design.md。
+- 涉及真实 API 前必须先查 apps/server/src/routes/ 和现有 schema / import runner。
+
+范围：
+1. 设计或实现 ChannelEntity、MarketingEvent、BusinessScenario、AudienceProfile、ProductFitProfile、Binding 的 schema/API。
+2. 支持 canonicalObjectKey、objectVersionId、dataVersion、sourceBatchId、latest view。
+3. 支持统一导入入口：基础模板和高级对象包 dry-run -> quality report -> confirm import -> audit。
+4. 支持活动/场景与任意渠道实体的多对多绑定。
+5. 支持对象库列表、详情、轻量编辑所需接口。
+6. 保持 workspace 隔离、admin token、Idempotency-Key、confirmText、db_admin_audit 纪律。
+
+红线：
+- 不破坏现有 /channels 与 /channels/entities 兼容路径。
+- 不自动合并疑似重复对象。
+- 不绕过 Admin API 写入规则。
+- 不在主 workspace 上执行破坏性 smoke。
+
+验证：
+- typecheck。
+- contract / smoke 覆盖 latest、历史版本、workspace 隔离、dry-run、confirm import、缺父级、疑似重复、绑定关系。
+- 会写入 workspace 的 smoke 必须使用独立临时 workspace。
+
+回流格式：
+- 说明新增 / 修改 API、schema、import 路由和 smoke。
+- 列出完整请求 method/path/headers/body。
+- 说明未实现的 UI 或 M 依赖。`
+  },
+  {
+    dom: "V",
+    status: "done",
+    created: "2026-07-06 00:04",
+    title: "V-P6-CHANNEL-4：渠道画像对象库工作台与分析视图",
+    brief: `目标：实现渠道画像 2.0 前端第一期体验：对象库列表、详情、轻量编辑、统一导入入口和商品 × 渠道实体 × 活动/场景分析视图。
+
+前置：
+- 先读取 docs/channel-profile-2.0-plan.md。
+- 先读取 docs/ui-flow.md、docs/api-contract.md、apps/web/src/services/api.ts 和现有渠道 / 工具工作台组件。
+- 若接真实 API，必须先确认 A-P6-CHANNEL-3 的 route/schema；mock 必须与真实响应同构。
+
+范围：
+1. 新增或扩展渠道画像对象库导航，包含平台、商圈、店铺、账号、活动、场景。
+2. 列表支持搜索、筛选、latest 版本展示、来源和质量标记。
+3. 详情展示 AudienceProfile、ProductFitProfile、绑定关系、版本、sourceBatchId、qualityFlags。
+4. 轻量编辑支持名称、说明、商圈半径、活动二级标签、场景说明、绑定关系。
+5. 统一导入入口支持选择目标类型、基础模板、高级对象包、dry-run 预览和质量报告。
+6. 分析视图支持临时选择多个渠道实体 + 活动 + 场景，不把组合渠道包作为长期对象落库。
+
+红线：
+- 不展示或暗示流量、转化、运营约束第一期已完成。
+- 不把活动/场景展示为渠道实体层级。
+- 不隐藏 manual_entity_without_profile、generated_key_needs_review、possible_duplicate 等质量标记。
+- 移动端和窄屏不得出现表格、按钮、标签文本重叠。
+
+验证：
+- apps/web lint / build。
+- Playwright 覆盖对象列表、详情、轻量编辑、导入 dry-run、质量标记、分析视图和窄屏布局。
+
+回流格式：
+- 说明新增 / 修改前端文件。
+- 说明 API adapter 映射与 mock 同构情况。
+- 附验证结果和视觉检查结论。`
+  },
+  {
+    dom: "V",
+    status: "done",
+    created: "2026-07-06 00:05",
+    title: "V-P6-CHANNEL-5：旧渠道画像能力迁入对象库详情页",
+    brief: `目标：收敛渠道画像 2.0 的信息架构，将原“渠道画像”模块能力迁入“渠道对象库”详情页；迁移完成后，最终主导航名称统一改回“渠道画像”，避免两个平级入口让用户困惑。
+
+前置：
+- 先读取 docs/channel-profile-2.0-plan.md。
+- 先读取 docs/api-contract.md §10.5、apps/web/src/pages/ChannelObjectLibrary.tsx、apps/web/src/pages/AccountProfileWorkbench.tsx。
+- 先确认 V-P6-CHANNEL-4 的总控复核意见，尤其真实 API null 字段处理和对象库详情页 tab 结构。
+
+范围：
+1. 迁移阶段以“渠道对象库”为 P6 主入口，把原“渠道画像”的实体画像查看能力迁入对象详情页。
+2. 对象详情页必须形成清晰 tab：总览、人群画像、商品适配、匹配分析、绑定关系、编辑。
+3. 人群画像 tab 承接原渠道画像中的 profile tags、benchmark tags、sampleSize、timeWindow、confidence、qualityFlags 展示能力。
+4. 匹配分析 tab 承接原渠道画像中按实体诊断商品适配 / 货渠匹配的入口；若真实分析 API 未就绪，必须明确显示为“待接入真实分析接口”，不得伪装成真实结果。
+5. 旧“渠道画像”导航入口改为兼容入口或下线：若保留，命名必须显式标注为 P2 兼容视图；若下线，需确认无现有 smoke / e2e 依赖被破坏。
+6. 迁移完成后，将合并后的 P6 主入口从“渠道对象库”更名为“渠道画像”；产品内部仍可称对象库，但用户侧导航不再暴露“对象库”作为主名称。
+7. 更新 docs/notes-viz.md，说明“渠道对象库”与旧“渠道画像”的迁移关系、最终主入口名称和旧入口处理方式。
+
+红线：
+- 不把活动 / 场景展示成渠道实体层级。
+- 不隐藏 manual_entity_without_profile、generated_key_needs_review、possible_duplicate 等质量标记。
+- 不展示或暗示流量、转化、运营约束第一期已完成。
+- 不在真实 API 模式下用本地 mock 分析结果冒充真实接口结果。
+- 移动端和窄屏不得出现表格、按钮、标签文本重叠。
+
+验证：
+- apps/web lint / build。
+- Playwright 覆盖对象详情页的人群画像、商品适配、匹配分析 tab，以及旧入口保留 / 下线后的导航行为。
+- 至少补一条 VITE_USE_MOCK=false 定向验证，覆盖 A-P6 真实返回中的 null sampleSize / timeWindow 不会导致页面崩溃。
+- 390px 窄屏无横向溢出。
+
+回流格式：
+- 说明旧“渠道画像”入口最终处理方式。
+- 说明最终导航命名是否已统一为“渠道画像”。
+- 说明迁入对象库详情页的能力清单和未迁入原因。
+- 附 lint / build / Playwright / 真实 API 验证结果。`
+  },
   {
     dom: "X",
     status: "done",
@@ -1410,10 +1617,13 @@ document.getElementById("themeToggle").addEventListener("click", () => {
 
 document.querySelectorAll(".tab").forEach((btn) => {
   btn.addEventListener("click", () => {
+    if (btn.hidden) return;
+    const target = document.getElementById(btn.dataset.view) || document.getElementById("dispatch");
+    if (target.hidden) return;
     document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
     document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
     btn.classList.add("active");
-    document.getElementById(btn.dataset.view).classList.add("active");
+    target.classList.add("active");
   });
 });
 

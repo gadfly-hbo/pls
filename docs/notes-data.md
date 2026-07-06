@@ -2,70 +2,38 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-05（D-P5-PORTRAIT-3 单品画像真实样本包模板总控审核通过）
+最近更新：2026-07-06（D-P6-CHANNEL-1 渠道画像对象库导入模板总控审核通过）
 
 进度：
 
-- P3-DB 任务链已完成并通过总控复核：`X-P3-DB-0`、`D-P3-DB-1`、`A-P3-DB-2/3/4/6`、`V-P3-DB-5/7`、`X-P3-DB-8` 均为 done。
-- `ws_demo` 已按用户确认执行受控 rebuild，重放口径为选 A：不重放 `data/demo`，不重放 `data/p1/douyin-bi`，保留空的新 schema 库。
-- D-P4-TOOLS-2 已新增 `data/templates/profile-extract/`，冻结 `profile-extract` 数据包结构、sample package、README 和 validator。
-- D-P4-TOOLS-3 已新增 `data/templates/business-aggregate/`，冻结 `business-aggregate` 数据包结构、sample package、README 和 validator。
-- X-P4-TOOLS-6 已完成并通过总控验收：临时 workspace `ws_tools_import_1783176743243` 完成 `profile-extract` 与 `business-aggregate` 工具包 import dry-run、confirm import、batch、dataVersion、qualityReport 和 Data Management 读回验证；未对 `ws_demo` 执行破坏性正式导入。
-- D-P5-PORTRAIT-3 已完成并经总控审核通过：新增 `data/templates/single-product-portrait-sample/`，冻结后续 5-20 款真实单品画像样本的标准包结构、mock sample、README 和 validator。
-- `single-product-portrait-sample` 样本包要求每个画像样本必须绑定可追溯 `skuId + sourceProductKey` 和商品属性；不允许只有画像无商品属性。
-- D-P5-PORTRAIT-3 mock sample 标记为 `mock_sample`，只作为 contract 示例，不伪装真实画像、商品属性或平台大盘基准；未新增 taxonomy tagId，未连接生产平台或 SQL，未导入主 workspace。
-- 两个 P4 工具模板样例均标记为 `mock_sample`；未读取用户未指定的本地文件，未连接生产 SQL，未新增 taxonomy tagId 或 DB schema。
-- 清库前 dry-run 影响范围：5707 行，其中包含 2503 行 protected system table 历史和 `douyin_*` user_authorized 数据。
-- rebuild 通过 Admin API `POST /api/v0/admin/database/rebuild` 执行，confirmText 为 `RESET ws_demo`；未手工删除主库，未绕过 `db_admin_audit`。
-- rebuild 快照路径：`data/workspaces/ws_demo/db.sqlite.snapshot.1783093107898`，大小 11M，SHA-256 为 `e644be67c3c4d310406664f42216de36b9abaf885c1eb689c0f7eb73864a71c3`。
-- rebuild 后主库 `data/workspaces/ws_demo/db.sqlite` 为 28 tables / 10 views，business rows = 0；`schema_migration=1`、`workspace=1`、`db_admin_audit=1`、`data_import_job=0`。
-- `db_admin_audit` 已记录 `rebuild / workspace / ws_demo / success`，after snapshot 包含快照路径。
-- 验收文档已输出：`docs/p3-db-rebuild-acceptance.md`。
-- `AGENTS.md` 已新增并调整“API 联调与契约纪律”：先查契约、复杂联调强制沙盘推演、Adapter 隔离、Mock 与真实形态同构。
+- D-P6-CHANNEL-1 已完成并经总控审核通过：新增 `data/templates/channel-profile-object-library/`，冻结渠道画像 2.0 对象库基础模板、高级对象包、字段字典、质量报告、失败样例和 validator。
+- D-P6 样例包均标记为 `mock_sample`，只作为 contract 示例；未新增 taxonomy tagId，未连接生产平台或 SQL，未导入主 workspace，未实现 DB schema / API / UI。
+- 基础模板覆盖 `platform`、`trade_area`、`store`、`account`、`marketing_event`、`business_scenario`；高级包覆盖对象、父子层级、活动/场景绑定、`AudienceProfile`、`ProductFitProfile` 和质量报告。
+- 当前 `ws_demo` 仍为空业务库；依赖历史 SKU、渠道、抖音 BI 或 demo 数据的旧业务 smoke / 页面流程需要先通过受控导入重放数据。
 
 下一步：
 
-- 后续如需演示或业务 smoke，需要先通过数据管理模块或 Admin API 重新导入数据；当前 `ws_demo` 是空业务库。
-- 如需恢复旧状态，必须基于快照文件制定明确恢复流程，不应直接覆盖当前主库。
-- 若重放数据，优先从 `data/demo/` 或 `data/p1/douyin-bi/` 的仓库真源执行；本地临时 `v2_20260704_xp1f6` 不在仓库完整真源内，只保留在快照中。
-- `smoke:admin-dangerous` 需要后续改造，避免继续假设主库存在 `v1_20260703` 数据；真实 delete-version 覆盖应继续使用临时 workspace。
-- P4 工具模块第一期已验收通过；后续数据域重点是接入真实平台解析器 / SQL 导出解析器、设计 tool-run 清理策略，以及在 X 拍板后决定 `product_master` / `channel_entity` 是否成为物理顶层表。
-- P5 单品画像后续如进入 M-P5-PORTRAIT-7 小样本规则校准，需要至少 5 款真实有效单品画像样本；当前模板 sample 只有 1 款 mock contract 示例，不计入真实校准，仍缺 5 款真实有效样本。
+- 建议执行 `/cdi-wrapup` 将 D-P6-CHANNEL-1 回流给 X 总控，确认 wiki 状态、changelog 和后续 A/M/V 任务衔接。
+- A 域后续需要实现 `channel-profile-object-library` import adapter：dry-run 质量检查、confirm import、workspace 隔离、admin token、Idempotency-Key、confirmText、audit，以及 ChannelEntity / MarketingEvent / BusinessScenario / Binding / AudienceProfile / ProductFitProfile 的持久化或 staging contract。
+- M/V 后续消费时必须先读取 `docs/channel-profile-2.0-plan.md` 和本模板 README，活动 / 场景只能绑定或调权，不能当作渠道实体或独立渠道分数。
+- 如需演示或业务 smoke，需要先通过数据管理模块或 Admin API 重新导入数据；当前 `ws_demo` 是空业务库。
 
 阻塞：
 
 - 当前没有数据域实现阻塞。
-- 业务数据为空会导致依赖历史 SKU、渠道、抖音 BI、demo 数据的旧业务 smoke 或页面流程失败；这是本次选 A 不重放的预期结果，不代表 schema rebuild 失败。
+- D-P6 落库、latest view、对象库 API、统一导入入口仍由 A/X 后续任务决定；D 域本轮只冻结包契约。
 
 开放问题：
 
-- 是否重放 `data/demo/` 或 `data/p1/douyin-bi/` 由后续任务另行确认；本次明确不重放。
-- 旧运行时历史仅在快照中，是否需要迁移或导出为长期审计档案尚未决定。
-- API smoke 中依赖主库历史数据的断言需要拆分为空库 smoke 与带 fixture smoke。
-- `ProductMaster` / `ChannelEntity` 是否成为物理 SQLite 顶层表，仍需 X 总控拍板；D-P4-TOOLS-3 只冻结包契约和 adapter 输入。
-- 三方平台 HTML/CSV/XLSX 画像解析器、业务 SQL 导出解析器尚未实现；当前 sample package 仍为 `mock_sample`。
-- 单品画像平台大盘 TGI 基准仍缺失；`platform_portrait.csv` 允许 `tgi` 留空，不得用 `0` 替代“暂无大盘基准”。
-- `docs/wiki.html` 当前未包含 D-P5-PORTRAIT-3 任务卡状态；本次 notes 按用户提供 brief 和总控审核通过事实记录，未修改 wiki。
+- D-P6 的物理 schema、API 路由、latest view、import adapter、对象轻量编辑和真实 workspace smoke 仍需 X/A 拍板与实现。
+- 重复对象第一期只做 `possible_duplicate` 风险提示和人工状态，不自动合并；后续治理工作流是否做仍未决定。
+- 三方平台 HTML/CSV/XLSX 画像解析器、业务 SQL 导出解析器尚未实现；当前 D-P6 sample package 仍为 `mock_sample`。
+- P5 单品画像进入真实小样本规则校准仍缺至少 5 款真实有效商品画像样本。
 
 验证：
 
-- `apps/server npm run typecheck` 通过。
-- `apps/server npm run schema:check` 通过：Valid true，0 missing / 0 extra，1 applied / 0 pending / 0 failed。
-- `apps/server npm run smoke:admin-database` 通过。
-- `apps/web npm run lint` 通过。
-- `apps/web npm run build` 通过。
-- `apps/web npm run smoke` 通过。
-- `apps/web VITE_USE_MOCK=false npx playwright test e2e/data-management.spec.ts --project=chromium` 通过。
-- `apps/server npm run smoke:admin-dangerous` 有 3 个旧断言失败：脚本假设 `ws_demo` 存在 `v1_20260703` 数据；本次空库验收目标下该断言不适用，脚本中的临时 workspace 危险操作闭环仍通过。
-- `node data/templates/profile-extract/scripts/validate-profile-extract-package.mjs data/templates/profile-extract/sample_package` 通过。
-- `node data/templates/business-aggregate/scripts/validate-business-aggregate-package.mjs data/templates/business-aggregate/sample_package` 通过。
-- 本次 data 域收尾复验（2026-07-04）：上述两个 D-P4-TOOLS validator 均重新运行通过，0 warnings。
-- X-P4-TOOLS-6 总体验收（2026-07-04）：
-  - `apps/server npm run typecheck` 通过。
-  - `apps/server npm run smoke:tools` 通过 27/27。
-  - `apps/server npm run smoke:tools-import` 通过 33/33；临时 workspace 为 `ws_tools_import_1783176743243`，覆盖 profile-extract / business-aggregate dry-run、confirm import、Data Management versions、quality reports 和 import batches。
-  - `apps/web npm run lint`、`npm run build`、`npm run smoke` 通过；`VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Tools Workbench"` 通过。
-- D-P5-PORTRAIT-3 收尾复验（2026-07-05）：`node data/templates/single-product-portrait-sample/scripts/validate-single-product-portrait-sample.mjs data/templates/single-product-portrait-sample/sample_package` 通过，0 warnings。
+- D-P6-CHANNEL-1 收尾复验（2026-07-06）：`node data/templates/channel-profile-object-library/scripts/validate-channel-profile-object-library-package.mjs data/templates/channel-profile-object-library/sample_package` 通过，`ok: true`，`failures: []`。
+- 本轮未运行 server/web typecheck、build 或 smoke，因为未改应用代码、DB schema、API 路由或前端代码。
 
 ---
 
@@ -203,3 +171,18 @@
 - M-P5-PORTRAIT-7 消费方式：按 `skuId + sourceProductKey` join `product_attributes.jsonl` 与 `platform_portrait.csv`；商品属性作为规则特征，平台画像行作为校准目标，`quality_report.json` 作为门禁元数据。
 - 小样本规则校准门槛仍为至少 5 款真实有效商品画像样本；当前 mock sample 只有 1 款 contract 示例，不能计入真实校准能力声明。
 - 本卡未新增 taxonomy tagId，未连接生产平台或 SQL，未导入主 workspace，未编造真实画像、商品属性或平台大盘基准。
+
+## D-P6-CHANNEL-1 沉淀
+
+- 模板目录固定为 `data/templates/channel-profile-object-library/`。
+- 标准包目录结构为 `run_manifest.json`、`source_manifest.json`、`basic_templates.csv`、`channel_objects.jsonl`、`bindings.jsonl`、`audience_profiles.jsonl`、`product_fit_profiles.jsonl`、`field_dictionary.csv`、`quality_report.json`、`report.md`。
+- 基础模板必须覆盖 6 类 `targetObjectType`：`platform`、`trade_area`、`store`、`account`、`marketing_event`、`business_scenario`。
+- 高级对象包必须覆盖多类对象、父子层级、活动/场景绑定、人群画像、商品适配和质量报告；活动和场景可以绑定渠道实体，但不是 `ChannelEntity`，不得改变实体层级。
+- 对象版本字段必须保留 `sourceStableKey`、`keySource`、`canonicalObjectKey`、`objectVersionId`、`dataVersion`、`sourceBatchId`、`generatedAt`；`canonicalObjectKey = objectType + ":" + sourceStableKey`，`objectVersionId = workspaceId + ":" + objectType + ":" + sourceStableKey + ":" + dataVersion`。
+- `AudienceProfile` 与 `ProductFitProfile` 必须保留 `source`、`sampleSize`、`timeWindow`、`confidence`、`qualityFlags`；不得伪造样本量、来源、时间窗口或商品适配结论。
+- 重复治理第一期只做提示：`possibleDuplicate`、`duplicateCandidateKeys`、`manualReviewStatus`；不得自动合并疑似重复对象。
+- dry-run 质量规则必须覆盖 `missing_parent_reference`、`generated_key_needs_review`、`manual_entity_without_profile`、`possible_duplicate`、`unapproved_tag_id`、`invalid_object_type`、`event_or_scenario_as_channel_entity`、`missing_profile_lineage`。
+- 样例包位于 `data/templates/channel-profile-object-library/sample_package/`，只作为 `mock_sample` contract 示例；未新增 taxonomy tagId，未连接生产平台或 SQL，未导入主 workspace。
+- validator 校验必填文件、6 类基础模板覆盖、高级包对象覆盖、key 公式、绑定引用、profile lineage、taxonomy 白名单、row count 一致性、质量规则和 3 类失败样例。
+- 校验命令：`node data/templates/channel-profile-object-library/scripts/validate-channel-profile-object-library-package.mjs data/templates/channel-profile-object-library/sample_package`。
+- A-P6-CHANNEL-3 需要实现 import adapter：dry-run、quality report preview、confirm import、workspace 隔离、admin token、`Idempotency-Key`、`X-PLS-Workspace`、`confirmText = IMPORT CHANNEL OBJECT LIBRARY <sourceBatchId>`、`data_import_job` / `db_admin_audit`。

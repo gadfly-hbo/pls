@@ -13,6 +13,7 @@
     "token-governance": "../server/node_modules/.bin/tsx src/cli.ts token-governance",
     "contract-test": "../server/node_modules/.bin/tsx src/contract-test.ts",
     "account-fit-contract-test": "../server/node_modules/.bin/tsx src/account-fit-contract-test.ts",
+    "channel-entity-fit-contract-test": "../server/node_modules/.bin/tsx src/channel-entity-fit-contract-test.ts",
     "validate-tags": "../server/node_modules/.bin/tsx src/cli.ts validate-tags",
     "single-product-portrait": "../server/node_modules/.bin/tsx src/cli.ts single-product-portrait",
     "single-product-portrait-smoke": "../server/node_modules/.bin/tsx src/single-product-portrait-smoke.ts",

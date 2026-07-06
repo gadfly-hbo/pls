@@ -2,7 +2,27 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-04（X-P4-TOOLS-6 工具模块第一期总体验收通过）
+最近更新：2026-07-06（V-P6-CHANNEL-5 旧渠道画像能力迁入对象库详情页完成并通过 X 总控复核）
+
+进度：
+
+- `V-P6-CHANNEL-5` (旧渠道画像能力迁入对象库详情页) 已完成：
+  - 已由 X 总控复核通过；`docs/wiki.html` 中 `V-P6-CHANNEL-5` 已标记为 `done`。
+  - `apps/web/src/pages/ChannelObjectLibrary.tsx` 详情页 tab 已统一为「总览 / 人群画像 / 商品适配 / 匹配分析 / 绑定关系 / 编辑」。
+  - 人群画像 tab 已承接原 `AccountProfileWorkbench` 的 benchmark tags、performance metrics（粉丝/互动率/转化率）、interaction preference 展示能力。
+  - 匹配分析 tab 已承接原「号货匹配决策」能力，支持输入 SKU 生成 `getAccountMatch` 诊断报告与 CSV 导出；真实 API 未就绪时显示「待接入真实分析接口」，不伪装结果。
+  - `apps/web/src/App.tsx` 主导航已统一：原「渠道对象库」入口更名为「渠道画像」；旧 `account-workbench` 导航入口已下线，`AccountProfileWorkbench.tsx` 文件保留但不挂载，作为可回退资产。
+  - `apps/web/src/pages/Overview.tsx` 中的「进入渠道画像」跳转已同步指向 `channel-objects`。
+  - 已补 `VITE_USE_MOCK=false` 定向 Playwright 用例，验证 A-P6 真实返回中 `ProductFitProfile.sampleSize: null` / `timeWindow: null` 不导致页面崩溃。
+  - `apps/web/e2e/smoke.spec.ts` 已更新，适配新「渠道画像」导航与详情页 tab 结构。
+- 前端类型扩展：在 `apps/web/src/types/index.ts` 新增 `ChannelObject`、`AudienceProfile`、`ProductFitProfile`、`ChannelObjectBinding`、`ChannelObjectAnalysisView`。
+- API adapter 对齐 A-P6-CHANNEL-3：在 `apps/web/src/services/api.ts` 新增 `getChannelObjects`、`getChannelObject`、`getChannelObjectAudienceProfiles`、`getChannelObjectProductFitProfiles`、`getChannelObjectBindings`、`updateChannelObject`、`analyzeChannelObjects`；Mock 数据与真实后端字段同构，包含 6 类对象（平台、商圈、店铺、账号、活动、场景）。
+- 工作台覆盖：左侧对象列表支持搜索、对象类型筛选、平台类型筛选；分组展示 latest 对象并透出版本、sourceBatchId、qualityFlags；详情页展示总览、人群画像、商品适配、匹配分析、绑定关系、轻量编辑。
+- 导入入口复用现有 Admin Database Import API，支持基础模板/高级对象包切换、dry-run 预览、确认导入。
+- 分析视图支持临时多选渠道实体 + 选择活动/场景 + 输入 SKU，生成 mock 匹配结果，不把组合包落库。
+- Playwright 新增 `apps/web/e2e/channel-object-library.spec.ts`：覆盖对象列表、详情、人群画像、商品适配、绑定关系、轻量编辑、导入 dry-run、分析视图、390px 窄屏无横向溢出。
+- 验证通过：`apps/web npm run lint`、`npm run build`、`npm run smoke`（21 项中 16 passed / 5 skipped），`VITE_USE_MOCK=false npx playwright test e2e/channel-object-library.spec.ts -g "real API contract"` 通过。
+- 轻量编辑当前在 mock 模式下本地生效；真实 API 模式下后端尚未提供 PUT/PATCH 编辑端点，会提示“not yet supported”。如需真实持久化编辑，需 A-P6-CHANNEL-3 补充编辑接口或走导入新版本。
 
 进度：
 

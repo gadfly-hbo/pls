@@ -18,6 +18,8 @@
 | [data-safety-policy.md](data-safety-policy.md) | X 总控 | P0 数据安全分级、LLM 准入边界、共享对象约束 |
 | [data-spec.md](data-spec.md) | D | 历史 SKU 训练宽表、DMP 聚合导入、商品和渠道字段 |
 | [model-plan.md](model-plan.md) | M | 商品画像预测、商品 × 渠道匹配算法、回测指标 |
+| [channel-profile-2.0-plan.md](channel-profile-2.0-plan.md) | X 总控 | 渠道画像 2.0 对象库、活动/场景、导入、匹配权重和第一期范围 |
+| [model-p6-channel-entity-fit-contract.md](model-p6-channel-entity-fit-contract.md) | M | 渠道画像 2.0 商品适配与活动/场景权重匹配契约 |
 | [single-product-portrait-algorithm-contract.md](single-product-portrait-algorithm-contract.md) | X 总控 | 单品商品属性到平台人群画像的规则 baseline contract、输出形态、验证标准和实现任务边界 |
 | [p5-portrait-baseline-acceptance.md](p5-portrait-baseline-acceptance.md) | X 总控 | 单品画像规则 baseline 总体验收、第一期展示边界和后续任务顺序 |
 | [p5-portrait-bridge-review.md](p5-portrait-bridge-review.md) | X 总控 | 单品平台画像到 PLS taxonomy 的 bridge 映射边界、不可映射理由和 taxonomy 扩展提案条件 |
@@ -27,6 +29,7 @@
 | [decision-output.md](decision-output.md) | V | 运营建议话术、归因解释、风险预警和导出边界 |
 | [p0-acceptance-report.md](p0-acceptance-report.md) | X 总控 | P0-B 端到端验收、红线检查、指标、风险缺口与 P0-C 任务拆解 |
 | [tools-module-design.md](tools-module-design.md) | X 总控 | 本地工具模块方案、数据包契约、API 草案和任务拆分 |
+| [../data/templates/channel-profile-object-library/README.md](../data/templates/channel-profile-object-library/README.md) | D | 渠道画像 2.0 对象库导入模板、字段字典、质量报告和样例包 |
 
 ---
 

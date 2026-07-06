@@ -1,4 +1,4 @@
-import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord, DbOverview, DbTableInfo, DbSchemaInfo, DbSampleInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbOperationDryRunResult, DbOperationExecuteResult, ToolRun, SingleProductPortraitPrediction } from '../types';
+import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord, DbOverview, DbTableInfo, DbSchemaInfo, DbSampleInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbOperationDryRunResult, DbOperationExecuteResult, ToolRun, SingleProductPortraitPrediction, ChannelObject, AudienceProfile, ProductFitProfile, ChannelObjectBinding } from '../types';
 
 // Feature flag for local mock vs real backend
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
@@ -25,8 +25,12 @@ const db = {
   products: [] as SKU[],
   predictions: [] as ProductProfile[],
   matches: [] as MatchResult[],
-  decisions: [] as any[], // DecisionRecord not directly imported here to avoid cycle or just any
+  decisions: [] as any[],
   toolRuns: [] as ToolRun[],
+  channelObjects: [] as ChannelObject[],
+  audienceProfiles: [] as AudienceProfile[],
+  productFitProfiles: [] as ProductFitProfile[],
+  channelObjectBindings: [] as ChannelObjectBinding[],
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -93,6 +97,301 @@ const mockChannels: ChannelProfile[] = [
   { channelId: 'mock_red_store', channelName: 'Mock RED Store', channelType: 'content_seeding', platformType: 'content_ecommerce' },
   { channelId: 'mock_wechat_miniprogram', channelName: 'Mock WeChat Mini Program', channelType: 'private_domain', platformType: 'social_ecommerce' },
 ];
+
+const mockChannelObjects: ChannelObject[] = [
+  {
+    workspaceId: 'ws_demo',
+    objectType: 'platform',
+    sourceStableKey: 'douyin',
+    keySource: 'provided',
+    canonicalObjectKey: 'platform:douyin',
+    objectVersionId: 'ws_demo:platform:douyin:v1',
+    dataVersion: 'v1',
+    sourceBatchId: 'batch_channel_objects_v1',
+    generatedAt: '2026-07-01T00:00:00Z',
+    timeWindow: '2026-05-01/2026-06-30',
+    displayName: '抖音',
+    platformName: '抖音',
+    platformType: 'content_ecommerce',
+    entityStatus: 'active',
+    targetObject: 'ChannelEntity',
+    entityAttributes: {},
+    possibleDuplicate: false,
+    duplicateCandidateKeys: [],
+    manualReviewStatus: 'confirmed_distinct',
+    qualityFlags: [],
+    source: 'mock_channel_object_library',
+    sourceType: 'mock',
+  },
+  {
+    workspaceId: 'ws_demo',
+    objectType: 'trade_area',
+    sourceStableKey: 'wanda_beijing_chaoyang',
+    keySource: 'provided',
+    canonicalObjectKey: 'trade_area:wanda_beijing_chaoyang',
+    objectVersionId: 'ws_demo:trade_area:wanda_beijing_chaoyang:v1',
+    dataVersion: 'v1',
+    sourceBatchId: 'batch_channel_objects_v1',
+    generatedAt: '2026-07-01T00:00:00Z',
+    timeWindow: '2026-05-01/2026-06-30',
+    displayName: '北京朝阳万达商圈',
+    platformName: null,
+    platformType: null,
+    entityStatus: 'active',
+    targetObject: 'ChannelEntity',
+    entityAttributes: { radiusKm: 3, radiusSource: 'default' },
+    possibleDuplicate: false,
+    duplicateCandidateKeys: [],
+    manualReviewStatus: 'confirmed_distinct',
+    qualityFlags: [],
+    source: 'mock_channel_object_library',
+    sourceType: 'mock',
+  },
+  {
+    workspaceId: 'ws_demo',
+    objectType: 'store',
+    sourceStableKey: 'douyin_semira_official',
+    keySource: 'source_system_id',
+    canonicalObjectKey: 'store:douyin_semira_official',
+    objectVersionId: 'ws_demo:store:douyin_semira_official:v1',
+    dataVersion: 'v1',
+    sourceBatchId: 'batch_channel_objects_v1',
+    generatedAt: '2026-07-01T00:00:00Z',
+    timeWindow: '2026-05-01/2026-06-30',
+    displayName: '森马抖音官方旗舰店',
+    platformName: '抖音',
+    platformType: 'content_ecommerce',
+    entityStatus: 'active',
+    targetObject: 'ChannelEntity',
+    entityAttributes: { storeType: 'online_shop', parentPlatformKey: 'platform:douyin' },
+    possibleDuplicate: false,
+    duplicateCandidateKeys: [],
+    manualReviewStatus: 'confirmed_distinct',
+    qualityFlags: [],
+    source: 'mock_channel_object_library',
+    sourceType: 'mock',
+  },
+  {
+    workspaceId: 'ws_demo',
+    objectType: 'account',
+    sourceStableKey: 'douyin_semira_official_live',
+    keySource: 'generated_from_name',
+    canonicalObjectKey: 'account:douyin_semira_official_live',
+    objectVersionId: 'ws_demo:account:douyin_semira_official_live:v1',
+    dataVersion: 'v1',
+    sourceBatchId: 'batch_channel_objects_v1',
+    generatedAt: '2026-07-01T00:00:00Z',
+    timeWindow: '2026-05-01/2026-06-30',
+    displayName: '森马官方直播间',
+    platformName: '抖音',
+    platformType: 'content_ecommerce',
+    entityStatus: 'active',
+    targetObject: 'ChannelEntity',
+    entityAttributes: { platformId: 'platform:douyin', parentStoreId: 'store:douyin_semira_official', bindingStatus: 'bound_to_store', contentFormats: ['live', 'short_video'] },
+    possibleDuplicate: true,
+    duplicateCandidateKeys: ['account:douyin_semira_official_short'],
+    manualReviewStatus: 'unreviewed',
+    qualityFlags: ['generated_key_needs_review', 'manual_entity_without_profile', 'possible_duplicate'],
+    source: 'mock_channel_object_library',
+    sourceType: 'mock',
+  },
+  {
+    workspaceId: 'ws_demo',
+    objectType: 'store',
+    sourceStableKey: 'mock_city_walk_store',
+    keySource: 'source_system_id',
+    canonicalObjectKey: 'store:mock_city_walk_store',
+    objectVersionId: 'ws_demo:store:mock_city_walk_store:v1',
+    dataVersion: 'v1',
+    sourceBatchId: 'batch_channel_objects_v1',
+    generatedAt: '2026-07-01T00:00:00Z',
+    timeWindow: '2026-05-01/2026-06-30',
+    displayName: 'Mock City Walk Store',
+    platformName: '抖音',
+    platformType: 'content_ecommerce',
+    entityStatus: 'active',
+    targetObject: 'ChannelEntity',
+    entityAttributes: { storeType: 'offline_store', parentTradeAreaKey: 'trade_area:wanda_beijing_chaoyang' },
+    possibleDuplicate: false,
+    duplicateCandidateKeys: [],
+    manualReviewStatus: 'confirmed_distinct',
+    qualityFlags: [],
+    source: 'mock_channel_object_library',
+    sourceType: 'mock',
+  },
+  {
+    workspaceId: 'ws_demo',
+    objectType: 'marketing_event',
+    sourceStableKey: '618_2026',
+    keySource: 'provided',
+    canonicalObjectKey: 'marketing_event:618_2026',
+    objectVersionId: 'ws_demo:marketing_event:618_2026:v1',
+    dataVersion: 'v1',
+    sourceBatchId: 'batch_channel_objects_v1',
+    generatedAt: '2026-07-01T00:00:00Z',
+    timeWindow: '2026-06-01/2026-06-20',
+    displayName: '2026 年 618 大促',
+    platformName: null,
+    platformType: null,
+    entityStatus: 'active',
+    targetObject: 'MarketingEvent',
+    entityAttributes: { eventType: 'platform_promotion', customTags: ['全品类', '满减'] },
+    possibleDuplicate: false,
+    duplicateCandidateKeys: [],
+    manualReviewStatus: 'confirmed_distinct',
+    qualityFlags: [],
+    source: 'mock_channel_object_library',
+    sourceType: 'mock',
+  },
+  {
+    workspaceId: 'ws_demo',
+    objectType: 'business_scenario',
+    sourceStableKey: 'new_product_launch_q3',
+    keySource: 'generated_from_name',
+    canonicalObjectKey: 'business_scenario:new_product_launch_q3',
+    objectVersionId: 'ws_demo:business_scenario:new_product_launch_q3:v1',
+    dataVersion: 'v1',
+    sourceBatchId: 'batch_channel_objects_v1',
+    generatedAt: '2026-07-01T00:00:00Z',
+    timeWindow: '2026-07-01/2026-09-30',
+    displayName: 'Q3 新品首发',
+    platformName: null,
+    platformType: null,
+    entityStatus: 'active',
+    targetObject: 'BusinessScenario',
+    entityAttributes: { scenarioType: 'new_product_launch', description: '第三季度新品集中上新场景' },
+    possibleDuplicate: false,
+    duplicateCandidateKeys: [],
+    manualReviewStatus: 'unreviewed',
+    qualityFlags: ['generated_key_needs_review'],
+    source: 'mock_channel_object_library',
+    sourceType: 'mock',
+  },
+];
+
+const mockAudienceProfiles: AudienceProfile[] = [
+  {
+    profileId: 'aud_profile_001',
+    canonicalObjectKey: 'account:douyin_semira_official_live',
+    profileStage: 'latest',
+    source: 'mock_channel_object_library',
+    sourceBatchId: 'batch_channel_objects_v1',
+    dataVersion: 'v1',
+    generatedAt: '2026-07-01T00:00:00Z',
+    timeWindow: '2026-05-01/2026-06-30',
+    sampleSize: 5000,
+    confidence: 0.72,
+    tags: [
+      { tagId: 'demo.age_25_34', score: 0.45 },
+      { tagId: 'demo.age_18_24', score: 0.30 },
+      { tagId: 'price.mid', score: 0.60 },
+      { tagId: 'city.tier_1_2', score: 0.55 },
+    ],
+    unmappedFields: [],
+    qualityFlags: [],
+    benchmarkTags: [
+      { dimension: 'age', optionLabel: '24-30', sharePercent: 34.83 },
+      { dimension: 'gender', optionLabel: 'female', sharePercent: 65.5 },
+    ],
+    performanceMetrics: {
+      followerCount: 1250000,
+      engagementRate: 0.085,
+      conversionRate: 0.032,
+    },
+    interactionPreference: ['短视频观看', '直播互动', '分享转发'],
+  },
+];
+
+const mockProductFitProfiles: ProductFitProfile[] = [
+  {
+    profileId: 'pf_profile_001',
+    canonicalObjectKey: 'account:douyin_semira_official_live',
+    source: 'mock_channel_object_library',
+    sourceBatchId: 'batch_channel_objects_v1',
+    dataVersion: 'v1',
+    generatedAt: '2026-07-01T00:00:00Z',
+    timeWindow: '2026-05-01/2026-06-30',
+    sampleSize: 5000,
+    confidence: 0.68,
+    fitCategories: ['女装', 'T恤', '连衣裙'],
+    fitPriceBands: ['中端'],
+    fitStyles: ['简约', '通勤'],
+    fitOccasions: ['日常', '职场'],
+    fitLaunchTypes: ['新品首发', '日常补货'],
+    evidence: [{ field: '品类销售分布', value: '女装占比 65%', rationale: '历史成交品类分布' }],
+    qualityFlags: [],
+  },
+  {
+    profileId: 'pf_profile_002',
+    canonicalObjectKey: 'store:mock_city_walk_store',
+    source: 'manual_config',
+    sourceBatchId: 'batch_channel_objects_v1',
+    dataVersion: 'v1',
+    generatedAt: '2026-07-01T00:00:00Z',
+    timeWindow: null,
+    sampleSize: null,
+    confidence: 0.55,
+    fitCategories: ['女装', '鞋包'],
+    fitPriceBands: ['中端'],
+    fitStyles: ['潮流', '休闲'],
+    fitOccasions: ['逛街', '约会'],
+    fitLaunchTypes: ['新品首发'],
+    evidence: [{ field: '商圈定位', value: '年轻潮流商圈', rationale: '运营人工配置' }],
+    qualityFlags: ['manual_config'],
+  },
+];
+
+const mockChannelObjectBindings: ChannelObjectBinding[] = [
+  {
+    bindingId: 'binding_001',
+    bindingType: 'event_channel',
+    fromCanonicalObjectKey: 'marketing_event:618_2026',
+    toCanonicalObjectKey: 'store:douyin_semira_official',
+    sourceBatchId: 'batch_channel_objects_v1',
+    dataVersion: 'v1',
+    generatedAt: '2026-07-01T00:00:00Z',
+    qualityFlags: [],
+  },
+  {
+    bindingId: 'binding_002',
+    bindingType: 'scenario_channel',
+    fromCanonicalObjectKey: 'business_scenario:new_product_launch_q3',
+    toCanonicalObjectKey: 'account:douyin_semira_official_live',
+    sourceBatchId: 'batch_channel_objects_v1',
+    dataVersion: 'v1',
+    generatedAt: '2026-07-01T00:00:00Z',
+    qualityFlags: [],
+  },
+];
+
+interface ChannelObjectListParams {
+  objectType?: string;
+  platformType?: string;
+  sourceBatchId?: string;
+  dataVersion?: string;
+  cursor?: string;
+  pageSize?: number;
+}
+
+interface ChannelObjectListResponse {
+  items: ChannelObject[];
+  page: {
+    cursor: string | null;
+    nextCursor: string | null;
+    pageSize: number;
+    hasMore: boolean;
+  };
+}
+
+function seedMockChannelObjects() {
+  if (db.channelObjects.length === 0) {
+    db.channelObjects = [...mockChannelObjects];
+    db.audienceProfiles = [...mockAudienceProfiles];
+    db.productFitProfiles = [...mockProductFitProfiles];
+    db.channelObjectBindings = [...mockChannelObjectBindings];
+  }
+}
+
 
 interface ChannelEntityApiItem {
   channelEntityId: string;
@@ -688,6 +987,196 @@ export const api = {
       qualityFlags: ['数据充足_置信度高']
     };
     return { code: 'ok', data: mockMatch };
+  },
+
+  getChannelObjects: async (params: ChannelObjectListParams = {}): Promise<{ code: string; data: ChannelObjectListResponse }> => {
+    if (!USE_MOCK) {
+      const qs = new URLSearchParams();
+      if (params.objectType) qs.append('objectType', params.objectType);
+      if (params.platformType) qs.append('platformType', params.platformType);
+      if (params.sourceBatchId) qs.append('sourceBatchId', params.sourceBatchId);
+      if (params.dataVersion) qs.append('dataVersion', params.dataVersion);
+      if (params.cursor) qs.append('cursor', params.cursor);
+      if (params.pageSize) qs.append('pageSize', String(params.pageSize));
+      const res = await fetchApi<ChannelObjectListResponse>(`/channel-objects?${qs.toString()}`);
+      return res;
+    }
+    seedMockChannelObjects();
+    let items = [...db.channelObjects];
+    if (params.objectType) {
+      items = items.filter(i => i.objectType === params.objectType);
+    }
+    if (params.platformType) {
+      items = items.filter(i => i.platformType === params.platformType);
+    }
+    if (params.sourceBatchId) {
+      items = items.filter(i => i.sourceBatchId === params.sourceBatchId);
+    }
+    if (params.dataVersion) {
+      items = items.filter(i => i.dataVersion === params.dataVersion);
+    }
+    const pageSize = params.pageSize || 20;
+    const offset = params.cursor ? Number(params.cursor.replace('offset:', '')) || 0 : 0;
+    const pageItems = items.slice(offset, offset + pageSize);
+    const hasMore = items.length > offset + pageSize;
+    return {
+      code: 'ok',
+      data: {
+        items: pageItems,
+        page: {
+          cursor: params.cursor ?? null,
+          nextCursor: hasMore ? `offset:${offset + pageSize}` : null,
+          pageSize,
+          hasMore,
+        }
+      }
+    };
+  },
+
+  getChannelObject: async (canonicalObjectKey: string, dataVersion?: string): Promise<{ code: string; data: ChannelObject }> => {
+    if (!USE_MOCK) {
+      const qs = dataVersion ? `?dataVersion=${encodeURIComponent(dataVersion)}` : '';
+      const res = await fetchApi<ChannelObject>(`/channel-objects/${canonicalObjectKey}${qs}`);
+      return res;
+    }
+    seedMockChannelObjects();
+    const obj = db.channelObjects.find(o => o.canonicalObjectKey === canonicalObjectKey);
+    if (!obj) throw new Error(`Channel object ${canonicalObjectKey} not found`);
+    return { code: 'ok', data: obj };
+  },
+
+  getChannelObjectAudienceProfiles: async (canonicalObjectKey: string, dataVersion?: string): Promise<{ code: string; data: { items: AudienceProfile[] } }> => {
+    if (!USE_MOCK) {
+      const qs = dataVersion ? `?dataVersion=${encodeURIComponent(dataVersion)}` : '';
+      const res = await fetchApi<{ items: AudienceProfile[] }>(`/channel-objects/${canonicalObjectKey}/audience-profiles${qs}`);
+      return res;
+    }
+    seedMockChannelObjects();
+    const items = db.audienceProfiles.filter(p => p.canonicalObjectKey === canonicalObjectKey);
+    return { code: 'ok', data: { items } };
+  },
+
+  getChannelObjectProductFitProfiles: async (canonicalObjectKey: string, dataVersion?: string): Promise<{ code: string; data: { items: ProductFitProfile[] } }> => {
+    if (!USE_MOCK) {
+      const qs = dataVersion ? `?dataVersion=${encodeURIComponent(dataVersion)}` : '';
+      const res = await fetchApi<{ items: ProductFitProfile[] }>(`/channel-objects/${canonicalObjectKey}/product-fit-profiles${qs}`);
+      return res;
+    }
+    seedMockChannelObjects();
+    const items = db.productFitProfiles.filter(p => p.canonicalObjectKey === canonicalObjectKey);
+    return { code: 'ok', data: { items } };
+  },
+
+  getChannelObjectBindings: async (canonicalObjectKey: string, bindingType?: string, dataVersion?: string): Promise<{ code: string; data: { items: ChannelObjectBinding[] } }> => {
+    if (!USE_MOCK) {
+      const qs = new URLSearchParams();
+      if (bindingType) qs.append('bindingType', bindingType);
+      if (dataVersion) qs.append('dataVersion', dataVersion);
+      const query = qs.toString() ? `?${qs.toString()}` : '';
+      const res = await fetchApi<{ items: ChannelObjectBinding[] }>(`/channel-objects/${canonicalObjectKey}/bindings${query}`);
+      return res;
+    }
+    seedMockChannelObjects();
+    const items = db.channelObjectBindings.filter(b =>
+      b.fromCanonicalObjectKey === canonicalObjectKey || b.toCanonicalObjectKey === canonicalObjectKey
+    );
+    return { code: 'ok', data: { items } };
+  },
+
+  getChannelEntityProfile: async (canonicalObjectKey: string): Promise<{ code: string; data: AccountProfile | null }> => {
+    if (!USE_MOCK) {
+      try {
+        const res = await fetchApi<ChannelEntityApiItem>(`/channels/entities/${canonicalObjectKey}`);
+        return { code: 'ok', data: mapChannelEntityToAccountProfile(res.data) };
+      } catch {
+        return { code: 'ok', data: null };
+      }
+    }
+    seedMockChannelObjects();
+    const obj = db.channelObjects.find(o => o.canonicalObjectKey === canonicalObjectKey);
+    if (!obj || obj.targetObject !== 'ChannelEntity') return { code: 'ok', data: null };
+    return {
+      code: 'ok',
+      data: {
+        accountId: obj.canonicalObjectKey,
+        sourceEntityKey: obj.sourceStableKey,
+        sourceId: obj.sourceBatchId,
+        accountName: obj.displayName,
+        accountType: obj.objectType,
+        platformType: obj.platformType || 'unknown',
+        qualityFlags: obj.qualityFlags,
+        sampleSize: 15000,
+        timeWindow: obj.timeWindow,
+        coreTags: [
+          { tagId: 'demo.age_25_34', score: 0.45 },
+          { tagId: 'demo.age_18_24', score: 0.30 },
+        ],
+        interactionPreference: ['短视频观看', '直播互动'],
+        performanceIndex: {
+          followerCount: 500000,
+          engagementRate: 0.08,
+          conversionRate: 0.025,
+        },
+      }
+    };
+  },
+
+  updateChannelObject: async (canonicalObjectKey: string, updates: Partial<ChannelObject>): Promise<{ code: string; data: ChannelObject }> => {
+    if (!USE_MOCK) {
+      throw new Error('Channel object light edit is not yet supported by the backend API.');
+    }
+    seedMockChannelObjects();
+    const idx = db.channelObjects.findIndex(o => o.canonicalObjectKey === canonicalObjectKey);
+    if (idx === -1) throw new Error(`Channel object ${canonicalObjectKey} not found`);
+    db.channelObjects[idx] = { ...db.channelObjects[idx], ...updates };
+    return { code: 'ok', data: db.channelObjects[idx] };
+  },
+
+  analyzeChannelObjects: async (params: {
+    channelEntityIds: string[];
+    marketingEventId?: string;
+    businessScenarioId?: string;
+    skuIds: string[];
+  }): Promise<{ code: string; data: { matchResults: MatchResult[] } }> => {
+    if (!USE_MOCK) {
+      throw new Error('Channel object analysis view is not yet supported by the backend API.');
+    }
+    seedMockChannelObjects();
+    const matches: MatchResult[] = [];
+    params.channelEntityIds.forEach((channelId, cidx) => {
+      params.skuIds.forEach((skuId, sidx) => {
+        const score = Math.max(0.2, 0.8 - (cidx * 0.15) - (sidx * 0.05));
+        let recommendation: 'priority_launch' | 'test_launch' | 'observe' | 'avoid' = 'priority_launch';
+        if (score < 0.35) recommendation = 'avoid';
+        else if (score < 0.5) recommendation = 'observe';
+        else if (score < 0.7) recommendation = 'test_launch';
+        matches.push({
+          matchId: `match_analyze_${Date.now()}_${cidx}_${sidx}`,
+          workspaceId: 'ws_demo',
+          taskId: `task_analyze_${Date.now()}`,
+          predictionId: `pred_analyze_${Date.now()}`,
+          skuId,
+          channelId,
+          channelType: 'account',
+          modelVersion: 'm-p0-baseline-0.1',
+          source: 'channel_object_analysis_view',
+          sourceType: 'derived',
+          generatedAt: new Date().toISOString(),
+          matchScore: score,
+          matchConfidence: 0.6,
+          rank: 1,
+          overlap: score,
+          bestSegmentId: 'seg_work_minimal_25_34',
+          bestSegmentMatch: score,
+          positiveDrivers: [{ tagId: 'style.minimal', productScore: 0.74, channelScore: 0.70 }],
+          negativeDrivers: score < 0.5 ? [{ tagId: 'price.premium', productScore: 0.12, channelScore: 0.05 }] : [],
+          recommendation,
+          risks: score < 0.5 ? ['channel_price_sensitivity_gap'] : [],
+          qualityFlags: []
+        });
+      });
+    });
+    return { code: 'ok', data: { matchResults: matches } };
   },
 
   createDecision: async (data: any) => {
