@@ -66,6 +66,20 @@ export default function DataManagementWorkbench() {
   const [auditFilterTarget, setAuditFilterTarget] = useState('');
   const [auditFilterStatus, setAuditFilterStatus] = useState('');
 
+  // State for CSV ingestion
+  type ImportPathType = 'csv' | 'business' | 'package';
+  const [importPath, setImportPath] = useState<ImportPathType>('package');
+  const [csvTargetTable, setCsvTargetTable] = useState<string>('sku');
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvDryRun, setCsvDryRun] = useState<DbOperationDryRunResult | null>(null);
+  const [csvConfirmText, setCsvConfirmText] = useState('');
+  const [csvError, setCsvError] = useState<string | null>(null);
+  const [csvExecuting, setCsvExecuting] = useState(false);
+  const [csvExecuteResult, setCsvExecuteResult] = useState<DbOperationExecuteResult | null>(null);
+  const [csvRunningDryRun, setCsvRunningDryRun] = useState(false);
+
+  const CSV_ALLOWED_TABLES = ['sku', 'channel_profile', 'wide_table_row', 'batch', 'prediction', 'match_result'];
+
   useEffect(() => {
     loadData(activeTab);
   }, [activeTab]);
@@ -153,6 +167,56 @@ export default function DataManagementWorkbench() {
       setOpError('Operation failed: ' + e.message);
     } finally {
       setOpExecuting(false);
+    }
+  };
+
+  const handleCsvFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setCsvFile(file);
+    setCsvDryRun(null);
+    setCsvExecuteResult(null);
+    setCsvConfirmText('');
+    setCsvError(null);
+  };
+
+  const handleCsvDryRun = async () => {
+    if (!csvFile) {
+      setCsvError('请先选择 CSV 文件');
+      return;
+    }
+    setCsvRunningDryRun(true);
+    setCsvError(null);
+    setCsvDryRun(null);
+    setCsvExecuteResult(null);
+    try {
+      const res = await api.dryRunCsvIngestion(csvFile, csvTargetTable);
+      setCsvDryRun(res.data);
+      setCsvConfirmText(res.data.requiredConfirmText);
+    } catch (e: any) {
+      setCsvError('Dry run failed: ' + e.message);
+    } finally {
+      setCsvRunningDryRun(false);
+    }
+  };
+
+  const handleCsvExecute = async () => {
+    if (!csvDryRun?.stagedFileId) {
+      setCsvError('请先完成 dry-run');
+      return;
+    }
+    setCsvExecuting(true);
+    setCsvError(null);
+    try {
+      const res = await api.executeCsvIngestion(csvDryRun.stagedFileId, csvTargetTable, csvConfirmText);
+      setCsvExecuteResult(res.data);
+      loadData('imports');
+      loadData('overview');
+      loadData('tables');
+      loadData('audits');
+    } catch (e: any) {
+      setCsvError('Operation failed: ' + e.message);
+    } finally {
+      setCsvExecuting(false);
     }
   };
 
@@ -337,9 +401,186 @@ export default function DataManagementWorkbench() {
 
         {!loading && activeTab === 'imports' && (
           <div className="panel">
-            <div className="flex-between" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
-              <h3 className="panel__title" style={{ margin: 0 }}>数据导入历史</h3>
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <h3 className="panel__title" style={{ marginBottom: 14 }}>数据导入</h3>
+            <div className="segmented-control" style={{ display: 'flex', gap: 4, overflowX: 'auto', flexWrap: 'wrap', marginBottom: 16 }}>
+              {[
+                { key: 'csv', label: 'CSV 导入' },
+                { key: 'business', label: '业务连接' },
+                { key: 'package', label: '数据包重放' }
+              ].map(path => (
+                <button
+                  key={path.key}
+                  className={`segmented-control__btn${importPath === path.key ? ' segmented-control__btn--active' : ''}`}
+                  onClick={() => {
+                    setImportPath(path.key as ImportPathType);
+                    setCsvError(null);
+                    setCsvExecuteResult(null);
+                  }}
+                >
+                  {path.label}
+                </button>
+              ))}
+            </div>
+
+            {importPath === 'csv' && (
+              <div>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, marginBottom: 6, fontWeight: 500 }}>目标表</label>
+                    <select
+                      className="form-control"
+                      value={csvTargetTable}
+                      onChange={e => {
+                        setCsvTargetTable(e.target.value);
+                        setCsvDryRun(null);
+                        setCsvExecuteResult(null);
+                      }}
+                      style={{ width: 'auto', minWidth: 180 }}
+                    >
+                      {CSV_ALLOWED_TABLES.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, marginBottom: 6, fontWeight: 500 }}>CSV 文件</label>
+                    <input
+                      type="file"
+                      accept=".csv"
+                      onChange={handleCsvFileChange}
+                      className="form-control"
+                      style={{ width: 'auto', minWidth: 220, padding: 6 }}
+                    />
+                  </div>
+                  <button
+                    className="btn btn--primary"
+                    onClick={handleCsvDryRun}
+                    disabled={csvRunningDryRun || !csvFile}
+                  >
+                    {csvRunningDryRun ? '校验中...' : 'Dry Run 校验'}
+                  </button>
+                </div>
+
+                {csvError && <div style={{ color: 'var(--destructive)', marginBottom: 14, fontSize: 13 }}>{csvError}</div>}
+
+                {csvExecuteResult ? (
+                  <div className={`alert-banner alert-banner--${csvExecuteResult.status === 'success' || csvExecuteResult.success ? 'success' : 'danger'}`}>
+                    <strong>执行结果:</strong> {csvExecuteResult.status || (csvExecuteResult.success ? 'success' : 'failed')}
+                    {csvExecuteResult.auditId && <span style={{ marginLeft: 8 }}>Audit ID: {csvExecuteResult.auditId}</span>}
+                  </div>
+                ) : csvDryRun && (
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 14, marginBottom: 16 }}>
+                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+                      <div className="metric-card" style={{ flex: '1 1 140px', minWidth: 120 }}>
+                        <div className="metric-card__title">总行数</div>
+                        <div className="metric-card__value">{csvDryRun.qualityReport?.rowCount ?? '-'}</div>
+                      </div>
+                      <div className="metric-card" style={{ flex: '1 1 140px', minWidth: 120 }}>
+                        <div className="metric-card__title">有效行</div>
+                        <div className="metric-card__value">{csvDryRun.qualityReport?.validRows ?? '-'}</div>
+                      </div>
+                      <div className="metric-card" style={{ flex: '1 1 140px', minWidth: 120 }}>
+                        <div className="metric-card__title">错误行</div>
+                        <div className="metric-card__value">{csvDryRun.qualityReport?.errorRows ?? '-'}</div>
+                      </div>
+                      <div className="metric-card" style={{ flex: '1 1 140px', minWidth: 120 }}>
+                        <div className="metric-card__title">类型错误</div>
+                        <div className="metric-card__value">{csvDryRun.qualityReport?.typeErrors ?? '-'}</div>
+                      </div>
+                    </div>
+
+                    {csvDryRun.qualityReport?.blockingErrors > 0 && (
+                      <div style={{ background: 'color-mix(in srgb, var(--destructive) 10%, transparent)', padding: 10, borderRadius: 6, marginBottom: 12 }}>
+                        <strong style={{ color: 'var(--destructive)', fontSize: 13 }}>检测到 {csvDryRun.qualityReport.blockingErrors} 个阻塞错误，禁止导入</strong>
+                      </div>
+                    )}
+
+                    {csvDryRun.qualityReport?.missingColumns && csvDryRun.qualityReport.missingColumns.length > 0 && (
+                      <div style={{ marginBottom: 8, fontSize: 13 }}>
+                        <strong>缺失字段：</strong>{csvDryRun.qualityReport.missingColumns.join(', ')}
+                      </div>
+                    )}
+
+                    {csvDryRun.qualityReport?.extraColumns && csvDryRun.qualityReport.extraColumns.length > 0 && (
+                      <div style={{ marginBottom: 8, fontSize: 13 }}>
+                        <strong>多余字段：</strong>{csvDryRun.qualityReport.extraColumns.join(', ')}
+                      </div>
+                    )}
+
+                    {csvDryRun.qualityReport?.sampleErrors && csvDryRun.qualityReport.sampleErrors.length > 0 && (
+                      <div className="data-table-wrapper" style={{ marginBottom: 12 }}>
+                        <table className="data-table">
+                          <thead>
+                            <tr><th>行号</th><th>列</th><th>原始值</th><th>规则</th><th>说明</th></tr>
+                          </thead>
+                          <tbody>
+                            {csvDryRun.qualityReport.sampleErrors.map((err: { rowNumber: number; column: string; rawValue: string; rule: string; message: string }, i: number) => (
+                              <tr key={i}>
+                                <td>{err.rowNumber}</td>
+                                <td>{err.column}</td>
+                                <td>{err.rawValue}</td>
+                                <td>{err.rule}</td>
+                                <td>{err.message}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {csvDryRun.qualityReport?.warnings && csvDryRun.qualityReport.warnings.length > 0 && (
+                      <div style={{ marginBottom: 12, color: 'var(--warning)', fontSize: 13 }}>
+                        <strong>Warnings：</strong>
+                        <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                          {csvDryRun.qualityReport.warnings.map((w: { rowNumber: number | null; column: string; message: string }, i: number) => <li key={i}>{w.message}</li>)}
+                        </ul>
+                      </div>
+                    )}
+
+                    <div style={{ marginBottom: 12, fontSize: 13 }}>
+                      <strong>影响表：</strong>{csvDryRun.affectedTables.join(', ')} · <strong>影响行数：</strong>{csvDryRun.affectedRows}
+                    </div>
+
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={{ display: 'block', marginBottom: 6, fontWeight: 500, fontSize: 13 }}>
+                        请输入 <code style={{ background: 'var(--secondary)', padding: '1px 6px', borderRadius: 4, fontSize: 12 }}>{csvDryRun.requiredConfirmText}</code> 以确认导入:
+                      </label>
+                      <input
+                        type="text"
+                        value={csvConfirmText}
+                        onChange={e => setCsvConfirmText(e.target.value)}
+                        className="form-control"
+                        disabled={csvDryRun.qualityReport?.blockingErrors > 0}
+                        style={{ maxWidth: 320 }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                      <button
+                        className="btn btn--primary"
+                        onClick={handleCsvExecute}
+                        disabled={csvExecuting || (csvDryRun.qualityReport?.blockingErrors ?? 0) > 0 || csvConfirmText !== csvDryRun.requiredConfirmText}
+                      >
+                        {csvExecuting ? '执行中...' : '确认导入'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!csvDryRun && !csvError && !csvRunningDryRun && (
+                  <div style={{ color: 'var(--muted-foreground)', fontSize: 13 }}>
+                    选择目标表和 CSV 文件后，点击「Dry Run 校验」预览导入影响。
+                  </div>
+                )}
+              </div>
+            )}
+
+            {importPath === 'business' && (
+              <div style={{ color: 'var(--muted-foreground)', fontSize: 14, padding: '20px 0' }}>
+                业务数据库 / API 直连导入将在后续版本支持。当前请使用 CSV 导入或数据包重放。
+              </div>
+            )}
+
+            {importPath === 'package' && (
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
                 <select id="importPackage" className="form-control" style={{ width: 'auto', fontSize: 13 }}>
                   <option value="douyin-bi">douyin-bi</option>
                   <option value="demo">demo</option>
@@ -349,7 +590,9 @@ export default function DataManagementWorkbench() {
                   handleStartOperation('IMPORT', pkg);
                 }}>导入数据包</button>
               </div>
-            </div>
+            )}
+
+            <h4 className="panel__title" style={{ marginTop: 24, marginBottom: 10, fontSize: 14 }}>数据导入历史</h4>
             <div className="data-table-wrapper">
               <table className="data-table">
                 <thead>

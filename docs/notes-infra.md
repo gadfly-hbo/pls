@@ -2,48 +2,38 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-06（X-P6-CHANNEL-0：渠道画像 2.0 总控契约冻结；当前 wiki 任务已新增 P6 渠道画像任务卡）
+最近更新：2026-07-07（P7 CSV 导入已有 SQLite 表第一期完成；A/V 已经总控复核通过并 mark done）
 
 进度：
 
-- `docs/channel-profile-2.0-plan.md` 已从草案收口为 P6 总控冻结契约，作为 D/M/A/V 后续渠道画像对象库、活动/场景、导入、匹配权重和 UI 边界的共同真源。
-- X-P6-CHANNEL-0 冻结 6 类对象库：平台、商圈、店铺、账号、活动、场景；线上层级为平台 -> 线上店铺 -> 账号，线下层级为商圈 -> 线下门店。
-- 活动 / 场景作为长期对象库，可绑定任意渠道实体但不改变实体归属层级；组合渠道包第一期只作为分析视图，不作为长期对象落库。
-- 第一期只做 AudienceProfile + ProductFitProfile；流量画像、转化画像、运营约束作为后续扩展，不进入 P6 第一期验收。
-- 第一期开工权重冻结：`baseScore = 0.7 * audienceFit + 0.3 * productFit`；活动 / 场景只做权重调节，不生成独立 eventScore / scenarioScore。
-- P2 既有 `livestream_room` / `content_account` 不要求删除或迁移历史数据；P6 新增主路径收敛到 `account`，用 `contentFormats` / `accountKind` 保留来源差异。
-- `docs/wiki.html` 当前 changelog `v0.62` 为 current；本 session P5 主线已完成 D-P5-PORTRAIT-3、X-P5-PORTRAIT-4、A-P5-PORTRAIT-5、V-P5-PORTRAIT-6、M-P5-PORTRAIT-7。
-- infra 域本 session 关键交付为 A-P5-PORTRAIT-5：注册 `single-product-portrait` 工具，通过 `POST /api/v0/tools/runs` 运行受控样本包，生成 derived artifact `prediction.json` / `report.md`，不写主业务画像表。
-- `single-product-portrait` 工具边界：只消费 `data/templates/single-product-portrait-<packageId>/sample_package/` 受控样本包；前端 / 调用方不得传任意本地文件路径。
-- artifact 读取边界：`GET /api/v0/tools/runs/:runId/artifacts/prediction.json` 返回原始 artifact body，不是 Hono `{ code, data }` wrapper；前端 V-P5 已按此契约修正。
-- A-P5-PORTRAIT-5 总控已修正并验收多 SKU 样本隔离：`platform_portrait.csv` 按 `skuId + sourceProductKey` 过滤，避免其他 SKU 画像行混入当前预测。
-- `prediction.json` 顶层保留 `sourceFiles`，用于追溯 `product_attributes.jsonl` 与 `platform_portrait.csv`。
-- tools run / artifact 读取保持 workspace 隔离；跨 workspace 读取 run、artifact 或 artifact list 应返回不可见。
-- 当前 P5 后端工具仍是本地 derived artifact 机制，不导入主业务 portrait 表；真实样本导入、artifact 清理策略、主业务表落地仍需后续任务卡。
+- `docs/prd-csv-and-business-source-ingestion.md` 已作为 P7 总控 PRD；第一期冻结为 CSV 上传到已有 SQLite 表，后续 CSV 建表、XLSX、业务数据库 / API 直连均不进入第一期。
+- `D-P7-INGEST-1` 已完成并 mark done：新增 `docs/p7-csv-ingestion-data-contract.md` 与 `data/templates/csv-ingestion/` 示例，冻结字段匹配、类型校验、quality report、blocking errors、append-only 和 lineage 口径。
+- `A-P7-INGEST-2` 已完成并 mark done：后端新增 CSV dry-run / import 接缝，支持 staged file、字段/类型/必填/主键校验、append-only、Import Job、audit、batch 和隔离 smoke。
+- `V-P7-INGEST-3` 已完成并 mark done：数据管理工作台支持 CSV 导入路径、业务连接占位、数据包重放保留；前端 adapter、mock 和 E2E 已对齐真实 `qualityReport` 契约。
+- 本 session `/learn` 已将 P7 返工沉淀写入 `AGENTS.md`：受控写入 / 导入必须在沙盘推演中明确 staged reference、overwrite/upsert 语义、白名单、真实 snapshot 和 audit/import job；UI 依赖后端字段类型时必须补 `VITE_USE_MOCK=false` contract shape 测试。
 
 本次收尾验证：
 
-- `apps/server npm run typecheck` 通过。
-- `apps/server npm run smoke:single-product-portrait` 通过：39/39，覆盖 tool registry、dry-run、run、prediction/report artifact、`sourceFiles`、未知 SKU 失败、异常 CSV risk flag、多 SKU 隔离、workspace 隔离、缺失 skuId、非法 packageId。
-- `apps/server npm run smoke:tools` 通过：27/27，覆盖通用 tools registry、dry-run/run、artifact list/read、path traversal、run list、workspace 隔离。
+- A-P7 回流验证已通过：`apps/server npm run typecheck`、`schema:check`、`smoke:csv-ingestion` 46/46、`smoke:admin-summary`、`smoke:tools`、`smoke:channel-object-library`。
+- V-P7 回流验证已通过：`apps/web npm run lint`、`build`、`smoke`，以及 `VITE_USE_MOCK=false npx playwright test e2e/data-management.spec.ts -g "CSV Ingestion Contract"`。
+- 总控本轮额外做了文档 / 契约定点复核，确认 `docs/wiki.html` 中 `D-P7-INGEST-1`、`A-P7-INGEST-2`、`V-P7-INGEST-3` 均为 `done`。
+- 本收尾未重新运行全量 server/web smoke；原因是本轮总控最后只改 `AGENTS.md` 与 `docs/notes-infra.md`，并已做定点结构读取。
 
 下一步：
 
-- D/M/A/V 可按 wiki 中 D-P6-CHANNEL-1、M-P6-CHANNEL-2、A-P6-CHANNEL-3、V-P6-CHANNEL-4 复制 brief 开工；必须先读 `docs/channel-profile-2.0-plan.md`。
-- 如需真实 P5 样本进入系统，应继续按 D-P5 样本包标准进入，后续再开 A/D 任务实现受控导入或真实解析器。
-- 如需将单品画像结果写入主业务 portrait 表，必须另开任务卡设计 schema、幂等、audit、回滚和前端展示边界；当前 artifact 不等于业务表落库。
-- `data/local/tool-runs/` 会累积 derived artifacts，清理策略仍需单独任务。
-- admin token 获取方式、tool-run retention、真实平台解析器 / SQL 导出解析器仍是 P4/P5 后续 infra 增强点。
+- P7 第二期如要做 CSV 首次建表，必须另开 X/D/A/V 任务：schema preview、用户确认、建表白名单、audit 和 rollback 口径先由 X 冻结。
+- P7 第三期业务数据库 / 业务 API 直连仍未开工；后续只能只读连接，不能写回业务库。
+- 若继续推进当前第一期，可从真实 UI 使用 `V-P7-INGEST-3` 路径验证 CSV dry-run 和正式导入；正式写入 smoke 仍需使用独立临时 workspace，避免污染 `ws_demo`。
+- 需要后续任务补 staged CSV 文件 retention / cleanup 策略；当前成功导入后不会自动清理 staged file。
 
 阻塞：
 
-- infra 本轮无实现阻塞。
-- P5 真实校准 / 真实画像产品化仍受限于 >=5 款真实画像商品样本和平台大盘 TGI 基准。
+- 当前 P7 第一期无总控阻塞。
 
 开放问题：
 
-- artifact API 原始 body 与 Hono wrapper 响应并存，前端 adapter 和 E2E mock 必须按真实路由逐个对齐，不能统一假设所有 `/api/v0` GET 都是 `{ code, data }`。
-- 多 workspace tool-run 产生的本地文件保留多久、如何清理、是否需要 UI 暴露清理入口，尚未拍板。
+- 目标表白名单后续是否扩展仍需 X 拍板；当前第一期保持 `sku`、`channel_profile`、`wide_table_row`、`batch`、`prediction`、`match_result`。
+- staged CSV 文件保留多久、是否需要 UI 暴露清理入口，尚未拍板。
 
 ---
 

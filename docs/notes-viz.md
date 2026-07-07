@@ -2,10 +2,20 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-06（V-P6-CHANNEL-5 旧渠道画像能力迁入对象库详情页完成并通过 X 总控复核）
+最近更新：2026-07-07（V-P7-INGEST-3 返工完成，前端 CSV 质量报告契约与真实后端对齐并通过 VITE_USE_MOCK=false contract 测试）
 
 进度：
 
+- `V-P7-INGEST-3` (数据管理 CSV 导入工作台) 已完成：
+  - 在 `DataManagementWorkbench` 导入 Tab 新增三段式路径：CSV 导入 / 业务连接 / 数据包重放。
+  - CSV 导入支持选择目标表（sku / channel_profile / wide_table_row / batch / prediction / match_result）、上传 CSV、Dry Run 校验、展示质量报告、输入 confirmText 并执行导入。
+  - 质量报告展示：影响表、影响行数、总行数、有效行、错误行、类型错误、缺失字段、多余字段、错误样例、warnings、blocking errors。
+  - 存在 blocking errors 时禁用确认导入按钮，业务连接路径仅显示后续占位。
+  - `apps/web/src/services/api.ts` 新增 `dryRunCsvIngestion` 与 `executeCsvIngestion`，使用 `multipart/form-data` 上传、JSON 执行，并携带 X-PLS-Workspace / X-PLS-Admin-Token / Idempotency-Key。
+  - 前端 `CsvQualityReport` 已与真实契约对齐：`blockingErrors: number`，`sampleErrors[].rowNumber/rawValue`，`warnings[].rowNumber/column/message`。
+  - Mock 与 E2E 已使用 snake_case CSV header（如 `sku_id`）与后端 header 归一化规则一致。
+  - `apps/web/e2e/data-management.spec.ts` 新增 CSV 导入流程测试：blocking errors、dry-run 成功、confirmText 错误、导入成功、390px 窄屏无横向溢出，以及 `VITE_USE_MOCK=false + page.route` 的 real API contract 测试（不会被本地 mock 短路）。
+  - 验证通过：`apps/web npm run lint`、`npm run build`、`npm run smoke`（24 项中 18 passed / 6 skipped）、`VITE_USE_MOCK=false npx playwright test e2e/data-management.spec.ts -g "CSV Ingestion Contract"` 通过。
 - `V-P6-CHANNEL-5` (旧渠道画像能力迁入对象库详情页) 已完成：
   - 已由 X 总控复核通过；`docs/wiki.html` 中 `V-P6-CHANNEL-5` 已标记为 `done`。
   - `apps/web/src/pages/ChannelObjectLibrary.tsx` 详情页 tab 已统一为「总览 / 人群画像 / 商品适配 / 匹配分析 / 绑定关系 / 编辑」。
@@ -83,6 +93,9 @@
 
 ## 决策沉淀
 
+- **CSV 导入质量报告契约对齐**：前端 `CsvQualityReport` 必须严格对齐 `docs/p7-csv-ingestion-data-contract.md` 与 `apps/server/src/lib/csv-ingestion.ts` 的真实字段形态。关键锚点：`blockingErrors` 是 `number` 而非 `string[]`；`sampleErrors` 项使用 `rowNumber` / `rawValue` 而非 `rowIndex` / `value`；`warnings` 是对象数组 `{ rowNumber, column, message }`。任何字段错配都会导致真实 API 下 UI 误判或无法阻止导入。
+- **CSV header 归一化口径**：Mock/E2E 测试必须使用 snake_case header（如 `sku_id`），与后端 `normalizeHeader` 规则保持一致；不再使用 camelCase 的 `skuId`。
+- **VITE_USE_MOCK=false 拦截式 contract 测试**：默认 `npm run smoke` 使用本地 Mock 短路，不验证真实 API response shape。对于 CSV 这种真实契约易错场景，必须补充一条 `VITE_USE_MOCK=false + page.route` 的 Playwright 测试，强制前端 adapter 解包真实层级字段。
 - **前端交互深度**：P0 阶段直接基于基础组件库搭建低保真 MVP，不设计高保真视觉和动画，重点走通数据展现和流程。后续迭代已按照 `product-ui-redesign` 流程翻新为现代卡片化 UI。
 - **UI Token 化与主题**：采用 `hsl` 中性色（neutral）变量方案建立设计系统；通过切换 `html.dark` class 并持久化至 `localStorage` 来实现跨端深浅色模式切换；状态色的透明度运算统一采用原生 CSS `color-mix`（如 `color-mix(in srgb, var(--destructive) 50%, transparent)`）替代硬编码 rgba，以支持主题自适应。
 - **数据导出**：基于运营实际痛点，一期保留浏览器端 CSV 纯文本导出能力；导出仅限热力图和 `MatchResult` 派生结果字段，不导出原始输入、DMP 原始字段值或审计原始 payload。

@@ -80,6 +80,12 @@ test.describe('Channel Object Library', () => {
     await page.click('button:has-text("导入")');
     await expect(page.locator('h3:has-text("导入渠道对象")').first()).toBeVisible();
 
+    const packageInput = page.locator('label:has-text("数据包路径 / 模板") + input').first();
+    await expect(packageInput).toHaveValue('channel-profile-object-library');
+    await packageInput.fill('channel-profile-object-library-custom');
+    await expect(packageInput).toHaveValue('channel-profile-object-library-custom');
+    await packageInput.fill('channel-profile-object-library');
+
     await page.click('button:has-text("Dry-run 预览")');
     await expect(page.locator('text=Dry-run 结果').first()).toBeVisible();
     await expect(page.locator('text=影响表').first()).toBeVisible();

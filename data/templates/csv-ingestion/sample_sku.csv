@@ -1,0 +1,4 @@
+sku_id,workspace_id,spu_id,category_lv1,category_lv2,season,title,attributes,assets,mapped_product_tags
+mock_csv_sku_001,ws_demo,mock_csv_spu_001,apparel,dress,spring_summer,Mock CSV Dress 001,"{\"color\":\"neutral\"}",[],[]
+mock_csv_sku_002,ws_demo,mock_csv_spu_001,apparel,top,spring_summer,Mock CSV Top 002,"{\"color\":\"warm\"}",[],[]
+mock_csv_sku_003,ws_demo,mock_csv_spu_002,apparel,bottom,fall_winter,Mock CSV Bottom 003,"{\"color\":\"cool\"}",[],[]

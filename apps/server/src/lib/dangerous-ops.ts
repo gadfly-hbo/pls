@@ -76,7 +76,7 @@ export const DROPPABLE_VIEWS = new Set([
 /** Standardized impact report for every admin database operation. */
 export interface OperationImpact {
   operation: string;
-  targetType: "table" | "view" | "version" | "workspace" | "package" | "migration";
+  targetType: "table" | "view" | "version" | "workspace" | "package" | "migration" | "csv_upload";
   targetName: string;
   affectedTables: string[];
   affectedRows: number;

@@ -1,4 +1,4 @@
-import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord, DbOverview, DbTableInfo, DbSchemaInfo, DbSampleInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbOperationDryRunResult, DbOperationExecuteResult, ToolRun, SingleProductPortraitPrediction, ChannelObject, AudienceProfile, ProductFitProfile, ChannelObjectBinding } from '../types';
+import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord, DbOverview, DbTableInfo, DbSchemaInfo, DbSampleInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbOperationDryRunResult, DbOperationExecuteResult, CsvQualityReport, CsvIngestionExecuteResponse, ToolRun, SingleProductPortraitPrediction, ChannelObject, AudienceProfile, ProductFitProfile, ChannelObjectBinding } from '../types';
 
 // Feature flag for local mock vs real backend
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
@@ -39,6 +39,53 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asArray(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null && !Array.isArray(item)) : [];
+}
+
+function readFileText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsText(file);
+  });
+}
+
+function parseCsvLine(line: string): string[] {
+  const cells: string[] = [];
+  let cell = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      cells.push(cell.trim());
+      cell = '';
+    } else {
+      cell += char;
+    }
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+
+const CSV_ALLOWED_TABLES = ['sku', 'channel_profile', 'wide_table_row', 'batch', 'prediction', 'match_result'];
+
+const CSV_REQUIRED_COLUMNS: Record<string, string[]> = {
+  sku: ['sku_id'],
+  channel_profile: ['channel_id'],
+  wide_table_row: ['sku_id', 'channel_id'],
+  batch: ['batch_id'],
+  prediction: ['prediction_id'],
+  match_result: ['match_id']
+};
+
+function normalizeCsvHeader(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[\s\-.]+/g, '_')
+    .replace(/_+/g, '_');
 }
 
 function toDecisionStatus(row: Record<string, unknown>, actions: ActionRecord[], reviews: Record<string, unknown>[]): DecisionRecord['status'] {
@@ -1571,6 +1618,149 @@ export const api = {
       return Promise.reject(new Error('Confirmation text does not match.'));
     }
     return { code: 'ok', data: { success: true, status: 'success', auditId: 'mock_audit_123', afterSnapshot: { mock: 'snapshot' } } as DbOperationExecuteResult };
+  },
+
+  dryRunCsvIngestion: async (file: File, targetTable: string) => {
+    if (!CSV_ALLOWED_TABLES.includes(targetTable)) {
+      throw new Error(`Target table "${targetTable}" is not supported for CSV import.`);
+    }
+
+    if (!USE_MOCK) {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('targetTable', targetTable);
+
+      const res = await fetch('/api/v0/admin/data-ingestion/csv/dry-run', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer pls-p0-demo-token',
+          'X-PLS-Workspace': 'ws_demo'
+        },
+        body: formData
+      });
+
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => ({}));
+        throw new Error(errorBody?.error?.message || `API Error: ${res.status}`);
+      }
+
+      const result = await res.json();
+      const impact = result.data || {};
+      const warnings: string[] = impact.warnings || [];
+      const hasAuditHistory = warnings.some(w => w.includes('protected system tables') || w.includes('audit/task') || w.includes('audit'));
+
+      return {
+        code: 'ok',
+        data: {
+          affectedTables: impact.affectedTables || [targetTable],
+          affectedRows: impact.affectedRows || 0,
+          hasUserAuthorized: !!impact.containsUserAuthorized || !!impact.isUserAuthorized,
+          hasAuditHistory,
+          qualityReport: impact.qualityReport,
+          warnings,
+          requiredConfirmText: impact.requiredConfirmText || '',
+          stagedFileId: impact.stagedFileId || ''
+        } as DbOperationDryRunResult
+      };
+    }
+
+    const content = await readFileText(file);
+    const lines = content.split(/\r?\n/).filter(line => line.trim().length > 0);
+    const rawHeaders = lines.length > 0 ? parseCsvLine(lines[0]) : [];
+    const normalizedHeaders = rawHeaders.map(normalizeCsvHeader);
+    const headerSet = new Set(normalizedHeaders.filter(h => h !== ''));
+
+    const requiredColumns = CSV_REQUIRED_COLUMNS[targetTable] || [];
+    const missingColumns = requiredColumns.filter(req => !headerSet.has(req));
+    const extraColumns = rawHeaders
+      .map((h, i) => ({ raw: h, norm: normalizedHeaders[i] }))
+      .filter(({ norm }) => norm !== '' && !requiredColumns.includes(norm))
+      .map(({ raw }) => raw);
+
+    const sampleErrors: CsvQualityReport['sampleErrors'] = [];
+    const warnings: CsvQualityReport['warnings'] = [];
+
+    for (const col of missingColumns) {
+      sampleErrors.push({ rowNumber: 1, column: col, rule: 'missing_required_column', message: `Required column "${col}" is missing from CSV header`, rawValue: '' });
+    }
+
+    for (const col of extraColumns) {
+      warnings.push({ rowNumber: null, column: col, message: `CSV column "${col}" is not in target table "${targetTable}" and will be ignored` });
+    }
+
+    if (file.name.toLowerCase().includes('blocking')) {
+      sampleErrors.push({ rowNumber: 1, column: '', rule: 'mock_blocking_error', message: 'Simulated blocking error', rawValue: '' });
+    }
+
+    if (file.name.toLowerCase().includes('type_error')) {
+      sampleErrors.push({ rowNumber: 2, column: 'sample_size', rule: 'type_conversion_failed', message: "Expected INTEGER, got 'N/A'", rawValue: 'N/A' });
+    }
+
+    const rowCount = Math.max(0, lines.length - 1);
+    const blockingErrors = sampleErrors.length;
+    const errorRows = blockingErrors > 0 ? rowCount : 0;
+    const validRows = blockingErrors > 0 ? 0 : rowCount;
+    const typeErrors = file.name.toLowerCase().includes('type_error') ? 1 : 0;
+
+    const stagedFileId = `csv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const requiredConfirmText = `IMPORT CSV ${targetTable}`;
+
+    const qualityReport: CsvQualityReport = {
+      rowCount,
+      validRows,
+      errorRows,
+      missingColumns,
+      extraColumns,
+      typeErrors,
+      sampleErrors,
+      warnings,
+      blockingErrors,
+      requiredConfirmText
+    };
+
+    return {
+      code: 'ok',
+      data: {
+        affectedTables: [targetTable],
+        affectedRows: validRows,
+        hasUserAuthorized: true,
+        hasAuditHistory: false,
+        qualityReport,
+        warnings: warnings.map(w => w.message),
+        requiredConfirmText,
+        stagedFileId
+      } as DbOperationDryRunResult
+    };
+  },
+
+  executeCsvIngestion: async (stagedFileId: string, targetTable: string, confirmText: string) => {
+    if (!USE_MOCK) {
+      const res = await fetchApi<CsvIngestionExecuteResponse>('/admin/data-ingestion/csv/import', {
+        method: 'POST',
+        headers: {
+          'X-PLS-Admin-Token': 'pls-admin-token',
+          'Idempotency-Key': `csv_import_${stagedFileId}_${Date.now()}`
+        },
+        body: JSON.stringify({ stagedFileId, targetTable, confirmText })
+      });
+      return { code: 'ok', data: { success: true, ...res.data } as DbOperationExecuteResult };
+    }
+
+    const expected = `IMPORT CSV ${targetTable}`;
+    if (confirmText !== expected) {
+      throw new Error('Confirmation text does not match.');
+    }
+    return {
+      code: 'ok',
+      data: {
+        success: true,
+        status: 'success',
+        auditId: `audit_${Date.now()}`,
+        beforeSnapshot: { tableRowCounts: { [targetTable]: 0 } },
+        afterSnapshot: { tableRowCounts: { [targetTable]: 1 } },
+        warnings: []
+      } as DbOperationExecuteResult
+    };
   },
 
   // ----------------------------------------------------

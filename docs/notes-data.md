@@ -2,10 +2,11 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-06（D-P6-CHANNEL-1 渠道画像对象库导入模板总控审核通过）
+最近更新：2026-07-06（D-P7-INGEST-1 CSV 导入字段校验口径与质量报告契约冻结）
 
 进度：
 
+- D-P7-INGEST-1 已完成：产出 `docs/p7-csv-ingestion-data-contract.md`，冻结 CSV 导入已有 SQLite 表的字段匹配规则、类型校验规则、dry-run 质量报告结构、blocking error 列表、lineage 要求与目标表白名单建议；新增 `data/templates/csv-ingestion/` 示例 CSV 与 README。
 - D-P6-CHANNEL-1 已完成并经总控审核通过：新增 `data/templates/channel-profile-object-library/`，冻结渠道画像 2.0 对象库基础模板、高级对象包、字段字典、质量报告、失败样例和 validator。
 - D-P6 样例包均标记为 `mock_sample`，只作为 contract 示例；未新增 taxonomy tagId，未连接生产平台或 SQL，未导入主 workspace，未实现 DB schema / API / UI。
 - 基础模板覆盖 `platform`、`trade_area`、`store`、`account`、`marketing_event`、`business_scenario`；高级包覆盖对象、父子层级、活动/场景绑定、`AudienceProfile`、`ProductFitProfile` 和质量报告。
@@ -13,7 +14,8 @@
 
 下一步：
 
-- 建议执行 `/cdi-wrapup` 将 D-P6-CHANNEL-1 回流给 X 总控，确认 wiki 状态、changelog 和后续 A/M/V 任务衔接。
+- D-P7-INGEST-1 完成后回流 X 总控，确认目标表白名单、extra columns 策略、append/upsert 策略等 open decisions，再派发给 A-P7-INGEST-2 / V-P7-INGEST-3 实现。
+- 建议执行 `/cdi-wrapup` 将 D-P6-CHANNEL-1 与 D-P7-INGEST-1 成果回流给 X 总控，确认 wiki 状态、changelog 和后续 A/M/V 任务衔接。
 - A 域后续需要实现 `channel-profile-object-library` import adapter：dry-run 质量检查、confirm import、workspace 隔离、admin token、Idempotency-Key、confirmText、audit，以及 ChannelEntity / MarketingEvent / BusinessScenario / Binding / AudienceProfile / ProductFitProfile 的持久化或 staging contract。
 - M/V 后续消费时必须先读取 `docs/channel-profile-2.0-plan.md` 和本模板 README，活动 / 场景只能绑定或调权，不能当作渠道实体或独立渠道分数。
 - 如需演示或业务 smoke，需要先通过数据管理模块或 Admin API 重新导入数据；当前 `ws_demo` 是空业务库。
@@ -25,6 +27,7 @@
 
 开放问题：
 
+- D-P7 目标表白名单、extra columns 默认策略、append/upsert 策略、CSV 编码/换行符、staging 文件保留策略仍需 X/A 拍板；契约文档已显式列出 open decisions。
 - D-P6 的物理 schema、API 路由、latest view、import adapter、对象轻量编辑和真实 workspace smoke 仍需 X/A 拍板与实现。
 - 重复对象第一期只做 `possible_duplicate` 风险提示和人工状态，不自动合并；后续治理工作流是否做仍未决定。
 - 三方平台 HTML/CSV/XLSX 画像解析器、业务 SQL 导出解析器尚未实现；当前 D-P6 sample package 仍为 `mock_sample`。
@@ -32,6 +35,7 @@
 
 验证：
 
+- D-P7-INGEST-1（2026-07-06）：`docs/p7-csv-ingestion-data-contract.md` 结构与章节完整；`data/templates/csv-ingestion/sample_sku.csv` / `sample_channel_profile.csv` header 与 `apps/server/src/db/schema.ts` 对应表字段一致；提供 README 人工校验命令。
 - D-P6-CHANNEL-1 收尾复验（2026-07-06）：`node data/templates/channel-profile-object-library/scripts/validate-channel-profile-object-library-package.mjs data/templates/channel-profile-object-library/sample_package` 通过，`ok: true`，`failures: []`。
 - 本轮未运行 server/web typecheck、build 或 smoke，因为未改应用代码、DB schema、API 路由或前端代码。
 
@@ -186,3 +190,18 @@
 - validator 校验必填文件、6 类基础模板覆盖、高级包对象覆盖、key 公式、绑定引用、profile lineage、taxonomy 白名单、row count 一致性、质量规则和 3 类失败样例。
 - 校验命令：`node data/templates/channel-profile-object-library/scripts/validate-channel-profile-object-library-package.mjs data/templates/channel-profile-object-library/sample_package`。
 - A-P6-CHANNEL-3 需要实现 import adapter：dry-run、quality report preview、confirm import、workspace 隔离、admin token、`Idempotency-Key`、`X-PLS-Workspace`、`confirmText = IMPORT CHANNEL OBJECT LIBRARY <sourceBatchId>`、`data_import_job` / `db_admin_audit`。
+
+## D-P7-INGEST-1 沉淀
+
+- 契约文档固定为 `docs/p7-csv-ingestion-data-contract.md`。
+- 第一期范围：CSV 导入已有 SQLite 表；不支持 CSV 建表、XLSX、业务源连接、自动 taxonomy 映射。
+- 字段匹配：CSV header 大小写不敏感；空格/连字符/点统一归一化为下划线；重复归一化结果触发 `header_normalization_collision`。
+- 必填字段：目标表 `NOT NULL` 且无 `DEFAULT` 的列必须存在且非空；`workspace_id` 由请求上下文注入，CSV 提供不一致时记 warning。
+- 多余列：默认忽略并记 warning；strict 模式可提升为 blocking，待 X/A 拍板。
+- 类型校验：TEXT / INTEGER / REAL / NUMERIC / BOOLEAN / JSON / DATETIME；不可转换值记 `type_conversion_failed`。
+- Dry-run 质量报告顶层字段：`rowCount`、`validRows`、`errorRows`、`missingColumns`、`extraColumns`、`typeErrors`、`sampleErrors`、`warnings`、`blockingErrors`、`requiredConfirmText`。
+- Blocking errors：`unsupported_target_table`、`header_normalization_collision`、`empty_csv`、`missing_required_column`、`required_field_empty`、`type_conversion_failed`、`duplicate_primary_key_in_csv`、`primary_key_missing`、`extra_columns_in_strict_mode`。
+- Lineage：`source = "csv_upload"`、`sourceType = "user_authorized"`、`sourceBatchId` / `dataVersion` / `generatedAt` 由后端生成或 CSV 显式提供；无 lineage 字段的目标表（如 `sku`）仅在 import job / batch 层保留来源。
+- 目标表白名单建议：第一期开放 `sku`、`channel_profile`、`wide_table_row`、`batch`、`prediction`、`match_result`；系统表与专用 adapter 表（`douyin_*`、`channel_object*`、`audience_profile`、`product_fit_profile`）暂不开放。
+- 确认文本建议：`IMPORT CSV <tableName>`。
+- 示例目录：`data/templates/csv-ingestion/`，含 `README.md`、`sample_sku.csv`、`sample_channel_profile.csv`。

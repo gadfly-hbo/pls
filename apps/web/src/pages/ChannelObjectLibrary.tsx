@@ -122,6 +122,7 @@ export default function ChannelObjectLibrary() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importMode, setImportMode] = useState<'basic' | 'advanced'>('basic');
   const [importObjectType, setImportObjectType] = useState('');
+  const [importPackageTarget, setImportPackageTarget] = useState('channel-profile-object-library');
   const [importDryRunResult, setImportDryRunResult] = useState<any>(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importConfirmText, setImportConfirmText] = useState('');
@@ -212,9 +213,11 @@ export default function ChannelObjectLibrary() {
   };
 
   const handleImportDryRun = async () => {
+    const target = importPackageTarget.trim();
+    if (!target) return;
     setImportLoading(true);
     try {
-      const res = await api.dryRunDbOperation('IMPORT', 'channel-profile-object-library');
+      const res = await api.dryRunDbOperation('IMPORT', target);
       setImportDryRunResult(res.data);
     } catch (err: any) {
       alert('Dry-run 失败: ' + err.message);
@@ -224,10 +227,11 @@ export default function ChannelObjectLibrary() {
   };
 
   const handleImportConfirm = async () => {
-    if (!importConfirmText) return;
+    const target = importPackageTarget.trim();
+    if (!importConfirmText || !target) return;
     setImportLoading(true);
     try {
-      await api.executeDbOperation('IMPORT', 'channel-profile-object-library', importConfirmText);
+      await api.executeDbOperation('IMPORT', target, importConfirmText);
       setShowImportModal(false);
       setImportDryRunResult(null);
       setImportConfirmText('');
@@ -987,9 +991,18 @@ export default function ChannelObjectLibrary() {
             )}
             <div className="form-group">
               <label>数据包路径 / 模板</label>
-              <input className="form-control" placeholder="data/channel-object-library-sample/" disabled />
+              <input
+                className="form-control"
+                value={importPackageTarget}
+                onChange={(e) => {
+                  setImportPackageTarget(e.target.value);
+                  setImportDryRunResult(null);
+                  setImportConfirmText('');
+                }}
+                placeholder="channel-profile-object-library"
+              />
             </div>
-            <button className="btn btn-primary" onClick={handleImportDryRun} disabled={importLoading}>
+            <button className="btn btn-primary" onClick={handleImportDryRun} disabled={importLoading || !importPackageTarget.trim()}>
               {importLoading ? 'Dry-run 中...' : 'Dry-run 预览'}
             </button>
             {importDryRunResult && (

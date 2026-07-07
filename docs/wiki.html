@@ -517,7 +517,7 @@ agy
 </div>
 
 <script>
-const VERSION = "0.48";
+const VERSION = "0.51";
 
 const DOMAINS = {
   X: { name: "总控", agent: "主控 Agent", color: "var(--x)" },
@@ -528,6 +528,241 @@ const DOMAINS = {
 };
 
 const TASKS = [
+  {
+    dom: "X",
+    status: "done",
+    created: "2026-07-06 22:10",
+    title: "X-P7-INGEST-0：CSV 导入与业务源直连接入 PRD 拆解",
+    brief: `标签：ready-for-agent
+
+目标：基于 docs/prd-csv-and-business-source-ingestion.md，把“CSV 直接导入 SQLite”和“业务数据库 / 业务 API 直连接入”拆成可派发的 D/A/V 实现任务。第一期只落 CSV 上传到已有 SQLite 表，后续再做 CSV 建表和业务源连接。
+
+前置：
+- 先读取 AGENTS.md、CONTEXT.md、Orchestration.md。
+- 先读取 docs/prd-csv-and-business-source-ingestion.md、docs/p3-db-mgmt-api-contract.md、docs/p3-db-mgmt-operational-plan.md。
+- 先查现有 Admin Database import route、data import job、audit、workspace middleware 和 DataManagementWorkbench 实现。
+
+范围：
+1. 冻结 Data Ingestion 接缝：dry-run、execute、import job listing。
+2. 冻结第一期范围：CSV 上传 -> 选择已有 SQLite 表 -> 字段/类型/必填校验 -> dry-run -> confirm import -> Import Job + audit。
+3. 明确第二期范围：CSV 首次创建表并导入，必须 schema preview 和用户确认。
+4. 明确第三期范围：业务 API / 业务数据库只读连接、连接测试、dry-run 和导入。
+5. 拆出 D/A/V 任务卡：CSV 模板与字段校验口径、后端 Data Ingestion/CSV adapter、前端 CSV 导入工作台、隔离 smoke。
+6. 保留现有数据包重放路径，不把 demo/douyin-bi import 改造成上传入口。
+
+红线：
+- 不直接导入任意 CSV 到任意表，必须先 dry-run 校验。
+- 首次建表不能完全自动推断后直接执行，必须展示 schema preview 并确认。
+- 正式写入必须保留 workspace、admin token、Idempotency-Key、confirmText、Import Job 和 audit。
+- 业务数据库连接第一期不做；后续只能只读，不能写回业务库。
+- 会写入 workspace 的 smoke 必须使用独立临时 workspace，不依赖 ws_demo 业务数据。
+
+验收：
+- 输出可派发任务卡，至少覆盖 D/A/V 三域。
+- 每张任务卡有目标、范围、非目标、真实接口/header/body、验证方式和回流格式。
+- 明确第一期完成标准：CSV 导入已有 SQLite 表可在 UI 完成 dry-run 和正式导入。
+
+回流格式：
+- 说明新增任务卡。
+- 说明是否需要 contract/schema 变更。
+- 说明第一期可开工顺序和阻塞项。`
+  },
+  {
+    dom: "D",
+    status: "done",
+    created: "2026-07-06 22:18",
+    title: "D-P7-INGEST-1：CSV 导入字段校验口径与质量报告",
+    brief: `标签：ready-for-agent
+
+目标：为 P7 第一期开工冻结 CSV 导入已有 SQLite 表的字段校验口径、错误分类和质量报告结构，让 A/V 能按同一规则实现 dry-run 与错误展示。
+
+前置：
+- 先读取 AGENTS.md、CONTEXT.md、Orchestration.md。
+- 先读取 docs/prd-csv-and-business-source-ingestion.md、docs/data-spec.md、docs/p3-db-mgmt-api-contract.md、docs/p3-db-mgmt-operational-plan.md。
+- 先读取 docs/notes-data.md、docs/notes-app.md。
+
+范围：
+1. 定义 CSV 导入已有表的字段匹配规则：header、目标表字段、必填字段、系统字段、允许忽略字段。
+2. 定义类型校验规则：文本、数字、布尔、日期时间、JSON、空值和不可转换值。
+3. 定义 dry-run 质量报告结构：rowCount、validRows、errorRows、missingColumns、extraColumns、typeErrors、sampleErrors、warnings、blockingErrors。
+4. 定义用户授权 CSV 数据准入口径：默认放行，但必须保留 source、sourceType、sourceBatchId、dataVersion、generatedAt 或等价 lineage。
+5. 定义第一期目标表白名单建议与风险说明，供 X/A 拍板；不得默认允许任意 SQLite 系统表。
+6. 明确第二期 CSV 建表的字段推断仅作为后续，不进入本卡实现范围。
+
+非目标：
+- 不写后端 parser、route、SQLite 写入代码。
+- 不改 DB schema / migration。
+- 不做 XLSX。
+- 不做业务数据库或业务 API 连接。
+- 不新增 taxonomy tagId，不做自动标签映射。
+
+允许改动：
+- docs/notes-data.md。
+- 可新增 docs/p7-csv-ingestion-data-contract.md 或同等 D 域契约文档。
+- 如需要，可新增 data/templates/csv-ingestion/ 下的示例 CSV 与字段说明，但不得伪造真实业务值。
+
+禁止改动：
+- apps/server/src/**。
+- apps/web/src/**。
+- apps/server/src/db/**。
+- data/workspaces/**。
+
+输出契约：
+- A 域可消费的字段校验规则。
+- V 域可展示的质量报告字段。
+- X 需要拍板的 open decisions：目标表白名单、extra columns 策略、append/upsert 策略。
+
+验证：
+- 文档结构检查。
+- 如新增示例 CSV 或模板，必须提供 validator 或说明人工校验命令。
+- 不要求 server/web build，因为不改应用代码。
+
+回流格式：
+- 说明新增 / 修改文档。
+- 列出字段匹配规则、类型校验规则和 blocking error 列表。
+- 列出仍需 X/A 拍板的问题。
+- 说明是否需要 contract/schema 变更。`
+  },
+  {
+    dom: "A",
+    status: "done",
+    created: "2026-07-06 22:19",
+    title: "A-P7-INGEST-2：Data Ingestion 接缝与 CSV 导入已有表后端",
+    brief: `标签：ready-for-agent
+
+目标：实现 P7 第一期后端闭环：CSV 上传暂存、选择已有 SQLite 表、dry-run 字段/类型/必填校验、confirm import、写入 Import Job 与 audit。第一期只支持导入已有表，不支持 CSV 自动建表。
+
+前置：
+- 先读取 AGENTS.md、CONTEXT.md、Orchestration.md。
+- 先读取 docs/prd-csv-and-business-source-ingestion.md、docs/p3-db-mgmt-api-contract.md、docs/p3-db-mgmt-operational-plan.md。
+- 先读取 docs/notes-app.md、docs/notes-data.md。
+- 先读取 D-P7-INGEST-1 回流的 CSV 字段校验契约。
+- 先查真实代码：apps/server/src/routes/admin-database.ts、apps/server/src/lib/import-packages.ts、apps/server/src/lib/dangerous-ops.ts、workspace middleware、idempotency middleware、db schema 和 data_import_job / db_admin_audit 写入方式。
+
+范围：
+1. 设计并实现 Data Ingestion 后端接缝：CSV dry-run、CSV execute、import job listing 或复用现有 import job listing。
+2. 支持 CSV 文件暂存；execute 必须基于同一 staged file 或稳定 staged reference，防止 dry-run 后文件被替换。
+3. dry-run 读取目标表 schema，执行 header、必填字段、类型转换、空值和行级错误校验。
+4. dry-run 返回统一影响摘要：affectedTables、affectedRows、qualityReport、warnings、blockingErrors、requiredConfirmText。
+5. 正式导入必须校验 X-PLS-Workspace、X-PLS-Admin-Token、Idempotency-Key、confirmText，并写 data_import_job 与 db_admin_audit。
+6. 正式导入必须拒绝 stale dry-run 或不一致 staged file。
+7. 写型 smoke 必须使用独立临时 workspace，不依赖或污染 ws_demo。
+8. 保留现有 demo / douyin-bi / channel-profile-object-library 数据包导入路径，不把它们改造成 CSV 上传。
+
+建议接口草案：
+- POST /api/v0/admin/data-ingestion/csv/dry-run
+- POST /api/v0/admin/data-ingestion/csv/import
+- 若决定复用现有 /admin/database/import-jobs，必须先在回流中提交 contract change request，由 X 拍板。
+
+正式请求要求：
+- Headers: Authorization、X-PLS-Workspace、X-PLS-Admin-Token、Idempotency-Key。
+- Body 必须包含 stagedFileId 或等价引用、targetTable、confirmText。
+- confirmText 建议形态：IMPORT CSV <targetTable>，最终以 dry-run 返回为准。
+
+非目标：
+- 不支持 CSV 首次创建表。
+- 不支持 XLSX。
+- 不支持业务数据库 / 业务 API 连接。
+- 不做通用 SQL console。
+- 不允许前端传任意 SQL。
+- 不导入系统保护表，除非 X 明确批准目标表白名单。
+
+允许改动：
+- apps/server/src/routes/** 中新增或扩展 admin ingestion route。
+- apps/server/src/lib/** 中新增 Data Ingestion / CSV adapter。
+- apps/server/src/types.d.ts 如确有必要。
+- apps/server/scripts/** 新增 isolated smoke。
+- docs/p3-db-mgmt-api-contract.md 和 docs/notes-app.md 如 contract 已冻结需同步。
+
+禁止改动：
+- apps/web/src/**。
+- apps/model/src/**。
+- data/workspaces/ws_demo/**。
+- 未经 X 批准不得新增 DB migration 或修改 schema。
+
+输出契约：
+- V 域可调用的真实 method/path/headers/body/response。
+- D 域质量报告字段被准确保留。
+- X 可复核的 smoke 结果和 contract drift 说明。
+
+验证：
+- apps/server npm run typecheck。
+- apps/server npm run schema:check。
+- 新增 CSV ingestion contract/smoke，必须创建临时 workspace，运行 dry-run、错误 confirmText、缺 header、类型错误、正式导入、audit/job 读回、workspace 隔离。
+- 如修改既有 admin import，必须回归 admin-empty / admin-imported 相关 smoke。
+
+回流格式：
+- 完整列出 method/path/headers/body/response。
+- 说明 changed files。
+- 说明 validation run and result。
+- 说明是否新增 contract/schema 或需要 X 拍板。
+- 说明未覆盖风险和后续 CSV 建表 / 业务源连接边界。`
+  },
+  {
+    dom: "V",
+    status: "done",
+    created: "2026-07-06 22:20",
+    title: "V-P7-INGEST-3：数据管理 CSV 导入工作台",
+    brief: `标签：ready-for-agent
+
+目标：在数据管理工作台提供第一期 CSV 导入体验：用户上传 CSV、选择已有 SQLite 表、查看 dry-run 字段/类型校验结果、输入确认文本并执行导入。UI 需明确区分 CSV 导入、业务连接、数据包重放。
+
+前置：
+- 先读取 AGENTS.md、CONTEXT.md、Orchestration.md。
+- 先读取 docs/prd-csv-and-business-source-ingestion.md、docs/p3-db-mgmt-api-contract.md、docs/p3-db-mgmt-operational-plan.md。
+- 先读取 docs/notes-viz.md、docs/notes-app.md。
+- 必须等待 A-P7-INGEST-2 回流真实 method/path/headers/body/response；不得凭前端 mock 猜接口。
+- 先读取 apps/web/src/pages/DataManagementWorkbench.tsx、apps/web/src/services/api.ts 和现有 data-management e2e。
+
+范围：
+1. 在 DataManagementWorkbench 中增加或调整导入入口，展示三条路径：CSV 导入、业务连接、数据包重放。
+2. 第一期只实现 CSV 导入已有 SQLite 表；业务连接显示后续占位，不发起真实连接。
+3. 支持选择目标表、上传 CSV、触发 dry-run。
+4. 展示 dry-run 结果：影响表、影响行数、字段匹配、缺失字段、多余字段、类型错误、错误样例、warnings、blocking errors、requiredConfirmText。
+5. 当 dry-run 有 blocking errors 时禁止正式导入。
+6. 正式导入必须使用 A 域 contract 要求的 X-PLS-Workspace、X-PLS-Admin-Token、Idempotency-Key、confirmText。
+7. 导入成功后刷新 import jobs、overview、tables 或明确哪些视图会刷新。
+8. Mock 与真实 API 响应必须同构；若本地 USE_MOCK 短路，必须同步更新 mock 形态。
+
+非目标：
+- 不实现 CSV 建表 UI。
+- 不实现 XLSX。
+- 不实现业务 DB/API credential 表单。
+- 不做单元格编辑或通用 SQL console。
+- 不改后端 route/schema。
+
+允许改动：
+- apps/web/src/pages/DataManagementWorkbench.tsx。
+- apps/web/src/services/api.ts。
+- apps/web/src/types/index.ts。
+- apps/web/e2e/data-management.spec.ts 或新增定向 e2e。
+- apps/web/src/index.css，如确需样式补充。
+
+禁止改动：
+- apps/server/src/**。
+- data/workspaces/**。
+- apps/model/src/**。
+- Playwright report 生成物不作为交付内容。
+
+输出契约：
+- 用户可完成 CSV dry-run 和正式导入。
+- A 域 response 被 adapter 清洗为稳定 View Model，不把原生错误直接透传到组件。
+- UI 中数据包重放仍保留 demo/douyin-bi 等现有能力，不被 CSV 导入替代。
+
+验证：
+- apps/web npm run lint。
+- apps/web npm run build。
+- Playwright 覆盖 CSV dry-run 成功、blocking errors、confirmText 错误、导入成功刷新。
+- 真实 API 模式测试必须使用 A 域提供的临时 workspace 或拦截；不得对 ws_demo 执行未隔离正式写入。
+- 检查 390px 窄屏无按钮、表格、错误文本重叠。
+
+回流格式：
+- 说明新增 / 修改前端文件。
+- 列出调用的真实 API method/path/headers/body。
+- 说明 mock 与真实响应同构情况。
+- 附 lint/build/e2e 结果。
+- 说明未实现的业务连接、CSV 建表和 XLSX 边界。`
+  },
   {
     dom: "X",
     status: "done",

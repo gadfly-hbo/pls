@@ -29,6 +29,8 @@
 | [decision-output.md](decision-output.md) | V | 运营建议话术、归因解释、风险预警和导出边界 |
 | [p0-acceptance-report.md](p0-acceptance-report.md) | X 总控 | P0-B 端到端验收、红线检查、指标、风险缺口与 P0-C 任务拆解 |
 | [tools-module-design.md](tools-module-design.md) | X 总控 | 本地工具模块方案、数据包契约、API 草案和任务拆分 |
+| [prd-csv-and-business-source-ingestion.md](prd-csv-and-business-source-ingestion.md) | X 总控 | CSV 直接导入 SQLite 与业务数据库/API 直连接入 PRD |
+| [p7-csv-ingestion-data-contract.md](p7-csv-ingestion-data-contract.md) | D | CSV 导入已有 SQLite 表的字段校验、质量报告和 blocking error 契约 |
 | [../data/templates/channel-profile-object-library/README.md](../data/templates/channel-profile-object-library/README.md) | D | 渠道画像 2.0 对象库导入模板、字段字典、质量报告和样例包 |
 
 ---

@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-06（A-P6-CHANNEL-3 渠道画像对象库后端通过总控复核）
+最近更新：2026-07-06（A-P7-INGEST-2 文档冲突已修复并 mark done；session end 验证通过）
 
 进度：
 
@@ -24,6 +24,15 @@
 - **A-P5-PORTRAIT-5 已完成并经总控 mark done**：注册 `single-product-portrait` L1 工具，前端通过 `POST /api/v0/tools/runs` 传 `toolId=single-product-portrait` 与 `skuId/packageId` 触发预测，结果只写 `data/local/tool-runs/<runId>/artifacts/prediction.json` 和 `report.md`。artifact 保留 `sourceFiles`、平台画像、风险、证据和 PLS bridge；run/artifact 查询沿用 tools workspace 隔离。
 - **A-P5-PORTRAIT-5 总控修正项已关闭**：`platform_portrait.csv` 按 `skuId + sourceProductKey` 过滤，防止多 SKU 样本包串画像；`prediction.json` 顶层已写入 `sourceFiles`，供 V/A 机器读取来源 lineage。
 - **A-P6-CHANNEL-3 已完成并经总控 mark done**：已修复 `missing_parent_reference` 为 blocking、正式 import 前拦截 dry-run blocking errors、对象库列表分页对齐 api-contract.md 通用契约、新增负向 smoke fixture 与 `smoke:channel-object-library` 脚本；`docs/api-contract.md` §10.5 与 `docs/notes-app.md` 已同步。
+- **A-P7-INGEST-2 已按 review 返工完成（2026-07-06）**：X 总控 review 指出的 stagedFileId 路径穿越风险、upsert/replace 语义未拍板、strict mode 与 execute 语义不一致、typeErrors 统计口径错误、before/after snapshot 行数不真实等问题已修复：
+  - `apps/server/src/lib/csv-ingestion.ts` 增加 `stagedFileId` 格式校验（`^csv_[0-9]+_[a-z0-9]{6}$`）、路径解析后确认仍在当前 workspace staging 目录内、`staging.json` 读取后校验 `meta.workspaceId`/`meta.stagedFileId`/`meta.targetTable`。
+  - 改为 append-only：dry-run 检测目标表主键冲突（`primary_key_conflict`），execute 使用普通 `INSERT` 不再 `INSERT OR REPLACE`。
+  - 从 public API 移除 `mode=strict/relaxed` 参数，第一期仅保留 relaxed。
+  - `typeErrors` 仅统计 `rule === "type_conversion_failed"`。
+  - `beforeSnapshot` / `afterSnapshot` 改为目标表真实行数（`COUNT(*) WHERE workspace_id = ?`），并写入 `db_admin_audit`。
+  - `apps/server/scripts/smoke-csv-ingestion.mjs` 新增路径穿越、URL 编码路径穿越、staging 文件篡改、`staging.json` workspaceId/targetTable 篡改、append-only 重复导入阻塞用例。
+  - `docs/p3-db-mgmt-api-contract.md` 与 `docs/p7-csv-ingestion-data-contract.md` 已同步 append-only、strict 移除、snapshot 真实行数等语义。
+  - 全部验证通过：typecheck、schema:check、`smoke:csv-ingestion` 46/46、`smoke:admin-summary`、`smoke:tools`、`smoke:channel-object-library` 均无回归。`docs/wiki.html` A-P7-INGEST-2 任务卡已 mark done。
 - 应用侧数据准入按项目级放行口径；taxonomy gate 未变。
 
 关键决策（A-P3-DB-6 三轮返工）：
@@ -106,6 +115,13 @@
   - `PLS_ADMIN_SMOKE_MODE=imported npm run smoke:channel-object-library` 通过 46/46，使用独立临时 workspace，未清理或重建 `ws_demo`。
   - `apps/server npm run smoke:admin-empty` 全通过 131/131。
   - `apps/server npm run smoke:admin-imported` 全通过 157/157。
+- A-P7-INGEST-2 验证（2026-07-06，按 review 返工后）：
+  - `apps/server npm run typecheck` 通过。
+  - `apps/server npm run schema:check` 通过（`ws_demo` valid，2 applied / 0 pending / 0 failed）。
+  - `apps/server npm run smoke:csv-ingestion` 通过 46/46，使用独立临时 workspace，覆盖 dry-run 成功、缺 header、类型错误、不支持表、admin token/Idempotency-Key/confirmText 校验、正式导入、audit/job 读回、workspace 隔离、幂等重放与冲突、stagedFileId 路径穿越（含 URL 编码）、staged 文件篡改、`staging.json` workspaceId/targetTable 篡改、append-only 重复导入主键冲突阻塞。
+  - `apps/server npm run smoke:admin-summary` 通过，空库 131/131 + 导入后 157/157，无回归。
+  - `apps/server npm run smoke:tools` 通过 27/27，无回归。
+  - `apps/server npm run smoke:channel-object-library` 通过 19/19（dry-run），无回归。
 - ws_demo 当前状态：A-P6-CHANNEL-3 开发与 smoke 过程中被直接写入了 object-library 测试数据（15 行）。`smoke:admin-empty` / `smoke:admin-imported` 使用独立临时 workspace，不污染 `ws_demo`；是否 rebuild `ws_demo` 需用户确认。
 
 ---
@@ -162,3 +178,18 @@
 - **artifact 机器可读产物必须保留来源 lineage**：`prediction.json` 不仅要有人工可读的 `report.md`，顶层也要写 `sourceFiles` 数组，让下游 V/A 读取时不丢失数据来源和版本信息。
 - **跨包引用 model 源码会触发 server 的 `noUncheckedIndexedAccess`**：`apps/server/tsconfig.json` 纳入 `../model/src/single-product-portrait.ts` 后，model 文件内 `const [a, b] = fields` 这种解构会被推断为 `string | undefined`。修复只能是 model 侧加 `fields[0]!` 或默认值，因为 server 的 strict 配置比 model 更严格。契约测试和 smoke 回归可验证行为无变化。
 - **工具 dry-run 的 plannedArtifacts 应来自工具定义**：`sample-profile-extract` 的 `outputFormats` 推导出的 `aggregate_profile.json` 不适用于新工具。为 `single-product-portrait` 注册 `plannedArtifacts: ["artifacts/prediction.json", "artifacts/report.md"]` 后，`planDryRun` 改为优先使用定义字段，避免 dry-run 与实际产物不一致。
+
+## A-P7-INGEST-2 沉淀
+
+- **CSV 上传暂存与 dry-run 解耦**：dry-run 接收 multipart 文件并落盘到 `data/local/csv-staging/<workspace>/<stagedFileId>/`，返回 `stagedFileId`；正式 import 用 JSON 提交 `stagedFileId`，可复用现有 `idempotencyMiddleware`（JSON body）。`staging.json` 保存 `contentHash`，execute 时拒绝被修改过的 staged file。
+- **目标表双重校验**：`CSV_PROTECTED_TABLES`（系统表）+ `CSV_ALLOWED_TABLES`（业务表白名单）+ `PRAGMA table_info` 存在性检查。三层任一失败都按 `unsupported_target_table` 处理。
+- **NOT NULL DEFAULT 列的 INSERT 策略**：CSV 提供的列按值插入；未提供的列不进入 INSERT column list，让 SQLite 使用 DEFAULT。这样避免显式传 NULL 触发 NOT NULL 约束失败。
+- **workspace_id 作为上下文注入**：CSV 可省略 `workspace_id`；若提供但与请求头不一致，仅 warning 并以请求头为准。INSERT 时统一写入 `workspaceId`。
+- **类型推断 = PRAGMA 声明类型 + 表级 override**：JSON / BOOLEAN / DATETIME 等在 SQLite 中多为 TEXT/INTEGER，需通过 `COLUMN_TYPE_OVERRIDES` 显式标记。后续 schema 新增 JSON 列时，应同步更新该配置。
+- **主键缺失归入 `missingColumns`**：D 契约把 `primary_key_missing` 与 `missing_required_column` 分为两个 rule，但 `missingColumns` 字段汇总所有 header 中缺失的必填/主键列，便于 V 域展示。
+- **CSV 解析手写**：当前无 csv-parse 依赖，parser 处理引号、逗号、CRLF/LF。复杂 RFC 4180 场景（如引号内换行）后续可考虑引入 `csv-parse`。
+- **Staging 文件生命周期**：当前成功导入后不清除 staged file，长期运行会累积。临时 workspace 运行结束可整体清理；生产环境需后续加 retention。
+- **stagedFileId 必须强校验**：限制格式 `^csv_[0-9]+_[a-z0-9]{6}$`，resolve 后确认路径仍在当前 workspace 的 staging 目录下，读取 `staging.json` 后再次校验 `meta.workspaceId`/`meta.stagedFileId`/`meta.targetTable`。任何一项失败都视为 staged file 不存在，返回 400 而非 500。
+- **CSV 导入仅 append**：第一期不支持 upsert。dry-run 阶段查询目标表，已有主键冲突时生成 `primary_key_conflict` blocking error；execute 使用普通 `INSERT`，二次导入同一批数据会被 dry-run 拦截。这避免了 REPLACE 语义下的业务数据被静默覆盖。
+- **typeErrors 只统计类型转换失败**：`typeErrors` 字段仅对 `rule === "type_conversion_failed"` 累加，header 缺失、主键缺失、主键冲突等 blocking errors 不再混入该计数。
+- **正式导入响应 snapshot 用真实行数**：`beforeSnapshot` / `afterSnapshot` 通过 `COUNT(*) WHERE workspace_id = ?` 读取目标表实际行数，并同步写入 `db_admin_audit`，不再固定为 0。

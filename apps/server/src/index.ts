@@ -19,6 +19,7 @@ import channelObjects from "./routes/channel-objects.js";
 import newProducts from "./routes/new-products.js";
 import flywheel from "./routes/flywheel.js";
 import adminDatabase from "./routes/admin-database.js";
+import adminDataIngestion from "./routes/admin-data-ingestion.js";
 import tools from "./routes/tools.js";
 
 const app = new Hono();
@@ -48,6 +49,7 @@ api.route("/data-management", dataManagement);
 api.route("/new-products", newProducts);
 api.route("/operations", flywheel);
 api.route("/admin/database", adminDatabase);
+api.route("/admin/data-ingestion", adminDataIngestion);
 
 app.route("/api/v0", api);
 

@@ -497,6 +497,51 @@ export interface DbAuditEvent {
   snapshot?: any;
 }
 
+export interface CsvQualityReport {
+  rowCount: number;
+  validRows: number;
+  errorRows: number;
+  missingColumns: string[];
+  extraColumns: string[];
+  typeErrors: number;
+  sampleErrors: Array<{ rowNumber: number; column: string; rule: string; message: string; rawValue: string }>;
+  warnings: Array<{ rowNumber: number | null; column: string; message: string }>;
+  blockingErrors: number;
+  requiredConfirmText: string;
+}
+
+export interface CsvIngestionDryRunResponse {
+  operation: string;
+  targetType: string;
+  targetName: string;
+  affectedTables: string[];
+  affectedRows: number;
+  sourceType: string;
+  dataVersion: string | null;
+  containsUserAuthorized: boolean;
+  containsSystemHistory: boolean;
+  warnings: string[];
+  requiredConfirmText: string;
+  stagedFileId: string;
+  qualityReport: CsvQualityReport;
+}
+
+export interface CsvIngestionExecuteRequest {
+  stagedFileId: string;
+  targetTable: string;
+  confirmText: string;
+}
+
+export interface CsvIngestionExecuteResponse {
+  operation: string;
+  status: string;
+  auditId: string;
+  jobId?: string;
+  beforeSnapshot: any;
+  afterSnapshot: any;
+  warnings: string[];
+}
+
 export interface DbOperationDryRunResult {
   affectedTables: string[];
   affectedRows: number;
@@ -505,6 +550,7 @@ export interface DbOperationDryRunResult {
   qualityReport?: any;
   warnings: string[];
   requiredConfirmText: string;
+  stagedFileId?: string;
 }
 
 export interface DbOperationExecuteResult {
