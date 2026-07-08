@@ -1,0 +1,18 @@
+{
+  "id": "T0002",
+  "slug": "single-product-portrait-api",
+  "status": "approved",
+  "assignee": "mimo",
+  "domain": "backend",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-08T15:38:48.794Z",
+  "updated_at": "2026-07-08T17:23:18.752Z",
+  "base_ref": "b09951dccbdb1fad97661bcbb4a0652d41d9da8d",
+  "dirty_at_creation": true,
+  "batch": "single-product-portrait-frontend",
+  "sequence": 2,
+  "depends_on": [
+    "T0001"
+  ]
+}

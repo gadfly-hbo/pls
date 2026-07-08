@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import {
   loadChannelProfiles,
   loadDemoSkus,
@@ -12,6 +13,15 @@ import {
 } from "./baseline.js";
 import { runSingleProductPortrait } from "./single-product-portrait.js";
 import { runSmallSampleRuleCalibration } from "./single-product-portrait-calibration.js";
+import {
+  evaluateSupervisedModel,
+  loadSupervisedModel,
+  predictSupervisedPortrait,
+  saveSupervisedModel,
+  trainSupervisedPortraitModel,
+  loadSupervisedTrainingData,
+  batchPredictSupervisedPortraits,
+} from "./single-product-portrait-supervised.js";
 
 const [command, ...args] = process.argv.slice(2);
 
@@ -65,6 +75,39 @@ if (command === "predict") {
 } else if (command === "single-product-portrait-calibrate") {
   const packagePath = getArg("--package") ?? "../../data/templates/single-product-portrait-sample/sample_package";
   printJson(runSmallSampleRuleCalibration({ packagePath }));
+} else if (command === "single-product-portrait-train") {
+  const packagePath = getArg("--package") ?? "../../data/local/single-product-portrait-q2-73sample";
+  const outputPath = getArg("--output") ?? "../../data/local/single-product-portrait-q2-73sample/model.json";
+  const alpha = Number(getArg("--alpha") ?? "1.0");
+  const { samples, targetsByDimension } = loadSupervisedTrainingData(packagePath);
+  const model = trainSupervisedPortraitModel({ samples, targetsByDimension, alpha });
+  saveSupervisedModel(model, outputPath);
+  printJson({ trained: true, outputPath, sampleCount: model.sampleCount, dimensions: model.dimensionModels.map((d) => d.labelType) });
+} else if (command === "single-product-portrait-eval") {
+  const packagePath = getArg("--package") ?? "../../data/local/single-product-portrait-q2-73sample";
+  const alpha = Number(getArg("--alpha") ?? "1.0");
+  printJson(evaluateSupervisedModel({ packagePath, alpha }));
+} else if (command === "single-product-portrait-predict-supervised") {
+  const modelPath = getArg("--model") ?? "../../data/local/single-product-portrait-q2-73sample/model.json";
+  const skuId = getArg("--sku") ?? "new_product";
+  const fitType = getArg("--fit") ?? "修身型";
+  const fabric = getArg("--fabric") ?? "全棉";
+  const fab = getArg("--fab") ?? "舒适修身T恤";
+  const model = loadSupervisedModel(modelPath);
+  printJson(predictSupervisedPortrait({ input: { skuId, fitType, fabric, fab }, model }));
+} else if (command === "single-product-portrait-predict-batch") {
+  const inputPath = getArg("--input");
+  if (!inputPath) throw new Error("--input is required for batch prediction");
+  const modelPath = getArg("--model") ?? "../../data/local/single-product-portrait-q2-73sample/model.json";
+  const outputPath = getArg("--output");
+  const topN = Number(getArg("--topN") ?? "3");
+  const results = batchPredictSupervisedPortraits({ inputPath, modelPath, outputTopNPerDimension: topN });
+  if (outputPath) {
+    writeFileSync(outputPath, JSON.stringify(results, null, 2));
+    printJson({ count: results.length, outputPath });
+  } else {
+    printJson(results);
+  }
 } else {
-  throw new Error("Usage: cli.ts <predict|match|backtest|validate-tags|segment-calibration|token-governance|single-product-portrait|single-product-portrait-calibrate> [--sku ...] [--mode demo|cutoff] [--input path] [--cutoff timeWindow] [--xlsx path] [--csv path] [--output path] [--package path]");
+  throw new Error("Usage: cli.ts <predict|match|backtest|validate-tags|segment-calibration|token-governance|single-product-portrait|single-product-portrait-calibrate|single-product-portrait-train|single-product-portrait-eval|single-product-portrait-predict-supervised|single-product-portrait-predict-batch> [--sku ...] [--mode demo|cutoff] [--input path] [--cutoff timeWindow] [--xlsx path] [--csv path] [--output path] [--package path] [--model path] [--fit ...] [--fabric ...] [--fab ...] [--alpha number] [--topN number]");
 }

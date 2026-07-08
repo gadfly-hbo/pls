@@ -1,0 +1,4 @@
+{"timestamp":"2026-07-08T15:38:41.142Z","type":"task_created","task_id":"T0001","actor":"codex","resulting_status":"queued","note":"worktree was dirty at task creation"}
+{"timestamp":"2026-07-08T15:51:55.644Z","type":"task_claimed","task_id":"T0001","actor":"opencode","resulting_status":"running"}
+{"timestamp":"2026-07-08T15:56:47.239Z","type":"handoff_submitted","task_id":"T0001","actor":"opencode","resulting_status":"handoff_ready"}
+{"timestamp":"2026-07-08T16:00:34.743Z","type":"review_decision","task_id":"T0001","actor":"codex","resulting_status":"approved","note":"Approved T0001. Reviewed handoff, brief, real diff, and reran validation: apps/model typecheck passed; supervised contract test passed; supervised smoke passed after rerun with escalated tsx IPC permission. Out-of-scope worktree diffs were present at task creation or controller-owned docs/database state and are not accepted as T0001 deliverables."}

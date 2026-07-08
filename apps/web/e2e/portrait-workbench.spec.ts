@@ -1,73 +1,84 @@
 import { test, expect } from '@playwright/test';
+import fs from 'fs';
 
-test.describe('Portrait Workbench Baseline Test', () => {
+test.describe('Single Product Portrait Workbench Mock Test', () => {
   test.skip(process.env.VITE_USE_MOCK === 'false', 'This test requires VITE_USE_MOCK=true');
 
-  test('Should render core dimensions, risk flags, fold long tail, show evidence and work on narrow screen', async ({ page }) => {
+  test('covers single prediction, batch success, partial failure, downloads and narrow screen', async ({ page }) => {
     const errors: string[] = [];
-    page.on('pageerror', err => {
-      console.error('PAGE ERROR:', err.message);
-      errors.push(err.message);
-    });
+    page.on('pageerror', err => errors.push(err.message));
     page.on('console', msg => {
-      if (msg.type() === 'error') {
-        if (!msg.text().includes('favicon.ico') && !msg.text().includes('Duplicate key')) {
-          console.error('CONSOLE ERROR:', msg.text());
-          errors.push(msg.text());
-        }
-      }
+      if (msg.type() === 'error' && !msg.text().includes('favicon.ico')) errors.push(msg.text());
     });
 
-    // 1. Navigate to '新品预测'
     await page.goto('/');
     await page.locator('button.app-nav__item', { hasText: '新品预测' }).click();
-    await expect(page.getByRole('heading', { name: '新品预测' })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: '单品画像预测' })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('single-product-portrait-supervised-ridge-0.1')).toBeVisible();
+    await expect(page.getByText('支持版型')).toBeVisible();
 
-    // 2. Fill required form fields and submit
-    await page.getByLabel('商品 ID').fill('mock_sku_portrait_001');
-    await page.getByLabel('受控样本包 ID').fill('sample');
-    await page.getByRole('button', { name: '开始预测画像' }).click();
+    await page.getByRole('button', { name: '填入示例' }).click();
+    await page.getByRole('button', { name: '预测单款画像' }).click();
+    const singleResult = page.locator('.single-portrait-result').filter({ hasText: '单款画像结果' });
+    await expect(singleResult.getByRole('heading', { name: '单款画像结果' })).toBeVisible({ timeout: 15000 });
+    await expect(singleResult.getByText('预测性别')).toBeVisible();
+    await expect(singleResult.getByText('预测人生阶段')).toBeVisible();
+    await expect(singleResult.getByText('Ridge model top positive drivers')).toBeVisible();
+    await expect(singleResult.getByText('baseline_not_trained_model')).toBeVisible();
+    await singleResult.getByRole('button', { name: '清空结果' }).click();
+    await expect(page.getByText('暂无单款画像结果')).toBeVisible();
 
-    // Wait for prediction result
-    await expect(page.getByRole('heading', { name: /预测画像结果/ })).toBeVisible({ timeout: 15000 });
+    await page.getByRole('button', { name: '批量预测' }).click();
+    await page.setInputFiles('input[type="file"]', {
+      name: 'success-batch.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('款号,版型,面料,FAB\nA,X型,全棉,通勤基础款\nB,X型,莱赛尔,舒适通勤\n'),
+    });
+    await page.getByRole('button', { name: '校验批量文件' }).click();
+    await expect(page.getByText('总行数')).toBeVisible();
+    await page.getByRole('button', { name: '执行批量预测' }).click();
+    await expect(page.getByRole('heading', { name: '批量画像结果' })).toBeVisible({ timeout: 15000 });
 
-    // 3. Verify Risk Flags
-    await expect(page.getByText('该结果为基于规则的预测 baseline，非已训练模型')).toBeVisible();
-    await expect(page.getByText('baseline_not_trained_model')).toBeVisible();
-    
-    // 4. Verify PLS Bridge Coverage Rate
-    await expect(page.getByText('PLS Bridge 覆盖率')).toBeVisible();
-    await expect(page.getByText('未映射长尾')).toBeVisible();
+    const [resultDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: '预测结果 CSV' }).click(),
+    ]);
+    const resultPath = await resultDownload.path();
+    expect(resultPath).toBeTruthy();
+    expect(fs.readFileSync(resultPath, 'utf-8')).toContain('rowNumber,skuId,dimension,rank,label,share,confidence,sourceFields,evidenceKeywords,riskFlags');
 
-    // 5. Verify Core Dimensions
-    const dimensionList = page.locator('.dimension-list');
-    await expect(page.getByText('画像维度分布')).toBeVisible();
-    await expect(dimensionList.getByText('预测性别', { exact: true })).toBeVisible();
-    await expect(dimensionList.getByText('预测年龄段', { exact: true })).toBeVisible();
-    
-    // Non-core dimensions should be hidden initially
-    await expect(dimensionList.getByText('品牌偏好', { exact: true })).not.toBeVisible();
+    const [jsonDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: '完整 JSON' }).click(),
+    ]);
+    expect(await jsonDownload.path()).toBeTruthy();
 
-    // 6. Unfold Long Tail
-    const unfoldBtn = page.getByRole('button', { name: '展开长尾画像' });
-    await expect(unfoldBtn).toBeVisible();
-    await unfoldBtn.click();
-    await expect(page.getByRole('button', { name: '收起长尾画像' })).toBeVisible();
-    await expect(page.getByText('注：以下长尾维度为锚点弱先验或平台原始长尾，仅供参考。')).toBeVisible();
-    await expect(dimensionList.getByText('品牌偏好', { exact: true })).toBeVisible();
+    await page.setInputFiles('input[type="file"]', {
+      name: 'partial-batch.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('款号,版型,面料,FAB,颜色\nA,X型,全棉,通勤基础款,黑色\nB,未知版型,全棉,通勤基础款,白色\n'),
+    });
+    await page.getByRole('button', { name: '校验批量文件' }).click();
+    await expect(page.getByText('unknown_fit_type')).toBeVisible();
+    await expect(page.getByText('duplicate_sku_id_in_file')).toBeVisible();
+    await expect(page.getByRole('button', { name: '预测有效行' })).toBeEnabled();
+    await page.getByRole('button', { name: '预测有效行' }).click();
+    await expect(page.getByRole('heading', { name: '批量画像结果' })).toBeVisible({ timeout: 15000 });
 
-    // 7. Verify Evidence Display
-    await expect(page.getByText('预测证据 (Evidence)')).toBeVisible();
-    await expect(page.getByText('基于款式特征 "minimal" 匹配核心风格')).toBeVisible();
+    const [errorDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: '错误报告 CSV' }).click(),
+    ]);
+    const errorPath = await errorDownload.path();
+    expect(errorPath).toBeTruthy();
+    expect(fs.readFileSync(errorPath, 'utf-8')).toContain('rowNumber,skuId,field,code,message,rawValue');
+    await page.locator('.single-portrait-result').filter({ hasText: '批量画像结果' }).getByRole('button', { name: '清空结果' }).click();
+    await expect(page.getByRole('heading', { name: '批量画像结果' })).not.toBeVisible();
 
-    // 8. Test narrow screen layout
-    await page.setViewportSize({ width: 375, height: 812 });
-    // In narrow screen, evidence table should be scrollable horizontally, but shouldn't overflow the page
-    const evidenceTableContainer = page.locator('.panel').filter({ hasText: '预测证据 (Evidence)' }).locator('> div');
-    const box = await evidenceTableContainer.boundingBox();
-    const viewportSize = page.viewportSize();
-    expect(box?.width).toBeLessThanOrEqual(viewportSize?.width || 375);
-
+    await page.setViewportSize({ width: 390, height: 812 });
+    const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(pageWidth).toBeLessThanOrEqual(390);
+    await expect(page.getByRole('button', { name: '校验批量文件' })).toBeVisible();
     expect(errors).toHaveLength(0);
   });
 });

@@ -15,6 +15,6 @@
     "types": ["node"],
     "lib": ["ES2022"]
   },
-  "include": ["src/**/*.ts", "../model/src/baseline.ts", "../model/src/single-product-portrait.ts"],
+  "include": ["src/**/*.ts", "../model/src/baseline.ts", "../model/src/single-product-portrait.ts", "../model/src/single-product-portrait-supervised.ts"],
   "exclude": ["node_modules", "dist"]
 }

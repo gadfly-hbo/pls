@@ -55,9 +55,10 @@
 - 总控 Agent 负责产品架构、数据准入口径、跨域契约、任务拆解、终审。
 - 域 Agent 只改自己域内文件和任务卡指定文件。
 - 接缝层文件、共享类型、DB schema、全局配置由总控持有；如需域 Agent 代笔，必须由总控在任务 brief 中写死口径。
-- 所有任务以 `docs/wiki.html` 的任务卡为派发真源。
+- AgentOps/CDI 工作流的任务创建、派发、review、状态流转与收口记录以 `.agentops/tasks/` Task Bus 为准。
+- `docs/wiki.html` 已被 AgentOps Task Bus 替代，后续不再作为任务真源、任务派发入口、任务状态看板或 session 收尾必更新文档。
+- 除非用户明确点名要求修改 `docs/wiki.html`，否则不要在 product iteration、task create/review、session end、commit/push 等流程中读取、更新或校验它。
 - 跨 session 连续性以 `docs/notes-<域>.md` 的 `## 0. 当前状态` 为准。
-- 域任务回流经 X 总控复核通过后，总控 Agent 必须同步把 `docs/wiki.html` 对应任务卡 `status` 改为 `done`，无需用户另行提醒。
 - 总控复核或 `/learn` 沉淀时，不只记录总控自己的执行经验；凡是在 PLS 任务审核中发现的 D/M/A/V/Infra 等域 agent 可复发错误模式，也应沉淀为项目级规则、notes 或后续任务约束。沉淀重点包括契约误读、真实 API / Mock 漂移、数据质量口径遗漏、UI 真实运行风险、smoke 隔离问题和跨域边界误改；一次性 typo 或局部实现细节不沉淀。
 
 ---
@@ -113,6 +114,7 @@ This product is registered in the multi-agent coding system.
 - System root: `/Users/huangbo/Dev/AgentOps/coding-system`
 - Product overlay: `/Users/huangbo/Dev/AgentOps/coding-system/products/pls/AGENTS.overlay.md`
 - Routing guide: `/Users/huangbo/Dev/AgentOps/coding-system/docs/agent-routing.md`
+- Domain memory guide: `/Users/huangbo/Dev/AgentOps/coding-system/docs/agent-domain-memory.md`
 
 This section does not replace the rules above. Existing product rules remain authoritative.
 <!-- AGENTOPS:END -->

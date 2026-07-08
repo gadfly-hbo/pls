@@ -2,9 +2,19 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-07（V-P7-INGEST-3 返工完成，前端 CSV 质量报告契约与真实后端对齐并通过 VITE_USE_MOCK=false contract 测试）
+最近更新：2026-07-09（T0003 / V-PORTRAIT-FE-3 完成 Dashboard 单品画像预测 UI，专用 API adapter、mock/real E2E 与下载闭环已通过验证）
 
 进度：
+
+- `T0003 / V-PORTRAIT-FE-3` (Dashboard 单品画像预测 UI) 已完成：
+  - 在“新品预测”工作台内新增 metadata 驱动的 `单品画像预测` 区域，支持 `单款预测` / `批量预测` 模式切换，不新增一级导航。
+  - 前端已改为专用 `/api/v0/single-product-portrait/*` adapter：metadata、单款 predict、批量 preview、批量 execute；真实模式精确解包 `{ code, data }`，批量使用 `multipart/form-data` 且只携带 `Authorization` 与 `X-PLS-Workspace`。
+  - 单款表单包含 `款号`、`版型`、`面料`、`FAB`，版型和示例来自 metadata；`modelAvailable: false` 时禁用单款/批量按钮并展示“模型文件未生成，请先训练模型”。
+  - 批量模式支持下载模板、后端 preview、execute、文件级错误、行级错误、warnings、额外列展示；valid rows 为 0 或存在 fileErrors 时禁用 execute。
+  - 结果展示支持 6 个画像维度 top3、evidence、risk flags、低稳定性提示、模型说明区（modelVersion、sampleCount、trainedAt、metricsSummary、支持版型）和预测结果 CSV / 错误报告 CSV / 完整 JSON 下载；单款/批量结果保留在模块内部 state，提供 `清空结果`，不写入旧 App 级 `prediction/currentSku`。
+  - `apps/web/e2e/portrait-workbench.spec.ts` 覆盖 mock 单款成功、批量成功、部分失败、下载字段和 390px 窄屏无页面级横向溢出；`portrait-workbench-real.spec.ts` 在 `VITE_USE_MOCK=false` 下断言 metadata、single predict、batch preview、batch execute 四个真实请求被命中，避免 `USE_MOCK` 短路。
+  - 验证通过：`apps/web npm run lint`、`npm run build`、`npm run smoke`（18 passed / 6 skipped）、`VITE_USE_MOCK=false npx playwright test e2e/portrait-workbench-real.spec.ts`。
+  - 注意：real contract 测试通过 `page.route` 提供后端同构响应；未启动真实 server 时，默认总览页在 `VITE_USE_MOCK=false` 下会对其他模块 API 打出 Vite proxy `ECONNREFUSED` 日志，但不影响单品画像专用端点断言。
 
 - `V-P7-INGEST-3` (数据管理 CSV 导入工作台) 已完成：
   - 在 `DataManagementWorkbench` 导入 Tab 新增三段式路径：CSV 导入 / 业务连接 / 数据包重放。
@@ -112,6 +122,7 @@
 - **Playwright 严格模式导致的导航选择器冲突**：在 V-P3-OVERVIEW-1 中引入总览页面时，页面内展示的模块名称（如“数据管理”、“人货匹配核心工作台”）与左侧/顶部导航菜单的文本完全一致，这导致原先通过 `getByText('数据管理', { exact: true })` 实现的 E2E 测试因为匹配到两个元素而触发 strict mode violation 失败。今后凡涉及应用级全局导航或公共操作的 E2E 定位，应优先使用带有结构语义的 locator（如 `locator('button.app-nav__item', { hasText: '...' })`），以提升测试面对内容变更时的鲁棒性。
 - **Playwright 本地端口复用注意**：`apps/web/playwright.config.ts` 使用固定端口 5175 且 `reuseExistingServer: false`。真实 API 模式下多个 Playwright 命令并行运行时，可能出现 `Port 5175 is already in use` 的 dev server 日志；即使测试复用已启动服务通过，收尾和 CI 复验仍应优先串行执行真实 API Playwright 命令，避免端口竞争造成误判。
 - **Real API E2E 与 Mock 数据的污染隔离**：在编写定向 `VITE_USE_MOCK=false` 的 Playwright E2E 冒烟测试时，切记不可在断言和定位器中混杂仅前端本地存在的 Mock 数据（如“生意参谋人群提取”）。在 V-P4-TOOLS-5 返修中，正是因为隔离不彻底导致 Real 验证被强行失败。以后所有涉及后端的 real 验证，必须仅针对真实后端注册的数据（如 “Sample Profile Extract”）或使用动态断言进行操作。
+- **前端模块状态边界与生成产物清理**：当 PRD / task brief 明确要求某个工作台模块“状态隔离”、不触发旧链路或不写入既有全局状态时，前端不得为了复用旧流程而写入 App 级 `prediction/currentSku`、下游匹配状态或其他跨模块 state；应使用模块内 state 保存结果，并提供清空/重置动作。运行 Playwright / smoke 后，必须检查并恢复 `apps/web/playwright-report/`、`test-results/` 等生成型报告产物，除非任务明确要求更新这些产物。
 - **Hono Wrapper 与原生 JSON 响应的区别（fetchApi 的局限）**：在接入 `single-product-portrait` 时踩坑发现，尽管大多数后端 API 返回 `{ code, data }` 的统一结构，但 `/api/v0/tools/runs/:runId/artifacts/:artifactId` 是直接返回 `prediction.json` 裸文件的。如果滥用前端的 `fetchApi` 自动解包，会导致拿到 `undefined` 从而使整个页面挂掉。这进一步强化了前文“强制 Adapter 隔离层对齐”的铁律：不同性质的路由接口（数据接口 vs 产物文件下载）必须使用匹配的请求与解析方式。
 - **级联数据与多端测试的 Mock 漂移**：在 P5 的 E2E 测试修复中发现，因删除了旧的同步匹配逻辑，`single-product-portrait` 只返回画像。然而全局 Smoke 测试（`smoke.spec.ts`）后续步骤依然期待生成 `matches` 并前往匹配工作台查看实体列表。如果不在 `runSingleProductPortrait` 的 Mock 逻辑中补偿性地初始化 `db.matches` 和 `db.products`，将会导致完全无关的下游测试因空列表而 timeout。这提醒我们在升级核心组件架构或请求流时，必须全局审视现有 `db.*` 内存 Mock 数据的完整性链条，严防“修改上游毁掉下游 Mock 上下文”的级联灾难。
 

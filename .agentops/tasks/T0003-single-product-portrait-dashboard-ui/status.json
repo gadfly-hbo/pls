@@ -1,0 +1,18 @@
+{
+  "id": "T0003",
+  "slug": "single-product-portrait-dashboard-ui",
+  "status": "approved",
+  "assignee": "kilo",
+  "domain": "frontend",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-08T15:38:54.852Z",
+  "updated_at": "2026-07-08T23:36:54.197Z",
+  "base_ref": "b09951dccbdb1fad97661bcbb4a0652d41d9da8d",
+  "dirty_at_creation": true,
+  "batch": "single-product-portrait-frontend",
+  "sequence": 3,
+  "depends_on": [
+    "T0002"
+  ]
+}

@@ -20,6 +20,7 @@ import newProducts from "./routes/new-products.js";
 import flywheel from "./routes/flywheel.js";
 import adminDatabase from "./routes/admin-database.js";
 import adminDataIngestion from "./routes/admin-data-ingestion.js";
+import singleProductPortrait from "./routes/single-product-portrait.js";
 import tools from "./routes/tools.js";
 
 const app = new Hono();
@@ -50,6 +51,7 @@ api.route("/new-products", newProducts);
 api.route("/operations", flywheel);
 api.route("/admin/database", adminDatabase);
 api.route("/admin/data-ingestion", adminDataIngestion);
+api.route("/single-product-portrait", singleProductPortrait);
 
 app.route("/api/v0", api);
 

@@ -114,6 +114,83 @@ export interface SingleProductPortraitPrediction {
   explanationSources: PortraitEvidence[];
 }
 
+export interface SingleProductPortraitInput {
+  skuId: string;
+  fitType: string;
+  fabric: string;
+  fab: string;
+}
+
+export interface SingleProductPortraitMetricsSummary {
+  labelType: string;
+  top1Overlap: number;
+  top3Overlap: number;
+}
+
+export interface SingleProductPortraitMetadataAvailable {
+  modelAvailable: true;
+  fitTypes: string[];
+  requiredColumns: string[];
+  maxBatchRows: number;
+  maxFileBytes: number;
+  modelVersion: string;
+  trainedAt: string;
+  sampleCount: number;
+  riskFlags: string[];
+  metricsSummary: SingleProductPortraitMetricsSummary[];
+}
+
+export interface SingleProductPortraitMetadataUnavailable {
+  modelAvailable: false;
+  requiredColumns: string[];
+  maxBatchRows: number;
+  maxFileBytes: number;
+  error: {
+    code: 'model_not_available';
+    message: string;
+  };
+}
+
+export type SingleProductPortraitMetadata = SingleProductPortraitMetadataAvailable | SingleProductPortraitMetadataUnavailable;
+
+export interface PortraitInputIssue {
+  code: string;
+  message: string;
+  field?: 'skuId' | 'fitType' | 'fabric' | 'fab' | 'file';
+  rawValue?: string;
+  rowNumber?: number;
+  skuId?: string;
+}
+
+export interface SingleProductPortraitBatchPreview {
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  fileErrors: PortraitInputIssue[];
+  rowErrors: PortraitInputIssue[];
+  warnings: PortraitInputIssue[];
+  extraColumns: string[];
+  requiredColumns: string[];
+}
+
+export interface SingleProductPortraitBatchResultRow {
+  rowNumber: number;
+  skuId: string;
+  prediction: SingleProductPortraitPrediction;
+}
+
+export interface SingleProductPortraitBatchExecute {
+  totalRows: number;
+  successCount: number;
+  failureCount: number;
+  warningCount: number;
+  results: SingleProductPortraitBatchResultRow[];
+  fileErrors: PortraitInputIssue[];
+  rowErrors: PortraitInputIssue[];
+  warnings: PortraitInputIssue[];
+  metadata: SingleProductPortraitMetadata;
+}
+
 export interface ProductProfile {
   predictionId: string;
   workspaceId: string;

@@ -171,6 +171,114 @@ Gating:
 - `mock_sample` packages are explicitly flagged and never treated as real calibration evidence.
 - `baseline_not_trained_model` is preserved; the framework does not train neural networks.
 
+## P5-PORTRAIT Supervised Phase (Q2 真实样本)
+
+`src/single-product-portrait-supervised.ts` trains per-dimension Ridge regressions from `版型 / 面料 / FAB` to platform portrait label shares, using the 73 Q2 labeled products.
+
+Data preparation:
+
+```bash
+npm run single-product-portrait-train
+```
+
+This reads the user-provided files and writes a standard sample package plus `model.json` to `data/local/single-product-portrait-q2-73sample/`.
+
+Train + evaluate (LOO):
+
+```bash
+npm run single-product-portrait-train
+npm run single-product-portrait-eval
+```
+
+Predict a new product:
+
+```bash
+npm run single-product-portrait-predict-supervised -- \
+  --sku NEW_SKU \
+  --fit 修身型 \
+  --fabric 全棉 \
+  --fab "修身显瘦通勤T恤，舒适亲肤"
+```
+
+Server import contract:
+
+- Import `buildSingleProductPortraitModelMetadata()` to serve metadata. It returns `modelAvailable: false` with `error.code = "model_not_available"` when `model.json` is missing or unreadable.
+- Import `predictSingleProductPortraitFromCleanInput()` for single-row clean input prediction with `{ skuId, fitType, fabric, fab }`. It throws `SingleProductPortraitModelUnavailableError` with `code = "model_not_available"` when the model cannot be loaded.
+- Default model path is `data/local/single-product-portrait-q2-73sample/model.json`, resolved from the repo root by the model module.
+- Server-side override uses `SINGLE_PRODUCT_PORTRAIT_MODEL_PATH`; API requests must not pass arbitrary local model paths.
+- Metadata includes `modelAvailable`, `fitTypes`, `requiredColumns`, `maxBatchRows`, `maxFileBytes`, `modelVersion`, `trainedAt`, `sampleCount`, `riskFlags`, and `metricsSummary`.
+
+Batch predict from an Excel with `款号 / 版型 / 面料 / FAB` columns:
+
+```bash
+npm run single-product-portrait-predict-batch -- \
+  --input /Users/huangbo/Downloads/Q1商品信息.xlsx \
+  --output /tmp/q1_portrait_predictions.json \
+  --topN 3
+```
+
+Input fields:
+
+- `fitType`: 版型. Missing values are imputed as `X型`.
+- `fabric`: 面料.
+- `fab`: FAB 综合描述.
+
+First-phase target dimensions:
+
+- `预测性别`
+- `预测年龄段`
+- `预测消费能力`
+- `城市等级`
+- `八大消费群体`
+- `预测人生阶段`
+
+Feature engineering:
+
+- `版型` is one-hot encoded after category normalization (`修身/紧身/收腰/X型` -> slim, `宽松/阔腿/直筒` -> loose, etc.).
+- `面料` and `FAB` are keyword-matched against fabric, style, function, and scene dictionaries.
+
+Model:
+
+- Closed-form Ridge regression per label per dimension.
+- Feature standardization before fitting; intercept computed on original scale.
+- Closed dimensions renormalize to sum 1 after top-N slicing.
+
+Evaluation uses leave-one-out on the 73 samples and reports:
+
+- `top1OverlapMean` / `top3OverlapMean`
+- `closedDimensionMassErrorMean`
+- Per-dimension `top1Overlap`, `top3Overlap`, `massError`
+
+Current LOO results:
+
+| Dimension | top1 overlap | top3 overlap |
+|---|---|---|
+| 预测性别 | 87.7% | 100.0% |
+| 预测人生阶段 | 80.8% | 100.0% |
+| 预测年龄段 | 68.5% | 80.4% |
+| 预测消费能力 | 63.0% | 100.0% |
+| 城市等级 | 39.7% | 77.6% |
+| 八大消费群体 | 31.5% | 81.3% |
+
+Risk flags:
+
+- `baseline_not_trained_model`
+- `small_sample_supervised_model`
+- `no_temporal_validation`
+
+Limitations:
+
+- 73 samples with LOO validation only; no time-split or holdout generalization claim.
+- TGI is `null` because no platform population benchmark is available.
+- The model is interpretable but high-cardinality dimensions (城市等级, 八大消费群体) are noisy with this sample size.
+
+Run tests:
+
+```bash
+npm run single-product-portrait-supervised-contract-test
+npm run single-product-portrait-supervised-smoke
+```
+
 ## C3 Follow-Up
 
 See `../../docs/model-c3-prep.md` for `unmappedInputTokens` handling, P1 time-split data requirements, and A adapter contract test expectations.

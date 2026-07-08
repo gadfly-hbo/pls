@@ -2,26 +2,39 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-06（M-P6-CHANNEL-2 渠道画像 2.0 商品适配与活动/场景权重匹配契约总控审核通过）
+最近更新：2026-07-08（Q2 监督画像模型 server import 契约冻结）
 
 进度：
 
-- 新增 `apps/model/src/channel-entity-fit.ts`：定义 `ChannelEntityFit` contract、`audienceFit`、`productFit`、`baseScore`、`contextWeightAdjustments` 与 `contextAdjustedScore`。
-- 冻结 `baseScore = 0.7 * audienceFit + 0.3 * productFit`；缺少 `ProductFitProfile` 时降级为 `audienceFit` 并标记 `missing_product_fit_profile`。
-- 活动/场景只作为 `baseScore` 的权重乘数调节，不生成独立 `eventScore` / `scenarioScore`。
-- 新增 `apps/model/src/channel-entity-fit-contract-test.ts`，覆盖 6 个最小场景。
-- 新增 `docs/model-p6-channel-entity-fit-contract.md` 记录公式、权重、降级策略、drivers、质量标记与测试覆盖；已纳入 `docs/README.md` 文档索引。
+- 新增 `apps/model/src/q2-portrait-data-prep.ts`：读取 `/Users/huangbo/Downloads/Q2有画像款.xlsx` 与 `/Users/huangbo/Downloads/单款画像/*.csv`，对齐生成标准样本包到 `data/local/single-product-portrait-q2-73sample/`，73 个样本全部匹配。
+- 新增 `apps/model/src/single-product-portrait-supervised.ts`：基于 `版型 / 面料 / FAB` 三字段训练分维度 Ridge 回归模型；特征工程包括版型 one-hot、面料/FAB 关键词字典（面料成分、风格、功能、场景）。
+- 第一轮目标维度已覆盖：`预测性别`、`预测年龄段`、`预测消费能力`、`城市等级`、`八大消费群体`、`预测人生阶段`。
+- 缺失版型按约定填为 `X型`；closed dimension 在 top-N 切片后重新归一化，保证剩余标签 share 和为 1。
+- 新增 LOO 验证框架：73 折 leave-one-out，输出 `top1OverlapMean`、`top3OverlapMean`、`closedDimensionMassErrorMean`、per-dimension 指标。
+- 修改 `apps/model/src/single-product-portrait.ts`：放宽 `PlatformPortraitRow.source` 和 `SingleProductPortraitPrediction.modelVersion/modelPath` 类型；新增风险标记 `small_sample_supervised_model`、`no_temporal_validation`。
+- 新增 CLI 命令与 npm scripts：`single-product-portrait-train`、`single-product-portrait-eval`、`single-product-portrait-predict-supervised`、`single-product-portrait-predict-batch`。
+- 新增批量预测入口：读取含 `款号 / 版型 / 面料 / FAB` 的 Excel，输出每款的 6 维度画像。
+- 新增测试：`single-product-portrait-supervised-contract-test.ts`、`single-product-portrait-supervised-smoke.ts`。
+- 冻结 server import 契约：A 域可从 `apps/model/src/single-product-portrait-supervised.ts` 导入 `buildSingleProductPortraitModelMetadata()`、`predictSingleProductPortraitFromCleanInput()`、`SingleProductPortraitModelUnavailableError`、`CleanSingleProductPortraitInput`、`SingleProductPortraitModelMetadata`。
+- `model.json` 默认路径由模型模块解析到 `data/local/single-product-portrait-q2-73sample/model.json`，服务端可用 `SINGLE_PRODUCT_PORTRAIT_MODEL_PATH` 覆盖；metadata 对缺失/不可读模型返回 `modelAvailable: false` + `model_not_available`，预测函数抛 `SingleProductPortraitModelUnavailableError` 供 A 域映射。
+- metadata 字段来源：`fitTypes` 来自训练样本写入的模型对象，`sampleCount/trainedAt/modelVersion` 来自模型文件，`requiredColumns/maxBatchRows/maxFileBytes/riskFlags` 来自模型模块常量，`metricsSummary` 来自当前 Q2 73 样本 LOO 验证摘要。
 
 本次验证：
 
 - `apps/model npm run typecheck` 通过。
-- `npm run channel-entity-fit-contract-test` 通过，6 个场景 `failures: []`。
-- `npm run contract-test`、`npm run account-fit-contract-test` 回归通过。
+- `npm run single-product-portrait-supervised-contract-test` 通过，`ok: true` / `failures: []`。
+- `npm run single-product-portrait-supervised-smoke` 通过，LOO 指标与预测输出结构符合预期。
+- `npm run single-product-portrait-train` 通过，生成 `data/local/single-product-portrait-q2-73sample/model.json`。
+- `npm run single-product-portrait-eval` 通过，当前 LOO top1 overlap：性别 87.7%、人生阶段 80.8%、年龄段 68.5%、消费能力 63.0%、城市等级 39.7%、消费群体 31.5%。
+- 回归验证：`npm run contract-test`、`npm run single-product-portrait-contract-test`、`npm run single-product-portrait-calibration-contract-test`、`npm run validate-tags`、`npm run account-fit-contract-test` 均通过。
+- Q1 新品批量预测验证：`npm run single-product-portrait-predict-batch -- --input /Users/huangbo/Downloads/Q1商品信息.xlsx --output /tmp/q1_portrait_predictions.json --topN 3` 成功输出 95 款预测结果。
 
 阻塞/开放：
 
-- 当前为第一期 contract baseline，不是已训练模型；正式 fit formula 需用户 / X 总控拍板后替换。
-- 活动/场景规则映射目前为最小集合，后续扩展需回流 X 总控。
+- 当前为 73 样本 LOO 验证，没有时间切分 holdout，不声明泛化能力。
+- 平台大盘 TGI 基准仍缺失，所有 `tgi` 输出为 `null`。
+- 高基数维度（城市等级、八大消费群体）在 73 样本下仍不稳定，需要更多样本或引入 hierarchy / regularization 调优。
+- 面料/FAB 关键词字典为最小集合，后续需根据业务反馈扩展。
 
 ### 上一轮状态（M-P5-PORTRAIT-7）
 
@@ -73,6 +86,20 @@
 - 决策：`contextDrivers` 只解释生效规则对排序的影响，未命中商品信号的规则标记 `active: false` 但不影响分数。
 - 踩坑：若把活动/场景权重直接加到维度权重里重新计算 `audienceFit`，会在渠道缺少该维度时反而降低分数；因此改为在 `baseScore` 上乘以乘数，只对商品-场景对齐部分加权。
 - 风险：当前活动/场景规则映射为最小集合，传统节日、平台大促、新品首发、会员复购等规则需用户 / X 总控确认后固化；未确认的规则不应直接用于生产排序。
+
+## Q2 真实样本监督画像模型收尾记录
+
+- 决策：采用方案 A（分维度可解释 Ridge 回归），只用 `版型 / 面料 / FAB` 三字段，缺失版型填 `X型`。
+- 决策：第一轮目标维度限定为 `预测性别`、`预测年龄段`、`预测消费能力`、`城市等级`、`八大消费群体`、`预测人生阶段`。
+- 决策：保留 `baseline_not_trained_model` 风险标记，因为缺少时间切分验证；同时增加 `small_sample_supervised_model` 和 `no_temporal_validation`。
+- 决策：closed dimension 在 top-N 输出后重新归一化，避免切片导致 share 和小于 1。
+- 决策：批量预测入口只认 `款号 / 版型 / 面料 / FAB` 四列，缺失版型自动填 `X型`，不依赖其他字段。
+- 踩坑：`predictDimension` 先全局归一化再切片，contract test 发现 `预测年龄段`、`城市等级`、`八大消费群体` 的 closed share 和不等于 1；修复后在 `predictSupervisedPortrait` 中对 closed dimension 切片结果二次归一化。
+- 踩坑：测试文件类型错误（`assert` 接收 `string | undefined`、`fmtPct` 接收 `number | null`）导致 `typecheck` 失败；修复后 `typecheck` 通过。
+- 踩坑：LOO aggregate `massError` 最初误把所有 closed dimension 加总到一个维度上，导致 per-dimension mass error 失真；修复为只累加当前维度的 predicted rows。
+- 风险：73 样本 LOO 不能替代时间切分 holdout，不能向业务宣称为最终泛化精度。
+- 风险：城市等级、八大消费群体高基数维度 top1 仅 39.7% / 31.5%，样本量增加或引入 hierarchy 后才可能稳定。
+- 风险：面料/FAB 关键词字典为最小集合，某些特殊面料或风格词可能未命中，导致特征稀疏。
 
 ## 模型域原则
 

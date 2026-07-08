@@ -16,7 +16,9 @@ export type SingleProductPortraitRisk =
   | "low_input_coverage"
   | "platform_label_unmapped"
   | "csv_source_row_anomaly"
-  | "anchor_product_attributes_missing";
+  | "anchor_product_attributes_missing"
+  | "small_sample_supervised_model"
+  | "no_temporal_validation";
 
 export interface PortraitEvidence {
   sourceField: string;
@@ -34,7 +36,7 @@ export interface PlatformPortraitRow {
   label: string;
   share: number | null;
   tgi: number | null;
-  source: "single_product_portrait_rule_baseline";
+  source: string;
   confidence: number;
   evidence: PortraitEvidence[];
   qualityFlags: string[];
@@ -79,8 +81,8 @@ export interface SingleProductPortraitInput {
 export interface SingleProductPortraitPrediction {
   skuId: string;
   generatedAt: string;
-  modelVersion: typeof SINGLE_PRODUCT_PORTRAIT_MODEL_VERSION;
-  modelPath: "rule_baseline";
+  modelVersion: string;
+  modelPath: string;
   sourceType: "derived";
   anchorSkuId: typeof ANCHOR_SKU_ID;
   inputCoverage: {

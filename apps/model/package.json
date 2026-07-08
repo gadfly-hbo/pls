@@ -21,6 +21,12 @@
     "single-product-portrait-calibrate": "../server/node_modules/.bin/tsx src/cli.ts single-product-portrait-calibrate",
     "single-product-portrait-calibration-contract-test": "../server/node_modules/.bin/tsx src/single-product-portrait-calibration-contract-test.ts",
     "single-product-portrait-calibration-smoke": "../server/node_modules/.bin/tsx src/single-product-portrait-calibration-smoke.ts",
+    "single-product-portrait-train": "../server/node_modules/.bin/tsx src/cli.ts single-product-portrait-train",
+    "single-product-portrait-eval": "../server/node_modules/.bin/tsx src/cli.ts single-product-portrait-eval",
+    "single-product-portrait-predict-supervised": "../server/node_modules/.bin/tsx src/cli.ts single-product-portrait-predict-supervised",
+    "single-product-portrait-predict-batch": "../server/node_modules/.bin/tsx src/cli.ts single-product-portrait-predict-batch",
+    "single-product-portrait-supervised-contract-test": "../server/node_modules/.bin/tsx src/single-product-portrait-supervised-contract-test.ts",
+    "single-product-portrait-supervised-smoke": "../server/node_modules/.bin/tsx src/single-product-portrait-supervised-smoke.ts",
     "typecheck": "../server/node_modules/.bin/tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

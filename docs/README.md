@@ -21,6 +21,7 @@
 | [channel-profile-2.0-plan.md](channel-profile-2.0-plan.md) | X 总控 | 渠道画像 2.0 对象库、活动/场景、导入、匹配权重和第一期范围 |
 | [model-p6-channel-entity-fit-contract.md](model-p6-channel-entity-fit-contract.md) | M | 渠道画像 2.0 商品适配与活动/场景权重匹配契约 |
 | [single-product-portrait-algorithm-contract.md](single-product-portrait-algorithm-contract.md) | X 总控 | 单品商品属性到平台人群画像的规则 baseline contract、输出形态、验证标准和实现任务边界 |
+| [prd-single-product-portrait-frontend.md](prd-single-product-portrait-frontend.md) | X 总控 | Q2 监督单品画像模型前端落地 PRD、单款/批量预测、metadata、API、错误码和任务拆分 |
 | [p5-portrait-baseline-acceptance.md](p5-portrait-baseline-acceptance.md) | X 总控 | 单品画像规则 baseline 总体验收、第一期展示边界和后续任务顺序 |
 | [p5-portrait-bridge-review.md](p5-portrait-bridge-review.md) | X 总控 | 单品平台画像到 PLS taxonomy 的 bridge 映射边界、不可映射理由和 taxonomy 扩展提案条件 |
 | [api-contract.md](api-contract.md) | A | P0 API 契约、核心对象、接口清单、V 域调用序列 |

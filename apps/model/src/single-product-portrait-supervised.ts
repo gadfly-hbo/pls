@@ -1,0 +1,1041 @@
+/**
+ * Supervised single-product portrait model (M-P5-PORTRAIT supervised phase).
+ *
+ * Trains per-dimension Ridge regressions from 版型 / 面料 / FAB to platform
+ * portrait label shares. Designed for small-sample, interpretable prediction.
+ *
+ * Constraints:
+ * - Does not claim generalization without time-split validation.
+ * - Keeps risk flags: baseline_not_trained_model, small_sample_supervised_model,
+ *   no_temporal_validation.
+ * - First-phase targets: 预测性别, 预测年龄段, 预测消费能力, 城市等级,
+ *   八大消费群体, 预测人生阶段.
+ */
+
+import { readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import * as XLSX from "xlsx";
+import {
+  ANCHOR_SKU_ID,
+  type ParsedPortraitAnchor,
+  type PlatformPortraitRow,
+  type PortraitEvidence,
+  type SingleProductPortraitPrediction,
+  type SingleProductPortraitRisk,
+} from "./single-product-portrait.js";
+import { loadSingleProductPortraitSamplePackage, type PortraitSamplePackage } from "./single-product-portrait-calibration.js";
+
+export const SUPERVISED_PORTRAIT_MODEL_VERSION = "single-product-portrait-supervised-ridge-0.1";
+export const SINGLE_PRODUCT_PORTRAIT_DEFAULT_MODEL_PATH = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../../data/local/single-product-portrait-q2-73sample/model.json",
+);
+export const SINGLE_PRODUCT_PORTRAIT_MODEL_PATH_ENV = "SINGLE_PRODUCT_PORTRAIT_MODEL_PATH";
+export const SINGLE_PRODUCT_PORTRAIT_REQUIRED_COLUMNS = ["款号", "版型", "面料", "FAB"] as const;
+export const SINGLE_PRODUCT_PORTRAIT_MAX_BATCH_ROWS = 100;
+export const SINGLE_PRODUCT_PORTRAIT_MAX_FILE_BYTES = 2 * 1024 * 1024;
+export const SUPERVISED_PORTRAIT_RISK_FLAGS: SingleProductPortraitRisk[] = [
+  "baseline_not_trained_model",
+  "small_sample_supervised_model",
+  "no_temporal_validation",
+];
+export const SUPERVISED_TARGET_DIMENSIONS = [
+  "预测性别",
+  "预测年龄段",
+  "预测消费能力",
+  "城市等级",
+  "八大消费群体",
+  "预测人生阶段",
+] as const;
+
+export type SupervisedTargetDimension = (typeof SUPERVISED_TARGET_DIMENSIONS)[number];
+
+export interface PortraitTrainingSample {
+  skuId: string;
+  sourceProductKey?: string;
+  fitType: string;
+  fabric: string;
+  fab: string;
+}
+
+export interface DimensionModel {
+  labelType: string;
+  isClosed: boolean;
+  labels: string[];
+  featureNames: string[];
+  weights: number[][]; // weights[labelIndex][featureIndex]
+  intercepts: number[]; // intercept[labelIndex]
+  featureMean: number[];
+  featureStd: number[];
+  alpha: number;
+}
+
+export interface SupervisedPortraitModel {
+  version: typeof SUPERVISED_PORTRAIT_MODEL_VERSION;
+  trainedAt: string;
+  sampleCount: number;
+  fitTypes: string[];
+  targetDimensions: string[];
+  dimensionModels: DimensionModel[];
+  featureExtractorVersion: string;
+}
+
+export interface SupervisedPortraitMetricsSummary {
+  labelType: SupervisedTargetDimension;
+  top1Overlap: number;
+  top3Overlap: number;
+}
+
+export interface SingleProductPortraitModelMetadataAvailable {
+  modelAvailable: true;
+  fitTypes: string[];
+  requiredColumns: readonly string[];
+  maxBatchRows: number;
+  maxFileBytes: number;
+  modelVersion: string;
+  trainedAt: string;
+  sampleCount: number;
+  riskFlags: SingleProductPortraitRisk[];
+  metricsSummary: SupervisedPortraitMetricsSummary[];
+}
+
+export interface SingleProductPortraitModelMetadataUnavailable {
+  modelAvailable: false;
+  requiredColumns: readonly string[];
+  maxBatchRows: number;
+  maxFileBytes: number;
+  error: {
+    code: "model_not_available";
+    message: string;
+  };
+}
+
+export type SingleProductPortraitModelMetadata =
+  | SingleProductPortraitModelMetadataAvailable
+  | SingleProductPortraitModelMetadataUnavailable;
+
+export interface CleanSingleProductPortraitInput {
+  skuId: string;
+  fitType: string;
+  fabric: string;
+  fab: string;
+}
+
+export interface SingleProductPortraitServiceOptions {
+  modelPath?: string;
+  model?: SupervisedPortraitModel;
+  outputTopNPerDimension?: number;
+}
+
+export class SingleProductPortraitModelUnavailableError extends Error {
+  readonly code = "model_not_available" as const;
+
+  constructor(message = "模型文件未生成或不可读取，请先训练模型", options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "SingleProductPortraitModelUnavailableError";
+  }
+}
+
+export const SUPERVISED_PORTRAIT_METRICS_SUMMARY: SupervisedPortraitMetricsSummary[] = [
+  { labelType: "预测性别", top1Overlap: 0.877, top3Overlap: 1.0 },
+  { labelType: "预测人生阶段", top1Overlap: 0.808, top3Overlap: 1.0 },
+  { labelType: "预测年龄段", top1Overlap: 0.685, top3Overlap: 0.804 },
+  { labelType: "预测消费能力", top1Overlap: 0.63, top3Overlap: 1.0 },
+  { labelType: "城市等级", top1Overlap: 0.397, top3Overlap: 0.776 },
+  { labelType: "八大消费群体", top1Overlap: 0.315, top3Overlap: 0.813 },
+];
+
+export type SupervisedPortraitInput = PortraitTrainingSample;
+
+export interface TrainSupervisedOptions {
+  packagePath: string;
+  alpha?: number;
+  outputPath?: string;
+}
+
+export interface PredictSupervisedOptions {
+  input: SupervisedPortraitInput;
+  model: SupervisedPortraitModel;
+  outputTopNPerDimension?: number;
+}
+
+export interface EvaluateSupervisedOptions {
+  packagePath: string;
+  alpha?: number;
+}
+
+export interface SupervisedEvaluationResult {
+  status: "ok" | "not_enough_labeled_samples";
+  sampleCount: number;
+  folds: SupervisedEvaluationFold[];
+  aggregateMetrics: SupervisedAggregateMetrics;
+  riskFlags: string[];
+  notEnoughSamplesReason?: string;
+}
+
+export interface SupervisedEvaluationFold {
+  skuId: string;
+  sourceProductKey?: string;
+  actualRows: PlatformPortraitRow[];
+  predictedRows: PlatformPortraitRow[];
+  top3Overlap: number;
+  top1Overlap: number;
+}
+
+export interface SupervisedAggregateMetrics {
+  top1OverlapMean: number;
+  top3OverlapMean: number;
+  closedDimensionMassErrorMean: number;
+  dimensionCoverageRate: number;
+  perDimension: Record<string, { top1Overlap: number; top3Overlap: number; massError: number }>;
+}
+
+// ---------------------------------------------------------------------------
+// Feature dictionaries
+// ---------------------------------------------------------------------------
+
+const FIT_TYPE_CATEGORIES: Record<string, string[]> = {
+  slim: ["修身", "紧身", "收腰", "X型"],
+  loose: ["宽松", "阔腿", "直筒", "小宽松", "特宽松"],
+  regular: ["合体", "合体型"],
+  a_line: ["A型", "A字"],
+  h_line: ["H型"],
+  o_line: ["O型"],
+};
+
+const FABRIC_KEYWORDS: Array<{ keyword: string; canonical: string }> = [
+  { keyword: "棉", canonical: "fabric_cotton" },
+  { keyword: "氨纶", canonical: "fabric_spandex" },
+  { keyword: "莱赛尔", canonical: "fabric_lyocell" },
+  { keyword: "天丝", canonical: "fabric_lyocell" },
+  { keyword: "涤纶", canonical: "fabric_polyester" },
+  { keyword: "聚酯纤维", canonical: "fabric_polyester" },
+  { keyword: "粘胶", canonical: "fabric_viscose" },
+  { keyword: "粘纤", canonical: "fabric_viscose" },
+  { keyword: "腈纶", canonical: "fabric_acrylic" },
+  { keyword: "锦纶", canonical: "fabric_nylon" },
+  { keyword: "尼龙", canonical: "fabric_nylon" },
+  { keyword: "莫代尔", canonical: "fabric_modal" },
+  { keyword: "羊毛", canonical: "fabric_wool" },
+  { keyword: "真丝", canonical: "fabric_silk" },
+  { keyword: "桑蚕丝", canonical: "fabric_silk" },
+  { keyword: "牛仔", canonical: "fabric_denim" },
+  { keyword: "雪纺", canonical: "fabric_chiffon" },
+  { keyword: "罗纹", canonical: "fabric_rib" },
+  { keyword: "针织", canonical: "fabric_knit" },
+  { keyword: "梭织", canonical: "fabric_woven" },
+  { keyword: "混纺", canonical: "fabric_blend" },
+  { keyword: "交织", canonical: "fabric_blend" },
+  { keyword: "混交", canonical: "fabric_blend" },
+];
+
+const STYLE_KEYWORDS: Array<{ keyword: string; canonical: string }> = [
+  { keyword: "复古", canonical: "style_vintage" },
+  { keyword: "怀旧", canonical: "style_vintage" },
+  { keyword: "休闲", canonical: "style_casual" },
+  { keyword: "松弛", canonical: "style_casual" },
+  { keyword: "慵懒", canonical: "style_casual" },
+  { keyword: "舒适", canonical: "style_casual" },
+  { keyword: "通勤", canonical: "style_commute" },
+  { keyword: "职场", canonical: "style_commute" },
+  { keyword: "办公", canonical: "style_commute" },
+  { keyword: "商务", canonical: "style_commute" },
+  { keyword: "干练", canonical: "style_commute" },
+  { keyword: "运动", canonical: "style_sporty" },
+  { keyword: "健身", canonical: "style_sporty" },
+  { keyword: "瑜伽", canonical: "style_sporty" },
+  { keyword: "户外", canonical: "style_outdoor" },
+  { keyword: "工装", canonical: "style_utilitarian" },
+  { keyword: "机能", canonical: "style_utilitarian" },
+  { keyword: "甜美", canonical: "style_sweet" },
+  { keyword: "俏皮", canonical: "style_sweet" },
+  { keyword: "可爱", canonical: "style_sweet" },
+  { keyword: "简约", canonical: "style_minimal" },
+  { keyword: "极简", canonical: "style_minimal" },
+  { keyword: "基础", canonical: "style_minimal" },
+  { keyword: "设计感", canonical: "style_designer" },
+  { keyword: "解构", canonical: "style_designer" },
+  { keyword: "拼接", canonical: "style_designer" },
+  { keyword: "不对称", canonical: "style_designer" },
+  { keyword: "显瘦", canonical: "style_slimming" },
+  { keyword: "修身", canonical: "style_slimming" },
+  { keyword: "收腰", canonical: "style_slimming" },
+  { keyword: "宽松", canonical: "style_loose" },
+  { keyword: "廓形", canonical: "style_loose" },
+  { keyword: "oversize", canonical: "style_loose" },
+  { keyword: "包容", canonical: "style_loose" },
+  { keyword: "学院", canonical: "style_preppy" },
+  { keyword: "校园", canonical: "style_preppy" },
+  { keyword: "青春", canonical: "style_preppy" },
+  { keyword: "文艺", canonical: "style_artsy" },
+  { keyword: "高知", canonical: "style_artsy" },
+  { keyword: "科技", canonical: "style_tech" },
+  { keyword: "三防", canonical: "style_tech" },
+  { keyword: "环保", canonical: "style_eco" },
+  { keyword: "森柔", canonical: "style_eco" },
+  { keyword: "高级", canonical: "style_premium" },
+  { keyword: "精致", canonical: "style_premium" },
+  { keyword: "轻奢", canonical: "style_premium" },
+  { keyword: "辣妹", canonical: "style_trendy" },
+  { keyword: "街头", canonical: "style_trendy" },
+  { keyword: "潮流", canonical: "style_trendy" },
+  { keyword: "法式", canonical: "style_french" },
+  { keyword: "优雅", canonical: "style_elegant" },
+  { keyword: "温柔", canonical: "style_gentle" },
+];
+
+const FUNCTION_KEYWORDS: Array<{ keyword: string; canonical: string }> = [
+  { keyword: "三防", canonical: "func_waterproof" },
+  { keyword: "防护", canonical: "func_protective" },
+  { keyword: "凉感", canonical: "func_cooling" },
+  { keyword: "弹力", canonical: "func_stretch" },
+  { keyword: "透气", canonical: "func_breathable" },
+  { keyword: "亲肤", canonical: "func_skinfriendly" },
+  { keyword: "防晒", canonical: "func_sunproof" },
+  { keyword: "抗菌", canonical: "func_antibacterial" },
+  { keyword: "易打理", canonical: "func_easycare" },
+  { keyword: "速干", canonical: "func_quickdry" },
+  { keyword: "保暖", canonical: "func_warm" },
+  { keyword: "垂坠", canonical: "func_drape" },
+  { keyword: "挺括", canonical: "func_structured" },
+];
+
+const SCENE_KEYWORDS: Array<{ keyword: string; canonical: string }> = [
+  { keyword: "日常", canonical: "scene_daily" },
+  { keyword: "约会", canonical: "scene_date" },
+  { keyword: "聚会", canonical: "scene_party" },
+  { keyword: "上班", canonical: "scene_work" },
+  { keyword: "出游", canonical: "scene_travel" },
+  { keyword: "度假", canonical: "scene_vacation" },
+  { keyword: "居家", canonical: "scene_home" },
+];
+
+// ---------------------------------------------------------------------------
+// Feature extraction
+// ---------------------------------------------------------------------------
+
+function categorizeFitType(fitType: string): string {
+  const lower = fitType.toLowerCase();
+  for (const [category, patterns] of Object.entries(FIT_TYPE_CATEGORIES)) {
+    if (patterns.some((p) => lower.includes(p.toLowerCase()))) return category;
+  }
+  return "other";
+}
+
+function extractKeywords(text: string, dictionary: Array<{ keyword: string; canonical: string }>): Record<string, number> {
+  const lower = text.toLowerCase();
+  const found = new Map<string, number>();
+  for (const { keyword, canonical } of dictionary) {
+    if (lower.includes(keyword.toLowerCase())) {
+      found.set(canonical, (found.get(canonical) ?? 0) + 1);
+    }
+  }
+  return Object.fromEntries(found);
+}
+
+function mergeCounts(...records: Record<string, number>[]): Record<string, number> {
+  const merged = new Map<string, number>();
+  for (const record of records) {
+    for (const [key, value] of Object.entries(record)) {
+      merged.set(key, (merged.get(key) ?? 0) + value);
+    }
+  }
+  return Object.fromEntries(merged);
+}
+
+export function extractSupervisedFeatures(sample: PortraitTrainingSample): Record<string, number> {
+  const fitCategory = categorizeFitType(sample.fitType);
+  const fitOneHot: Record<string, number> = { [`fit_${fitCategory}`]: 1 };
+
+  const fabricFeatures = extractKeywords(sample.fabric, FABRIC_KEYWORDS);
+  const fabStyleFeatures = extractKeywords(sample.fab, STYLE_KEYWORDS);
+  const fabFunctionFeatures = extractKeywords(sample.fab, FUNCTION_KEYWORDS);
+  const fabSceneFeatures = extractKeywords(sample.fab, SCENE_KEYWORDS);
+
+  // Also extract fabric keywords from FAB
+  const fabFabricFeatures = extractKeywords(sample.fab, FABRIC_KEYWORDS);
+
+  return mergeCounts(fitOneHot, fabricFeatures, fabFabricFeatures, fabStyleFeatures, fabFunctionFeatures, fabSceneFeatures);
+}
+
+// ---------------------------------------------------------------------------
+// Matrix helpers
+// ---------------------------------------------------------------------------
+
+function transpose(matrix: number[][]): number[][] {
+  if (matrix.length === 0) return [];
+  return matrix[0]!.map((_, j) => matrix.map((row) => row[j]!));
+}
+
+function matMul(a: number[][], b: number[][]): number[][] {
+  const result: number[][] = [];
+  for (let i = 0; i < a.length; i++) {
+    result[i] = [];
+    for (let j = 0; j < b[0]!.length; j++) {
+      let sum = 0;
+      for (let k = 0; k < b.length; k++) {
+        sum += a[i]![k]! * b[k]![j]!;
+      }
+      result[i]![j] = sum;
+    }
+  }
+  return result;
+}
+
+function matVecMul(a: number[][], v: number[]): number[] {
+  return a.map((row) => row.reduce((sum, value, j) => sum + value * (v[j] ?? 0), 0));
+}
+
+function addIdentity(matrix: number[][], alpha: number): number[][] {
+  return matrix.map((row, i) => row.map((value, j) => (i === j ? value + alpha : value)));
+}
+
+function invertMatrix(matrix: number[][]): number[][] {
+  const n = matrix.length;
+  // Augment with identity
+  const aug: number[][] = matrix.map((row, i) => [
+    ...row,
+    ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0)),
+  ]);
+
+  // Gaussian elimination
+  for (let i = 0; i < n; i++) {
+    // Partial pivoting
+    let maxRow = i;
+    for (let k = i + 1; k < n; k++) {
+      if (Math.abs(aug[k]![i]!) > Math.abs(aug[maxRow]![i]!)) maxRow = k;
+    }
+    if (Math.abs(aug[maxRow]![i]!) < 1e-12) {
+      throw new Error("Matrix is singular or nearly singular");
+    }
+    [aug[i], aug[maxRow]] = [aug[maxRow]!, aug[i]!];
+
+    // Normalize pivot row
+    const pivot = aug[i]![i]!;
+    for (let j = 0; j < 2 * n; j++) {
+      aug[i]![j]! /= pivot;
+    }
+
+    // Eliminate other rows
+    for (let k = 0; k < n; k++) {
+      if (k === i) continue;
+      const factor = aug[k]![i]!;
+      for (let j = 0; j < 2 * n; j++) {
+        aug[k]![j]! -= factor * aug[i]![j]!;
+      }
+    }
+  }
+
+  // Extract inverse
+  return aug.map((row) => row.slice(n));
+}
+
+// ---------------------------------------------------------------------------
+// Standardization
+// ---------------------------------------------------------------------------
+
+function computeMeanStd(values: number[]): { mean: number; std: number } {
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length;
+  const std = Math.sqrt(variance) || 1; // avoid zero std
+  return { mean, std };
+}
+
+function standardize(matrix: number[][]): { scaled: number[][]; means: number[]; stds: number[] } {
+  const featureCount = matrix[0]?.length ?? 0;
+  const means: number[] = [];
+  const stds: number[] = [];
+
+  for (let j = 0; j < featureCount; j++) {
+    const column = matrix.map((row) => row[j]!);
+    const { mean, std } = computeMeanStd(column);
+    means.push(mean);
+    stds.push(std);
+  }
+
+  const scaled = matrix.map((row) => row.map((value, j) => (value - means[j]!) / stds[j]!));
+  return { scaled, means, stds };
+}
+
+// ---------------------------------------------------------------------------
+// Ridge regression
+// ---------------------------------------------------------------------------
+
+function trainRidge(X: number[][], y: number[], alpha: number): { weights: number[]; intercept: number } {
+  const featureCount = X[0]?.length ?? 0;
+  const Xt = transpose(X);
+  const XtX = matMul(Xt, X);
+  const XtX_reg = addIdentity(XtX, alpha);
+  const XtX_inv = invertMatrix(XtX_reg);
+  const Xty = matVecMul(Xt, y);
+  const weights = matVecMul(XtX_inv, Xty);
+
+  // Compute intercept on original scale
+  const yMean = y.reduce((a, b) => a + b, 0) / y.length;
+  const featureMeans = X[0]?.map((_, j) => X.reduce((sum, row) => sum + row[j]!, 0) / X.length) ?? [];
+  const intercept = yMean - weights.reduce((sum, w, j) => sum + w * featureMeans[j]!, 0);
+
+  return { weights, intercept };
+}
+
+// ---------------------------------------------------------------------------
+// Data loading
+// ---------------------------------------------------------------------------
+
+export function loadSupervisedTrainingData(packagePath: string): {
+  samples: PortraitTrainingSample[];
+  targetsByDimension: Map<string, Map<string, number[]>>;
+  package: PortraitSamplePackage;
+} {
+  const pkg = loadSingleProductPortraitSamplePackage(packagePath);
+
+  const samples: PortraitTrainingSample[] = pkg.products.map((p) => ({
+    skuId: p.skuId,
+    sourceProductKey: p.sourceProductKey,
+    fitType: p.fitType || "X型",
+    fabric: p.fabric,
+    fab: p.fab,
+  }));
+
+  const targetsByDimension = new Map<string, Map<string, number[]>>();
+  for (const sample of samples) {
+    const rows = pkg.portraitRows.filter(
+      (r) => r.skuId === sample.skuId && r.sourceProductKey === sample.sourceProductKey,
+    );
+    for (const row of rows) {
+      if (!SUPERVISED_TARGET_DIMENSIONS.includes(row.labelType as SupervisedTargetDimension)) continue;
+      let dimMap = targetsByDimension.get(row.labelType);
+      if (!dimMap) {
+        dimMap = new Map<string, number[]>();
+        targetsByDimension.set(row.labelType, dimMap);
+      }
+      let labelList = dimMap.get(row.label);
+      if (!labelList) {
+        labelList = [];
+        dimMap.set(row.label, labelList);
+      }
+      labelList.push(row.share ?? 0);
+    }
+  }
+
+  // Ensure each sample has a value for every label in each dimension (0 if missing)
+  for (const [labelType, dimMap] of targetsByDimension) {
+    const labels = [...dimMap.keys()];
+    for (const sample of samples) {
+      for (const label of labels) {
+        const rows = pkg.portraitRows.filter(
+          (r) =>
+            r.skuId === sample.skuId &&
+            r.sourceProductKey === sample.sourceProductKey &&
+            r.labelType === labelType &&
+            r.label === label,
+        );
+        if (rows.length === 0) {
+          let list = dimMap.get(label);
+          if (!list) {
+            list = [];
+            dimMap.set(label, list);
+          }
+          list.push(0);
+        }
+      }
+    }
+  }
+
+  return { samples, targetsByDimension, package: pkg };
+}
+
+// ---------------------------------------------------------------------------
+// Model training
+// ---------------------------------------------------------------------------
+
+export function trainSupervisedPortraitModel(options: {
+  samples: PortraitTrainingSample[];
+  targetsByDimension: Map<string, Map<string, number[]>>;
+  alpha?: number;
+}): SupervisedPortraitModel {
+  const { samples, targetsByDimension, alpha = 1.0 } = options;
+
+  // Build feature matrix
+  const featureRecords = samples.map((s) => extractSupervisedFeatures(s));
+  const featureNames = [...new Set(featureRecords.flatMap((r) => Object.keys(r)))].sort();
+  const X = featureRecords.map((record) => featureNames.map((name) => record[name] ?? 0));
+  const { scaled, means, stds } = standardize(X);
+
+  const dimensionModels: DimensionModel[] = [];
+
+  for (const labelType of SUPERVISED_TARGET_DIMENSIONS) {
+    const dimMap = targetsByDimension.get(labelType);
+    if (!dimMap) continue;
+
+    const labels = [...dimMap.keys()].sort();
+    const isClosed = ["预测性别", "预测年龄段", "预测消费能力", "城市等级", "八大消费群体", "预测人生阶段"].includes(labelType);
+
+    const weights: number[][] = [];
+    const intercepts: number[] = [];
+
+    for (const label of labels) {
+      const y = dimMap.get(label) ?? [];
+      const { weights: w, intercept } = trainRidge(scaled, y, alpha);
+      weights.push(w);
+      intercepts.push(intercept);
+    }
+
+    dimensionModels.push({
+      labelType,
+      isClosed,
+      labels,
+      featureNames,
+      weights,
+      intercepts,
+      featureMean: means,
+      featureStd: stds,
+      alpha,
+    });
+  }
+
+  return {
+    version: SUPERVISED_PORTRAIT_MODEL_VERSION,
+    trainedAt: new Date().toISOString(),
+    sampleCount: samples.length,
+    fitTypes: [...new Set(samples.map((sample) => sample.fitType).filter(Boolean))].sort(),
+    targetDimensions: [...SUPERVISED_TARGET_DIMENSIONS],
+    dimensionModels,
+    featureExtractorVersion: "q2_supervised_v1",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Prediction
+// ---------------------------------------------------------------------------
+
+function predictDimension(model: DimensionModel, features: Record<string, number>): PlatformPortraitRow[] {
+  const featureVector = model.featureNames.map((name) => features[name] ?? 0);
+  const standardized = featureVector.map((v, j) => (v - model.featureMean[j]!) / model.featureStd[j]!);
+
+  const scores: number[] = [];
+  for (let i = 0; i < model.labels.length; i++) {
+    let score = model.intercepts[i]!;
+    for (let j = 0; j < standardized.length; j++) {
+      score += model.weights[i]![j]! * standardized[j]!;
+    }
+    scores.push(score);
+  }
+
+  // Clip negatives
+  const clipped = scores.map((s) => Math.max(0, s));
+
+  // Normalize closed dimensions
+  let shares: number[];
+  if (model.isClosed) {
+    const total = clipped.reduce((a, b) => a + b, 0);
+    shares = total > 0 ? clipped.map((s) => s / total) : clipped.map(() => 1 / clipped.length);
+  } else {
+    shares = clipped.map((s) => Math.min(1, s));
+  }
+
+  return model.labels.map((label, i) => ({
+    labelType: model.labelType,
+    label,
+    share: round2(shares[i]!),
+    tgi: null,
+    source: "single_product_portrait_supervised_ridge",
+    confidence: round2(Math.min(1, 0.5 + Math.min(shares[i]!, 1) * 0.3)),
+    evidence: [buildEvidence(model, i)],
+    qualityFlags: [],
+  }));
+}
+
+function buildEvidence(model: DimensionModel, labelIndex: number): PortraitEvidence {
+  // Find top positive weighted features for this label
+  const featureWeights = model.weights[labelIndex]!.map((w, j) => ({
+    name: model.featureNames[j]!,
+    weight: w,
+  }));
+  const topFeatures = featureWeights.filter((fw) => fw.weight > 0).sort((a, b) => b.weight - a.weight).slice(0, 3);
+
+  return {
+    sourceField: "版型/面料/FAB",
+    sourceValue: topFeatures.map((fw) => fw.name).join(","),
+    ruleId: `supervised-ridge-${model.labelType}`,
+    targetLabelType: model.labelType,
+    targetLabel: model.labels[labelIndex]!,
+    effect: "increase",
+    weight: round3(topFeatures[0]?.weight ?? 0),
+    rationale: `Ridge model top positive drivers: ${topFeatures.map((fw) => fw.name).join(", ") || "none"}.`,
+  };
+}
+
+export function predictSupervisedPortrait(options: PredictSupervisedOptions): SingleProductPortraitPrediction {
+  const { input, model, outputTopNPerDimension = 10 } = options;
+  const features = extractSupervisedFeatures(input);
+
+  const platformPortraitRows: PlatformPortraitRow[] = [];
+  for (const dimModel of model.dimensionModels) {
+    const rows = predictDimension(dimModel, features);
+    const sorted = rows.sort((a, b) => (b.share ?? 0) - (a.share ?? 0)).slice(0, outputTopNPerDimension);
+    // Renormalize closed dimensions after top-N slicing so remaining mass sums to 1
+    if (dimModel.isClosed) {
+      const total = sorted.reduce((sum, r) => sum + (r.share ?? 0), 0);
+      if (total > 0) {
+        for (const row of sorted) {
+          row.share = round2((row.share ?? 0) / total);
+        }
+      }
+    }
+    platformPortraitRows.push(...sorted);
+  }
+
+  const byDimension = new Map<string, PlatformPortraitRow[]>();
+  for (const row of platformPortraitRows) {
+    const list = byDimension.get(row.labelType) ?? [];
+    list.push(row);
+    byDimension.set(row.labelType, list);
+  }
+
+  const dimensionSummaries = [...byDimension.entries()].map(([labelType, rows]) => ({
+    labelType,
+    topLabels: rows.slice(0, 3).map((r) => ({ label: r.label, share: r.share, tgi: r.tgi, confidence: r.confidence })),
+    qualityFlags: rows.some((r) => r.evidence.length === 0) ? ["missing_evidence"] : [],
+  }));
+
+  const riskFlags: SingleProductPortraitRisk[] = [...SUPERVISED_PORTRAIT_RISK_FLAGS];
+
+  const explanationSources = platformPortraitRows.flatMap((r) => r.evidence);
+
+  return {
+    skuId: input.skuId,
+    generatedAt: new Date().toISOString(),
+    modelVersion: SUPERVISED_PORTRAIT_MODEL_VERSION,
+    modelPath: "supervised_ridge",
+    sourceType: "derived",
+    anchorSkuId: ANCHOR_SKU_ID,
+    inputCoverage: {
+      requiredFieldCoverage: [input.fitType, input.fabric, input.fab].filter(Boolean).length / 3,
+      optionalSignalCoverage: 0,
+      usedFields: ["fitType", "fabric", "fab"],
+      missingFields: [],
+    },
+    platformPortraitRows,
+    dimensionSummaries,
+    riskFlags,
+    explanationSources,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// LOO evaluation
+// ---------------------------------------------------------------------------
+
+export function evaluateSupervisedModel(options: EvaluateSupervisedOptions): SupervisedEvaluationResult {
+  const { packagePath, alpha = 1.0 } = options;
+  const { samples, targetsByDimension } = loadSupervisedTrainingData(packagePath);
+
+  if (samples.length < 5) {
+    return {
+      status: "not_enough_labeled_samples",
+      sampleCount: samples.length,
+      folds: [],
+      aggregateMetrics: {
+        top1OverlapMean: 0,
+        top3OverlapMean: 0,
+        closedDimensionMassErrorMean: 0,
+        dimensionCoverageRate: 0,
+        perDimension: {},
+      },
+      riskFlags: ["baseline_not_trained_model", "small_sample_supervised_model", "not_enough_labeled_samples"],
+      notEnoughSamplesReason: `Only ${samples.length} samples available; need at least 5.`,
+    };
+  }
+
+  const folds: SupervisedEvaluationFold[] = [];
+
+  for (let i = 0; i < samples.length; i++) {
+    const heldOut = samples[i]!;
+    const trainSamples = [...samples.slice(0, i), ...samples.slice(i + 1)];
+
+    // Build training targets excluding held-out
+    const trainTargets = new Map<string, Map<string, number[]>>();
+    for (const [labelType, dimMap] of targetsByDimension) {
+      const newDimMap = new Map<string, number[]>();
+      for (const [label, values] of dimMap) {
+        const newValues = values.filter((_, idx) => idx !== i);
+        newDimMap.set(label, newValues);
+      }
+      trainTargets.set(labelType, newDimMap);
+    }
+
+    const trainModel = trainSupervisedPortraitModel({ samples: trainSamples, targetsByDimension: trainTargets, alpha });
+    const predicted = predictSupervisedPortrait({ input: heldOut, model: trainModel, outputTopNPerDimension: 10 });
+
+    // Build actual rows for target dimensions
+    const actualRows: PlatformPortraitRow[] = [];
+    for (const [labelType, dimMap] of targetsByDimension) {
+      const labels = [...dimMap.keys()];
+      for (const label of labels) {
+        const values = dimMap.get(label) ?? [];
+        const share = values[i];
+        if (share === undefined || share === 0) continue;
+        actualRows.push({
+          labelType,
+          label,
+          share,
+          tgi: null,
+          source: "single_product_portrait_supervised_ridge",
+          confidence: 1,
+          evidence: [],
+          qualityFlags: [],
+        });
+      }
+    }
+
+    const topActual = actualRows.filter((r) => r.share !== null).sort((a, b) => (b.share ?? 0) - (a.share ?? 0));
+    const top1Actual = new Set(topActual.slice(0, 1).map((r) => `${r.labelType}::${r.label}`));
+    const top3Actual = new Set(topActual.slice(0, 3).map((r) => `${r.labelType}::${r.label}`));
+    const top1Predicted = new Set(predicted.platformPortraitRows.slice(0, 1).map((r) => `${r.labelType}::${r.label}`));
+    const top3Predicted = new Set(predicted.platformPortraitRows.slice(0, 3).map((r) => `${r.labelType}::${r.label}`));
+
+    const top1Overlap = [...top1Predicted].filter((k) => top1Actual.has(k)).length / Math.max(1, top1Actual.size);
+    const top3Overlap = [...top3Predicted].filter((k) => top3Actual.has(k)).length / Math.max(1, top3Actual.size);
+
+    folds.push({
+      skuId: heldOut.skuId,
+      sourceProductKey: heldOut.sourceProductKey,
+      actualRows,
+      predictedRows: predicted.platformPortraitRows,
+      top1Overlap,
+      top3Overlap,
+    });
+  }
+
+  const aggregate = aggregateSupervisedMetrics(folds, targetsByDimension);
+
+  return {
+    status: "ok",
+    sampleCount: samples.length,
+    folds,
+    aggregateMetrics: aggregate,
+    riskFlags: ["baseline_not_trained_model", "small_sample_supervised_model", "no_temporal_validation"],
+  };
+}
+
+function aggregateSupervisedMetrics(
+  folds: SupervisedEvaluationFold[],
+  targetsByDimension: Map<string, Map<string, number[]>>,
+): SupervisedAggregateMetrics {
+  const perDimension: SupervisedAggregateMetrics["perDimension"] = {};
+
+  for (const labelType of SUPERVISED_TARGET_DIMENSIONS) {
+    const dimFolds = folds.map((fold) => {
+      const actualTop = fold.actualRows
+        .filter((r) => r.labelType === labelType && r.share !== null)
+        .sort((a, b) => (b.share ?? 0) - (a.share ?? 0));
+      const predTop = fold.predictedRows
+        .filter((r) => r.labelType === labelType)
+        .sort((a, b) => (b.share ?? 0) - (a.share ?? 0));
+
+      const actualTop1 = new Set(actualTop.slice(0, 1).map((r) => r.label));
+      const actualTop3 = new Set(actualTop.slice(0, 3).map((r) => r.label));
+      const predTop1 = new Set(predTop.slice(0, 1).map((r) => r.label));
+      const predTop3 = new Set(predTop.slice(0, 3).map((r) => r.label));
+
+      const top1 = actualTop1.size === 0 ? 0 : [...predTop1].filter((l) => actualTop1.has(l)).length / actualTop1.size;
+      const top3 = actualTop3.size === 0 ? 0 : [...predTop3].filter((l) => actualTop3.has(l)).length / actualTop3.size;
+
+      const closedDims = new Set(["预测性别", "预测年龄段", "预测消费能力", "城市等级", "八大消费群体", "预测人生阶段"]);
+      const predClosed = predTop.filter((r) => r.labelType === labelType);
+      const total = predClosed.reduce((sum, r) => sum + (r.share ?? 0), 0);
+      const massError = closedDims.has(labelType) ? Math.abs(total - 1) : 0;
+
+      return { top1, top3, massError };
+    });
+
+    perDimension[labelType] = {
+      top1Overlap: dimFolds.reduce((a, b) => a + b.top1, 0) / dimFolds.length,
+      top3Overlap: dimFolds.reduce((a, b) => a + b.top3, 0) / dimFolds.length,
+      massError: dimFolds.reduce((a, b) => a + b.massError, 0) / dimFolds.length,
+    };
+  }
+
+  const top1OverlapMean = folds.reduce((a, b) => a + b.top1Overlap, 0) / folds.length;
+  const top3OverlapMean = folds.reduce((a, b) => a + b.top3Overlap, 0) / folds.length;
+  const closedMassErrorMean =
+    Object.values(perDimension).reduce((a, b) => a + b.massError, 0) /
+    Object.values(perDimension).filter((d) => d.massError > 0).length || 0;
+
+  // Dimension coverage: predicted dimensions / target dimensions
+  const dimensionCoverageRate = SUPERVISED_TARGET_DIMENSIONS.length / SUPERVISED_TARGET_DIMENSIONS.length;
+
+  return {
+    top1OverlapMean,
+    top3OverlapMean,
+    closedDimensionMassErrorMean: closedMassErrorMean,
+    dimensionCoverageRate,
+    perDimension,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Batch prediction from new-product Excel
+// ---------------------------------------------------------------------------
+
+export interface NewProductRow {
+  skuId: string;
+  fitType: string;
+  fabric: string;
+  fab: string;
+}
+
+export interface BatchPredictResult {
+  skuId: string;
+  fitType: string;
+  fabric: string;
+  fab: string;
+  prediction: SingleProductPortraitPrediction;
+}
+
+const NEW_PRODUCT_FIELD_MAP: Record<string, keyof NewProductRow> = {
+  "款号": "skuId",
+  "版型": "fitType",
+  "面料": "fabric",
+  "FAB": "fab",
+};
+
+function normalizeString(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+}
+
+export function readNewProductXlsx(filePath: string): NewProductRow[] {
+  const buffer = readFileSync(filePath);
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
+  const sheet = workbook.Sheets[workbook.SheetNames[0] ?? ""];
+  if (!sheet) throw new Error(`No sheet found in ${filePath}`);
+  const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+
+  return rawRows.map((raw, index) => {
+    const mapped: Partial<NewProductRow> = {};
+    for (const [header, key] of Object.entries(NEW_PRODUCT_FIELD_MAP)) {
+      mapped[key] = normalizeString(raw[header]) as never;
+    }
+    const row = mapped as NewProductRow;
+    if (!row.skuId) {
+      throw new Error(`Row ${index + 1} is missing 款号`);
+    }
+    // Impute missing fitType as X型 per project convention
+    if (!row.fitType) row.fitType = "X型";
+    return row;
+  });
+}
+
+export function batchPredictSupervisedPortraits(options: {
+  inputPath: string;
+  modelPath: string;
+  outputTopNPerDimension?: number;
+}): BatchPredictResult[] {
+  const { inputPath, modelPath, outputTopNPerDimension = 3 } = options;
+  const rows = readNewProductXlsx(inputPath);
+  const model = loadSupervisedModel(modelPath);
+
+  return rows.map((row) => ({
+    ...row,
+    prediction: predictSupervisedPortrait({
+      input: { skuId: row.skuId, fitType: row.fitType, fabric: row.fabric, fab: row.fab },
+      model,
+      outputTopNPerDimension,
+    }),
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Server import contract
+// ---------------------------------------------------------------------------
+
+export function resolveSingleProductPortraitModelPath(explicitPath?: string): string {
+  return explicitPath ?? process.env[SINGLE_PRODUCT_PORTRAIT_MODEL_PATH_ENV] ?? SINGLE_PRODUCT_PORTRAIT_DEFAULT_MODEL_PATH;
+}
+
+export function buildSingleProductPortraitModelMetadata(
+  options: { modelPath?: string; model?: SupervisedPortraitModel } = {},
+): SingleProductPortraitModelMetadata {
+  try {
+    const model = options.model ?? loadSupervisedModel(resolveSingleProductPortraitModelPath(options.modelPath));
+    return {
+      modelAvailable: true,
+      fitTypes: extractFitTypesFromModel(model),
+      requiredColumns: SINGLE_PRODUCT_PORTRAIT_REQUIRED_COLUMNS,
+      maxBatchRows: SINGLE_PRODUCT_PORTRAIT_MAX_BATCH_ROWS,
+      maxFileBytes: SINGLE_PRODUCT_PORTRAIT_MAX_FILE_BYTES,
+      modelVersion: model.version,
+      trainedAt: model.trainedAt,
+      sampleCount: model.sampleCount,
+      riskFlags: [...SUPERVISED_PORTRAIT_RISK_FLAGS],
+      metricsSummary: SUPERVISED_PORTRAIT_METRICS_SUMMARY,
+    };
+  } catch {
+    return {
+      modelAvailable: false,
+      requiredColumns: SINGLE_PRODUCT_PORTRAIT_REQUIRED_COLUMNS,
+      maxBatchRows: SINGLE_PRODUCT_PORTRAIT_MAX_BATCH_ROWS,
+      maxFileBytes: SINGLE_PRODUCT_PORTRAIT_MAX_FILE_BYTES,
+      error: {
+        code: "model_not_available",
+        message: "模型文件未生成，请先训练模型",
+      },
+    };
+  }
+}
+
+export function predictSingleProductPortraitFromCleanInput(
+  input: CleanSingleProductPortraitInput,
+  options: SingleProductPortraitServiceOptions = {},
+): SingleProductPortraitPrediction {
+  try {
+    const model = options.model ?? loadSupervisedModel(resolveSingleProductPortraitModelPath(options.modelPath));
+    return predictSupervisedPortrait({
+      input,
+      model,
+      outputTopNPerDimension: options.outputTopNPerDimension ?? 3,
+    });
+  } catch (error) {
+    throw new SingleProductPortraitModelUnavailableError(undefined, { cause: error });
+  }
+}
+
+function extractFitTypesFromModel(model: SupervisedPortraitModel): string[] {
+  if (Array.isArray(model.fitTypes) && model.fitTypes.length > 0) {
+    return [...model.fitTypes].sort();
+  }
+  const fitFeatureNames = new Set<string>();
+  for (const dimModel of model.dimensionModels) {
+    for (const featureName of dimModel.featureNames) {
+      if (featureName.startsWith("fit_")) fitFeatureNames.add(featureName.replace(/^fit_/, ""));
+    }
+  }
+  return [...fitFeatureNames].sort();
+}
+
+// ---------------------------------------------------------------------------
+// Model persistence
+// ---------------------------------------------------------------------------
+
+export function saveSupervisedModel(model: SupervisedPortraitModel, path: string): void {
+  writeFileSync(path, JSON.stringify(model, null, 2));
+}
+
+export function loadSupervisedModel(path: string): SupervisedPortraitModel {
+  return JSON.parse(readFileSync(path, "utf-8")) as SupervisedPortraitModel;
+}
+
+// ---------------------------------------------------------------------------
+// Utils
+// ---------------------------------------------------------------------------
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function round3(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}

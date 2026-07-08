@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-06（A-P7-INGEST-2 文档冲突已修复并 mark done；session end 验证通过）
+最近更新：2026-07-08（T0002 单品画像预测专用 API 实现并通过 smoke）
 
 进度：
 
@@ -25,6 +25,7 @@
 - **A-P5-PORTRAIT-5 总控修正项已关闭**：`platform_portrait.csv` 按 `skuId + sourceProductKey` 过滤，防止多 SKU 样本包串画像；`prediction.json` 顶层已写入 `sourceFiles`，供 V/A 机器读取来源 lineage。
 - **A-P6-CHANNEL-3 已完成并经总控 mark done**：已修复 `missing_parent_reference` 为 blocking、正式 import 前拦截 dry-run blocking errors、对象库列表分页对齐 api-contract.md 通用契约、新增负向 smoke fixture 与 `smoke:channel-object-library` 脚本；`docs/api-contract.md` §10.5 与 `docs/notes-app.md` 已同步。
 - **A-P7-INGEST-2 已按 review 返工完成（2026-07-06）**：X 总控 review 指出的 stagedFileId 路径穿越风险、upsert/replace 语义未拍板、strict mode 与 execute 语义不一致、typeErrors 统计口径错误、before/after snapshot 行数不真实等问题已修复：
+- **T0002 已完成（2026-07-08）**：实现单品画像预测专用 API `GET /api/v0/single-product-portrait/metadata`、`POST /api/v0/single-product-portrait/predict`、`POST /api/v0/single-product-portrait/predict/batch/preview`、`POST /api/v0/single-product-portrait/predict/batch`；支持 `.xlsx` / `.csv` 批量解析、行级校验与 preview/execute 同构；模型不可用时 metadata 返回 200 + `modelAvailable: false`，predict 返回 `model_not_available`，批量 preview/execute 在 `fileErrors` 中返回 `model_not_available`；`smoke:single-product-portrait` 70/70 通过，`smoke:single-product-portrait-tool` 39/39 回归通过。相关实现见 `apps/server/src/routes/single-product-portrait.ts`、`apps/server/src/lib/single-product-portrait/`、`apps/server/scripts/smoke-single-product-portrait-api.mjs`。`apps/server/package.json` 新增 `xlsx: ^0.18.5` 并保持与 `apps/model` 版本一致；`apps/model/src/single-product-portrait-supervised.ts` 加 `!` 修复 server 端 `noUncheckedIndexedAccess` 跨包类型错误。
   - `apps/server/src/lib/csv-ingestion.ts` 增加 `stagedFileId` 格式校验（`^csv_[0-9]+_[a-z0-9]{6}$`）、路径解析后确认仍在当前 workspace staging 目录内、`staging.json` 读取后校验 `meta.workspaceId`/`meta.stagedFileId`/`meta.targetTable`。
   - 改为 append-only：dry-run 检测目标表主键冲突（`primary_key_conflict`），execute 使用普通 `INSERT` 不再 `INSERT OR REPLACE`。
   - 从 public API 移除 `mode=strict/relaxed` 参数，第一期仅保留 relaxed。

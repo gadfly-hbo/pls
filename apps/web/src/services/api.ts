@@ -1,4 +1,4 @@
-import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord, DbOverview, DbTableInfo, DbSchemaInfo, DbSampleInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbOperationDryRunResult, DbOperationExecuteResult, CsvQualityReport, CsvIngestionExecuteResponse, ToolRun, SingleProductPortraitPrediction, ChannelObject, AudienceProfile, ProductFitProfile, ChannelObjectBinding } from '../types';
+import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord, DbOverview, DbTableInfo, DbSchemaInfo, DbSampleInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbOperationDryRunResult, DbOperationExecuteResult, CsvQualityReport, CsvIngestionExecuteResponse, ToolRun, SingleProductPortraitPrediction, SingleProductPortraitInput, SingleProductPortraitMetadata, SingleProductPortraitBatchPreview, SingleProductPortraitBatchExecute, ChannelObject, AudienceProfile, ProductFitProfile, ChannelObjectBinding } from '../types';
 
 // Feature flag for local mock vs real backend
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
@@ -32,6 +32,132 @@ const db = {
   productFitProfiles: [] as ProductFitProfile[],
   channelObjectBindings: [] as ChannelObjectBinding[],
 };
+
+const mockSinglePortraitMetadata: SingleProductPortraitMetadata = {
+  modelAvailable: true,
+  fitTypes: ['X型', 'H型', '宽松型'],
+  requiredColumns: ['款号', '版型', '面料', 'FAB'],
+  maxBatchRows: 100,
+  maxFileBytes: 2097152,
+  modelVersion: 'single-product-portrait-supervised-ridge-0.1',
+  trainedAt: '2026-07-01T00:00:00Z',
+  sampleCount: 73,
+  riskFlags: ['baseline_not_trained_model', 'small_sample_supervised_model', 'no_temporal_validation'],
+  metricsSummary: [
+    { labelType: '预测性别', top1Overlap: 0.877, top3Overlap: 1 },
+    { labelType: '预测人生阶段', top1Overlap: 0.808, top3Overlap: 1 },
+    { labelType: '预测年龄段', top1Overlap: 0.685, top3Overlap: 0.804 },
+    { labelType: '预测消费能力', top1Overlap: 0.63, top3Overlap: 1 },
+    { labelType: '城市等级', top1Overlap: 0.397, top3Overlap: 0.776 },
+    { labelType: '八大消费群体', top1Overlap: 0.315, top3Overlap: 0.813 },
+  ],
+};
+
+function buildMockSinglePortraitPrediction(input: SingleProductPortraitInput, rowShift = 0): SingleProductPortraitPrediction {
+  const generatedAt = new Date().toISOString();
+  const ageShare = Math.max(0.2, 0.68 - rowShift * 0.03);
+  return {
+    skuId: input.skuId,
+    generatedAt,
+    modelVersion: mockSinglePortraitMetadata.modelAvailable ? mockSinglePortraitMetadata.modelVersion : 'model_unavailable',
+    modelPath: 'supervised_ridge',
+    sourceType: 'derived',
+    anchorSkuId: '10A326100109',
+    inputCoverage: {
+      requiredFieldCoverage: 1,
+      optionalSignalCoverage: 0,
+      usedFields: ['fitType', 'fabric', 'fab'],
+      missingFields: [],
+    },
+    platformPortraitRows: [],
+    dimensionSummaries: [
+      {
+        labelType: '预测性别',
+        topLabels: [
+          { label: '女', share: 0.88, tgi: null, confidence: 0.76 },
+          { label: '男', share: 0.12, tgi: null, confidence: 0.55 },
+        ],
+        qualityFlags: [],
+      },
+      {
+        labelType: '预测年龄段',
+        topLabels: [
+          { label: '24-30', share: ageShare, tgi: null, confidence: 0.72 },
+          { label: '31-35', share: 0.2, tgi: null, confidence: 0.61 },
+          { label: '20-23', share: 0.12, tgi: null, confidence: 0.58 },
+        ],
+        qualityFlags: [],
+      },
+      {
+        labelType: '预测消费能力',
+        topLabels: [
+          { label: '中消费', share: 0.62, tgi: null, confidence: 0.68 },
+          { label: '高消费', share: 0.25, tgi: null, confidence: 0.6 },
+          { label: '低消费', share: 0.13, tgi: null, confidence: 0.55 },
+        ],
+        qualityFlags: [],
+      },
+      {
+        labelType: '城市等级',
+        topLabels: [
+          { label: '新一线', share: 0.36, tgi: null, confidence: 0.52 },
+          { label: '二线', share: 0.31, tgi: null, confidence: 0.5 },
+          { label: '一线', share: 0.21, tgi: null, confidence: 0.48 },
+        ],
+        qualityFlags: ['low_stability_dimension'],
+      },
+      {
+        labelType: '八大消费群体',
+        topLabels: [
+          { label: '精致妈妈', share: 0.33, tgi: null, confidence: 0.51 },
+          { label: '新锐白领', share: 0.3, tgi: null, confidence: 0.5 },
+          { label: '资深中产', share: 0.18, tgi: null, confidence: 0.47 },
+        ],
+        qualityFlags: ['low_stability_dimension'],
+      },
+      {
+        labelType: '预测人生阶段',
+        topLabels: [
+          { label: '职场发展期', share: 0.58, tgi: null, confidence: 0.69 },
+          { label: '家庭成长期', share: 0.28, tgi: null, confidence: 0.62 },
+          { label: '校园到职场过渡', share: 0.14, tgi: null, confidence: 0.56 },
+        ],
+        qualityFlags: [],
+      },
+    ],
+    riskFlags: ['baseline_not_trained_model', 'small_sample_supervised_model', 'no_temporal_validation'],
+    explanationSources: [
+      {
+        sourceField: '版型/面料/FAB',
+        sourceValue: `${input.fitType},${input.fabric},style_commute,fabric_cotton`,
+        ruleId: 'supervised-ridge-预测年龄段',
+        targetLabelType: '预测年龄段',
+        targetLabel: '24-30',
+        effect: 'increase',
+        weight: 0.42,
+        rationale: 'Ridge model top positive drivers: style_commute, fabric_cotton, scene_work.',
+      },
+    ],
+  };
+}
+
+async function uploadSinglePortraitBatch<T>(path: string, file: File): Promise<{ code: string; data: T }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(`/api/v0${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer pls-p0-demo-token',
+      'X-PLS-Workspace': 'ws_demo',
+    },
+    body: formData,
+  });
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({}));
+    throw new Error(errorBody?.error?.message || `API Error: ${res.status}`);
+  }
+  return res.json();
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -511,6 +637,109 @@ function mapChannelEntityToAccountProfile(entity: ChannelEntityApiItem): Account
 }
 
 export const api = {
+  getSingleProductPortraitMetadata: async (): Promise<{ code: string; data: SingleProductPortraitMetadata }> => {
+    if (!USE_MOCK) return fetchApi<SingleProductPortraitMetadata>('/single-product-portrait/metadata');
+    return { code: 'ok', data: mockSinglePortraitMetadata };
+  },
+
+  predictSingleProductPortrait: async (input: SingleProductPortraitInput): Promise<{ code: string; data: { prediction: SingleProductPortraitPrediction } }> => {
+    if (!USE_MOCK) {
+      return fetchApi<{ prediction: SingleProductPortraitPrediction }>('/single-product-portrait/predict', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+    }
+    if (!mockSinglePortraitMetadata.fitTypes.includes(input.fitType)) {
+      throw new Error('版型不在当前模型支持列表中');
+    }
+    return { code: 'ok', data: { prediction: buildMockSinglePortraitPrediction(input) } };
+  },
+
+  previewSingleProductPortraitBatch: async (file: File): Promise<{ code: string; data: SingleProductPortraitBatchPreview }> => {
+    if (!USE_MOCK) return uploadSinglePortraitBatch<SingleProductPortraitBatchPreview>('/single-product-portrait/predict/batch/preview', file);
+    const lowerName = file.name.toLowerCase();
+    if (lowerName.includes('missing')) {
+      return {
+        code: 'ok',
+        data: {
+          totalRows: 0,
+          validRows: 0,
+          invalidRows: 0,
+          fileErrors: [{ code: 'missing_required_columns', message: '缺少必需列: FAB', field: 'file', rawValue: '款号,版型,面料' }],
+          rowErrors: [],
+          warnings: [],
+          extraColumns: [],
+          requiredColumns: mockSinglePortraitMetadata.requiredColumns,
+        },
+      };
+    }
+    const hasPartialErrors = lowerName.includes('partial') || lowerName.includes('mixed');
+    return {
+      code: 'ok',
+      data: {
+        totalRows: hasPartialErrors ? 4 : 2,
+        validRows: hasPartialErrors ? 2 : 2,
+        invalidRows: hasPartialErrors ? 2 : 0,
+        fileErrors: [],
+        rowErrors: hasPartialErrors
+          ? [
+              { code: 'unknown_fit_type', message: '版型不在当前模型支持列表中', field: 'fitType', rawValue: '未知版型', rowNumber: 3, skuId: 'MOCK_BAD_FIT' },
+              { code: 'required_field_empty', message: 'FAB 不能为空', field: 'fab', rawValue: '', rowNumber: 5, skuId: 'MOCK_EMPTY_FAB' },
+            ]
+          : [],
+        warnings: [
+          { code: 'extra_columns_ignored', message: '忽略额外列: 颜色', field: 'file' },
+          ...(hasPartialErrors ? [{ code: 'duplicate_sku_id_in_file', message: '款号重复，首次出现在第 2 行', field: 'skuId' as const, rawValue: 'MOCK_DUP', rowNumber: 4, skuId: 'MOCK_DUP' }] : []),
+        ],
+        extraColumns: ['颜色'],
+        requiredColumns: mockSinglePortraitMetadata.requiredColumns,
+      },
+    };
+  },
+
+  executeSingleProductPortraitBatch: async (file: File): Promise<{ code: string; data: SingleProductPortraitBatchExecute }> => {
+    if (!USE_MOCK) return uploadSinglePortraitBatch<SingleProductPortraitBatchExecute>('/single-product-portrait/predict/batch', file);
+    const preview = (await api.previewSingleProductPortraitBatch(file)).data;
+    if (preview.fileErrors.length > 0) {
+      return {
+        code: 'ok',
+        data: {
+          totalRows: preview.totalRows,
+          successCount: 0,
+          failureCount: preview.totalRows,
+          warningCount: preview.warnings.length,
+          results: [],
+          fileErrors: preview.fileErrors,
+          rowErrors: preview.rowErrors,
+          warnings: preview.warnings,
+          metadata: mockSinglePortraitMetadata,
+        },
+      };
+    }
+    const fitType = mockSinglePortraitMetadata.modelAvailable ? mockSinglePortraitMetadata.fitTypes[0] ?? 'X型' : 'X型';
+    const rows = [
+      { rowNumber: 2, skuId: 'MOCK_BATCH_001' },
+      { rowNumber: 4, skuId: 'MOCK_DUP' },
+    ].slice(0, preview.validRows);
+    return {
+      code: 'ok',
+      data: {
+        totalRows: preview.totalRows,
+        successCount: rows.length,
+        failureCount: preview.rowErrors.length,
+        warningCount: preview.warnings.length,
+        results: rows.map((row, index) => ({
+          ...row,
+          prediction: buildMockSinglePortraitPrediction({ skuId: row.skuId, fitType, fabric: '全棉针织', fab: '通勤基础款，舒适亲肤，适合日常上班' }, index),
+        })),
+        fileErrors: preview.fileErrors,
+        rowErrors: preview.rowErrors,
+        warnings: preview.warnings,
+        metadata: mockSinglePortraitMetadata,
+      },
+    };
+  },
+
   getTaxonomy: async () => {
     if (!USE_MOCK) return fetchApi<Record<string, string>>('/taxonomy').then(r => r.data);
     return {
