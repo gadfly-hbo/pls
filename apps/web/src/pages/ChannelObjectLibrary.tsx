@@ -3,13 +3,34 @@ import { api } from '../services/api';
 import type { ChannelObject, AudienceProfile, ProductFitProfile, ChannelObjectBinding, MatchResult, AccountProfile, AccountMatchResult } from '../types';
 import { translateTag } from '../utils/translate';
 import {
+  estimateSemirThreeAudienceShares,
+  parseCsv,
+  parseMarkdownTable,
+  parseXlsx,
+  pickColumn,
+  validateAndBuildSegments,
+  validateShareTotal,
+  formatShareAsPercent,
+  LABEL_COLUMN_CANDIDATES,
+  SHARE_COLUMN_CANDIDATES,
+} from '../utils/three-audience-local-parser';
+import type {
+  ThreeAudienceChannel,
+  ThreeAudienceEstimateResult,
+  NativeSegmentSystem,
+} from '../utils/three-audience-local-parser';
+import {
   Search,
   Import,
   BarChart3,
   AlertTriangle,
   HelpCircle,
   X,
-  Layers
+  Layers,
+  FileSpreadsheet,
+  FolderOpen,
+  Upload,
+  Calculator,
 } from 'lucide-react';
 
 const OBJECT_TYPE_LABELS: Record<string, string> = {
@@ -37,6 +58,26 @@ const PLATFORM_TYPE_OPTIONS = [
   { value: 'traditional_ecommerce', label: '传统电商' },
   { value: 'social_ecommerce', label: '社交电商' },
 ];
+
+const THREE_AUDIENCE_CHANNELS: { value: ThreeAudienceChannel; label: string }[] = [
+  { value: 'douyin', label: '抖音' },
+  { value: 'tmall', label: '天猫' },
+  { value: 'jd', label: '京东' },
+  { value: 'offline', label: '线下' },
+  { value: 'vip', label: '唯品会' },
+  { value: 'wechat_channels', label: '视频号' },
+  { value: 'pinduoduo', label: '拼多多' },
+];
+
+const CHANNEL_SYSTEM: Record<ThreeAudienceChannel, NativeSegmentSystem> = {
+  douyin: 'douyin_eight',
+  tmall: 'tmall_industry_six',
+  jd: 'jd_ten',
+  offline: 'offline_industry_six',
+  vip: 'vip_eleven',
+  wechat_channels: 'wechat_channels_seven',
+  pinduoduo: 'pinduoduo_ten',
+};
 
 function translateObjectType(type: string): string {
   return OBJECT_TYPE_LABELS[type] || type;
@@ -111,7 +152,7 @@ export default function ChannelObjectLibrary() {
   const [searchQuery, setSearchQuery] = useState('');
   const [objectTypeFilter, setObjectTypeFilter] = useState('');
   const [platformTypeFilter, setPlatformTypeFilter] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'audience' | 'productFit' | 'match' | 'bindings' | 'edit'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'audience' | 'productFit' | 'match' | 'bindings' | 'edit' | 'threeAudience'>('overview');
   const [editLoading, setEditLoading] = useState(false);
   const [detail, setDetail] = useState<ChannelObject | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -140,6 +181,23 @@ export default function ChannelObjectLibrary() {
   const [matchAnalysisResult, setMatchAnalysisResult] = useState<AccountMatchResult | null>(null);
   const [matchAnalysisLoading, setMatchAnalysisLoading] = useState(false);
   const [matchAnalysisError, setMatchAnalysisError] = useState<string | null>(null);
+
+  const [threeAudienceFile, setThreeAudienceFile] = useState<File | null>(null);
+  const [threeAudienceCandidateFiles, setThreeAudienceCandidateFiles] = useState<File[]>([]);
+  const [threeAudienceParsed, setThreeAudienceParsed] = useState<{ headers: string[]; rows: Record<string, string>[] } | null>(null);
+  const [threeAudienceLabelColumn, setThreeAudienceLabelColumn] = useState('');
+  const [threeAudienceShareColumn, setThreeAudienceShareColumn] = useState('');
+  const [threeAudienceChannel, setThreeAudienceChannel] = useState<ThreeAudienceChannel>('tmall');
+  const [threeAudiencePriorA, setThreeAudiencePriorA] = useState('');
+  const [threeAudiencePriorB, setThreeAudiencePriorB] = useState('');
+  const [threeAudiencePriorC, setThreeAudiencePriorC] = useState('');
+  const [threeAudienceSegments, setThreeAudienceSegments] = useState<{ label: string; rawShare: string; share: number }[]>([]);
+  const [threeAudienceErrors, setThreeAudienceErrors] = useState<{ rowNumber: number; reason: string }[]>([]);
+  const [threeAudienceTotalError, setThreeAudienceTotalError] = useState<string | null>(null);
+  const [threeAudienceResult, setThreeAudienceResult] = useState<ThreeAudienceEstimateResult | null>(null);
+  const [threeAudienceAlgorithmError, setThreeAudienceAlgorithmError] = useState<string | null>(null);
+  const [threeAudienceLoading, setThreeAudienceLoading] = useState(false);
+  const [threeAudienceMappingConfirmed, setThreeAudienceMappingConfirmed] = useState(false);
 
   const filteredObjects = useMemo(() => {
     return objects.filter((obj) => {
@@ -285,6 +343,160 @@ export default function ChannelObjectLibrary() {
     }));
   };
 
+  const resetThreeAudienceState = () => {
+    setThreeAudienceParsed(null);
+    setThreeAudienceLabelColumn('');
+    setThreeAudienceShareColumn('');
+    setThreeAudienceMappingConfirmed(false);
+    setThreeAudienceSegments([]);
+    setThreeAudienceErrors([]);
+    setThreeAudienceTotalError(null);
+    setThreeAudienceResult(null);
+    setThreeAudienceAlgorithmError(null);
+  };
+
+  const buildThreeAudienceSegments = (
+    rows: Record<string, string>[],
+    labelColumn: string,
+    shareColumn: string
+  ) => {
+    const { segments, errors } = validateAndBuildSegments(rows, { labelColumn, shareColumn });
+    setThreeAudienceSegments(segments);
+    setThreeAudienceErrors(errors);
+    const totalError = validateShareTotal(segments, threeAudienceChannel);
+    setThreeAudienceTotalError(totalError);
+  };
+
+  const parseThreeAudienceFile = async (file: File) => {
+    resetThreeAudienceState();
+    setThreeAudienceFile(file);
+    setThreeAudienceCandidateFiles([]);
+    const lowerName = file.name.toLowerCase();
+    try {
+      let parsed: { headers: string[]; rows: Record<string, string>[] };
+      if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
+        const arrayBuffer = await file.arrayBuffer();
+        parsed = await parseXlsx(arrayBuffer);
+      } else if (lowerName.endsWith('.md')) {
+        const text = await file.text();
+        parsed = parseMarkdownTable(text);
+      } else {
+        const text = await file.text();
+        parsed = parseCsv(text);
+      }
+      setThreeAudienceParsed(parsed);
+      const detectedLabel = pickColumn(parsed.headers, LABEL_COLUMN_CANDIDATES, 'none');
+      const detectedShare = pickColumn(parsed.headers, SHARE_COLUMN_CANDIDATES, 'none');
+      setThreeAudienceLabelColumn(detectedLabel ?? (parsed.headers[0] || ''));
+      setThreeAudienceShareColumn(detectedShare ?? (parsed.headers[1] || ''));
+      setThreeAudienceMappingConfirmed(false);
+      setThreeAudienceSegments([]);
+      setThreeAudienceErrors([]);
+      setThreeAudienceTotalError(null);
+    } catch (err: any) {
+      setThreeAudienceAlgorithmError(`文件解析失败：${err.message || '未知错误'}`);
+    }
+  };
+
+  const handleThreeAudienceFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    parseThreeAudienceFile(file);
+  };
+
+  const handleThreeAudienceFolderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const candidates = Array.from(files).filter((f) => {
+      const lowerName = f.name.toLowerCase();
+      return lowerName.endsWith('.csv') || lowerName.endsWith('.md') || lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls');
+    });
+    setThreeAudienceCandidateFiles(candidates);
+    if (candidates.length === 1) {
+      parseThreeAudienceFile(candidates[0]);
+    } else {
+      resetThreeAudienceState();
+      setThreeAudienceFile(null);
+    }
+  };
+
+  const handleThreeAudienceCandidateSelect = (file: File) => {
+    parseThreeAudienceFile(file);
+  };
+
+  const handleThreeAudienceMappingChange = (labelColumn: string, shareColumn: string) => {
+    setThreeAudienceLabelColumn(labelColumn);
+    setThreeAudienceShareColumn(shareColumn);
+    setThreeAudienceMappingConfirmed(false);
+    setThreeAudienceSegments([]);
+    setThreeAudienceErrors([]);
+    setThreeAudienceTotalError(null);
+    setThreeAudienceResult(null);
+    setThreeAudienceAlgorithmError(null);
+  };
+
+  const handleThreeAudienceConfirmMapping = () => {
+    if (!threeAudienceParsed) return;
+    buildThreeAudienceSegments(threeAudienceParsed.rows, threeAudienceLabelColumn, threeAudienceShareColumn);
+    setThreeAudienceMappingConfirmed(true);
+    setThreeAudienceResult(null);
+    setThreeAudienceAlgorithmError(null);
+  };
+
+  const handleThreeAudienceChannelChange = (channel: ThreeAudienceChannel) => {
+    setThreeAudienceChannel(channel);
+    if (threeAudienceSegments.length > 0) {
+      const totalError = validateShareTotal(threeAudienceSegments, channel);
+      setThreeAudienceTotalError(totalError);
+    }
+    setThreeAudienceResult(null);
+    setThreeAudienceAlgorithmError(null);
+  };
+
+  const handleThreeAudienceCalculate = () => {
+    if (threeAudienceErrors.length > 0 || threeAudienceTotalError || threeAudienceSegments.length === 0) return;
+    setThreeAudienceLoading(true);
+    setThreeAudienceResult(null);
+    setThreeAudienceAlgorithmError(null);
+    try {
+      const priorA = parseFloat(threeAudiencePriorA);
+      const priorB = parseFloat(threeAudiencePriorB);
+      const priorC = parseFloat(threeAudiencePriorC);
+      const hasPrior =
+        threeAudiencePriorA.trim() !== '' &&
+        threeAudiencePriorB.trim() !== '' &&
+        threeAudiencePriorC.trim() !== '';
+      const expertPrior = hasPrior
+        ? { a: priorA, b: priorB, c: priorC }
+        : undefined;
+      const result = estimateSemirThreeAudienceShares({
+        brand: 'semir',
+        channel: threeAudienceChannel,
+        distribution: {
+          system: CHANNEL_SYSTEM[threeAudienceChannel],
+          segments: threeAudienceSegments.map((s) => ({ label: s.label, share: s.share })),
+        },
+        expertPrior,
+      });
+      setThreeAudienceResult(result);
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : String(err);
+      setThreeAudienceAlgorithmError(message);
+    } finally {
+      setThreeAudienceLoading(false);
+    }
+  };
+
+  const isThreeAudiencePriorValid = (): boolean => {
+    if (threeAudiencePriorA.trim() === '' && threeAudiencePriorB.trim() === '' && threeAudiencePriorC.trim() === '') return true;
+    const a = parseFloat(threeAudiencePriorA);
+    const b = parseFloat(threeAudiencePriorB);
+    const c = parseFloat(threeAudiencePriorC);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || !Number.isFinite(c)) return false;
+    if (a < 0 || a > 1 || b < 0 || b > 1 || c < 0 || c > 1) return false;
+    return Math.abs(a + b + c - 1) <= 1e-6;
+  };
+
   const renderObjectList = () => (
     <div className="workbench-sidebar">
       <div className="workbench-sidebar__header">
@@ -415,6 +627,7 @@ export default function ChannelObjectLibrary() {
               { id: 'match', label: '匹配分析' },
               { id: 'bindings', label: '绑定关系' },
               { id: 'edit', label: '编辑' },
+              { id: 'threeAudience', label: '三大人群' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -964,6 +1177,311 @@ export default function ChannelObjectLibrary() {
     );
   };
 
+  const renderThreeAudience = () => {
+    if (!detail) return null;
+    const canCalculate =
+      threeAudienceMappingConfirmed &&
+      threeAudienceSegments.length > 0 &&
+      threeAudienceErrors.length === 0 &&
+      !threeAudienceTotalError &&
+      isThreeAudiencePriorValid();
+
+    return (
+      <div className="workbench-detail">
+        <div className="alert-banner alert-banner--neutral" style={{ marginBottom: 16 }}>
+          <Upload size={16} />
+          <span>文件和结果仅在当前浏览器会话保留，不上传、不落库。</span>
+        </div>
+
+        <div className="panel">
+          <h3 className="panel__title">选择本地文件</h3>
+          <div className="form-group" style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <button
+              className="btn"
+              onClick={() => document.getElementById('three-audience-file')?.click()}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <FileSpreadsheet size={14} /> 选择文件
+            </button>
+            <input
+              id="three-audience-file"
+              type="file"
+              accept=".csv,.md,.xlsx,.xls"
+              style={{ display: 'none' }}
+              onChange={handleThreeAudienceFileChange}
+            />
+            <button
+              className="btn"
+              onClick={() => document.getElementById('three-audience-folder')?.click()}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <FolderOpen size={14} /> 选择文件夹
+            </button>
+            <input
+              id="three-audience-folder"
+              type="file"
+              /* @ts-expect-error webkitdirectory/directory are non-standard attrs for folder picker */
+              webkitdirectory=""
+              directory=""
+              style={{ display: 'none' }}
+              onChange={handleThreeAudienceFolderChange}
+            />
+          </div>
+          {threeAudienceFile && (
+            <div style={{ marginTop: 12, fontSize: 14, wordBreak: 'break-all' }}>
+              已选文件：<span className="tag" style={{ margin: 0 }}>{threeAudienceFile.name}</span>
+            </div>
+          )}
+          {threeAudienceCandidateFiles.length > 1 && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 13, color: 'var(--muted-foreground)', marginBottom: 8 }}>文件夹中候选文件（请选择一个）：</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {threeAudienceCandidateFiles.map((file) => (
+                  <button
+                    key={file.name}
+                    className={`tag ${threeAudienceFile?.name === file.name ? 'status-badge--success' : ''}`}
+                    style={{ margin: 0, cursor: 'pointer' }}
+                    onClick={() => handleThreeAudienceCandidateSelect(file)}
+                  >
+                    {file.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {threeAudienceParsed && threeAudienceParsed.headers.length > 0 && (
+          <div className="panel">
+            <h3 className="panel__title">列映射</h3>
+            <div className="form-group" style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <label>标签列</label>
+                <select
+                  className="form-control"
+                  data-testid="three-audience-label-column"
+                  value={threeAudienceLabelColumn}
+                  onChange={(e) => handleThreeAudienceMappingChange(e.target.value, threeAudienceShareColumn)}
+                >
+                  {threeAudienceParsed.headers.map((h) => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <label>占比列</label>
+                <select
+                  className="form-control"
+                  data-testid="three-audience-share-column"
+                  value={threeAudienceShareColumn}
+                  onChange={(e) => handleThreeAudienceMappingChange(threeAudienceLabelColumn, e.target.value)}
+                >
+                  {threeAudienceParsed.headers.map((h) => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {!threeAudienceMappingConfirmed && (
+              <button
+                className="btn btn-primary"
+                data-testid="three-audience-confirm-mapping"
+                onClick={handleThreeAudienceConfirmMapping}
+                style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <Calculator size={14} /> 确认列映射
+              </button>
+            )}
+            {threeAudienceMappingConfirmed && (
+              <div className="alert-banner alert-banner--success" style={{ marginTop: 12, background: 'var(--background)' }}>
+                <span>列映射已确认，可继续选择渠道并计算。</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {threeAudienceMappingConfirmed && threeAudienceParsed && threeAudienceParsed.headers.length > 0 && (
+          <div className="panel">
+            <h3 className="panel__title">行级输入</h3>
+            <div className="data-table-wrapper" style={{ overflowX: 'auto' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>行号</th>
+                    <th>标签</th>
+                    <th>原始占比</th>
+                    <th>解析后 share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {threeAudienceSegments.map((segment, index) => (
+                    <tr key={segment.label}>
+                      <td>{index + 2}</td>
+                      <td>{segment.label}</td>
+                      <td>{segment.rawShare}</td>
+                      <td>{formatShareAsPercent(segment.share)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {threeAudienceErrors.length > 0 && (
+              <div className="alert-banner alert-banner--warning" style={{ marginTop: 16 }}>
+                <AlertTriangle size={16} />
+                <div>
+                  <div style={{ marginBottom: 4 }}>以下行存在错误，请先修正源文件后再计算：</div>
+                  <ul style={{ margin: 0, paddingLeft: 16, fontSize: 13 }}>
+                    {threeAudienceErrors.map((err) => (
+                      <li key={err.rowNumber}>第 {err.rowNumber} 行：{err.reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+            {threeAudienceTotalError && (
+              <div className="alert-banner alert-banner--warning" style={{ marginTop: 16 }}>
+                <AlertTriangle size={16} />
+                <span>{threeAudienceTotalError}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {threeAudienceMappingConfirmed && threeAudienceParsed && threeAudienceParsed.headers.length > 0 && (
+          <div className="panel">
+            <h3 className="panel__title">渠道与专家先验</h3>
+            <div className="form-group" style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <label>渠道</label>
+                <select
+                  className="form-control"
+                  data-testid="three-audience-channel"
+                  value={threeAudienceChannel}
+                  onChange={(e) => handleThreeAudienceChannelChange(e.target.value as ThreeAudienceChannel)}
+                >
+                  {THREE_AUDIENCE_CHANNELS.map((ch) => (
+                    <option key={ch.value} value={ch.value}>{ch.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="form-group" style={{ marginTop: 12 }}>
+              <label>专家先验 A/B/C（可选，三项和为 1）</label>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <input
+                  className="form-control"
+                  data-testid="three-audience-prior-a"
+                  placeholder="A 先验"
+                  value={threeAudiencePriorA}
+                  onChange={(e) => { setThreeAudiencePriorA(e.target.value); setThreeAudienceResult(null); setThreeAudienceAlgorithmError(null); }}
+                />
+                <input
+                  className="form-control"
+                  data-testid="three-audience-prior-b"
+                  placeholder="B 先验"
+                  value={threeAudiencePriorB}
+                  onChange={(e) => { setThreeAudiencePriorB(e.target.value); setThreeAudienceResult(null); setThreeAudienceAlgorithmError(null); }}
+                />
+                <input
+                  className="form-control"
+                  data-testid="three-audience-prior-c"
+                  placeholder="C 先验"
+                  value={threeAudiencePriorC}
+                  onChange={(e) => { setThreeAudiencePriorC(e.target.value); setThreeAudienceResult(null); setThreeAudienceAlgorithmError(null); }}
+                />
+              </div>
+              {!isThreeAudiencePriorValid() && (
+                <div style={{ color: 'var(--destructive)', fontSize: 13, marginTop: 8 }}>
+                  先验必须为空或三项均为 0-1 且和为 1
+                </div>
+              )}
+            </div>
+            <button
+              className="btn btn-primary"
+              data-testid="three-audience-calculate"
+              onClick={handleThreeAudienceCalculate}
+              disabled={!canCalculate || threeAudienceLoading}
+              style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <Calculator size={14} /> {threeAudienceLoading ? '计算中...' : '计算三大人群'}
+            </button>
+          </div>
+        )}
+
+        {threeAudienceAlgorithmError && (
+          <div className="alert-banner alert-banner--warning">
+            <AlertTriangle size={16} />
+            <span>计算失败：{threeAudienceAlgorithmError}</span>
+          </div>
+        )}
+
+        {threeAudienceResult && (
+          <div className="panel">
+            <h3 className="panel__title">估算结果</h3>
+            <div className="metric-grid">
+              {threeAudienceResult.shares.map((share) => (
+                <div key={share.code} className="metric-card metric-card--compact">
+                  <div className="metric-title">{share.code} {share.name}</div>
+                  <div className="metric-value">{formatShareAsPercent(share.share)}</div>
+                </div>
+              ))}
+              <div className="metric-card metric-card--compact">
+                <div className="metric-title">覆盖率 coverage</div>
+                <div className="metric-value">{formatShareAsPercent(threeAudienceResult.coverage)}</div>
+              </div>
+              <div className="metric-card metric-card--compact">
+                <div className="metric-title">未覆盖 uncovered</div>
+                <div className="metric-value">{formatShareAsPercent(threeAudienceResult.uncovered)}</div>
+              </div>
+            </div>
+            <div className="data-table-wrapper" style={{ marginTop: 16, overflowX: 'auto' }}>
+              <table className="data-table">
+                <tbody>
+                  <tr>
+                    <td style={{ width: 140, color: 'var(--muted-foreground)' }}>算法版本</td>
+                    <td>{threeAudienceResult.algorithmVersion}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ color: 'var(--muted-foreground)' }}>模式 mode</td>
+                    <td>{threeAudienceResult.mode}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ color: 'var(--muted-foreground)' }}>质量标记</td>
+                    <td>
+                      {threeAudienceResult.qualityFlags.length > 0 ? (
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {threeAudienceResult.qualityFlags.map((flag) => (
+                            <span key={flag} className="tag" style={{ margin: 0 }}>{flag}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        '无'
+                      )}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ color: 'var(--muted-foreground)' }}>未映射标签</td>
+                    <td>
+                      {threeAudienceResult.unmappedSegments.length > 0 ? (
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {threeAudienceResult.unmappedSegments.map((s) => (
+                            <span key={s.label} className="tag" style={{ margin: 0 }}>{s.label} ({formatShareAsPercent(s.share)})</span>
+                          ))}
+                        </div>
+                      ) : (
+                        '无'
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderImportModal = () => {
     if (!showImportModal) return null;
     return (
@@ -1168,6 +1686,7 @@ export default function ChannelObjectLibrary() {
               {activeTab === 'match' && renderMatchAnalysis()}
               {activeTab === 'bindings' && renderBindings()}
               {activeTab === 'edit' && renderEdit()}
+              {activeTab === 'threeAudience' && renderThreeAudience()}
             </>
           ) : null}
         </div>

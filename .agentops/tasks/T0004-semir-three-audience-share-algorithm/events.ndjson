@@ -1,0 +1,4 @@
+{"timestamp":"2026-07-10T03:18:37.216Z","type":"task_created","task_id":"T0004","actor":"codex","resulting_status":"queued","note":"worktree was dirty at task creation"}
+{"timestamp":"2026-07-10T03:29:28.778Z","type":"task_claimed","task_id":"T0004","actor":"opencode","resulting_status":"running"}
+{"timestamp":"2026-07-10T03:37:28.757Z","type":"handoff_submitted","task_id":"T0004","actor":"opencode","resulting_status":"blocked"}
+{"timestamp":"2026-07-10T03:38:22.793Z","type":"review_decision","task_id":"T0004","actor":"codex","resulting_status":"cancelled","note":"Cancelled without implementation: T0004 was superseded before coding by ordered tasks T0005 (JD ten-segment matrix calibration) and T0006 (seven-channel algorithm implementation). Handoff reports no changed files and no validation; existing dirty diffs are outside this cancelled task."}

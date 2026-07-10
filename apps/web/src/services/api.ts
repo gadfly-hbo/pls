@@ -40,16 +40,16 @@ const mockSinglePortraitMetadata: SingleProductPortraitMetadata = {
   maxBatchRows: 100,
   maxFileBytes: 2097152,
   modelVersion: 'single-product-portrait-supervised-ridge-0.1',
-  trainedAt: '2026-07-01T00:00:00Z',
+  trainedAt: '2026-07-09T09:49:25.064Z',
   sampleCount: 73,
   riskFlags: ['baseline_not_trained_model', 'small_sample_supervised_model', 'no_temporal_validation'],
   metricsSummary: [
-    { labelType: '预测性别', top1Overlap: 0.877, top3Overlap: 1 },
-    { labelType: '预测人生阶段', top1Overlap: 0.808, top3Overlap: 1 },
-    { labelType: '预测年龄段', top1Overlap: 0.685, top3Overlap: 0.804 },
+    { labelType: '预测性别', top1Overlap: 0.959, top3Overlap: 1 },
+    { labelType: '预测人生阶段', top1Overlap: 0.836, top3Overlap: 1 },
+    { labelType: '预测年龄段', top1Overlap: 0.726, top3Overlap: 0.776 },
     { labelType: '预测消费能力', top1Overlap: 0.63, top3Overlap: 1 },
-    { labelType: '城市等级', top1Overlap: 0.397, top3Overlap: 0.776 },
-    { labelType: '八大消费群体', top1Overlap: 0.315, top3Overlap: 0.813 },
+    { labelType: '城市等级', top1Overlap: 0.342, top3Overlap: 0.749 },
+    { labelType: '八大消费群体', top1Overlap: 0.342, top3Overlap: 0.808 },
   ],
 };
 

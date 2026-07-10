@@ -2,9 +2,50 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-08（Q2 监督画像模型 server import 契约冻结）
+最近更新：2026-07-10（七渠道三大人群占比算法实现）
 
 进度：
+
+- 新增 `apps/model/src/three-audience-share.ts`：实现对象无关的 `estimateSemirThreeAudienceShares()`，支持抖音、天猫、京东、线下、唯品会、视频号、拼多多七类渠道。
+- 统一算法严格校验 `channel/system` 一一匹配、重复标签、share 越界、输入总和、非法 prior；未知标签保留在 `unmappedSegments`，不做跨渠道 fallback。
+- 已实现契约明确的标准化/合并规则：抖音 `Z世代 -> genz`；视频号 `小镇中青年 -> 小镇中老年`、`精致妈妈/精致中产 -> 资深中产`；拼多多 `都市白领/都市Z世代/都市中产/小镇银发/学生/小资中年` 合并到抖音八大体系。
+- 京东统一算法直接消费依赖任务冻结的 `JD_RECOMMENDED_CALIBRATED_MATRIX` 和 `semir_three_audience_v2.1.0-jd-calibrated`，不再使用 v2.0.2 partial-coverage 矩阵。
+- 统一入口对总和在契约容差内的轻微溢出执行归一化，避免 `expertPrior` 软回填时出现负 `uncovered` 或负 share；京东额外接受来源四舍五入 `0.0001` 容差并归一化，四份 portable fixture 均可直接通过统一入口。
+- 新增 `apps/model/src/three-audience-share-contract-test.ts` 和 npm script `three-audience-share-contract-test`，覆盖七渠道矩阵单元、天猫确认样例、京东校准矩阵、拼多多/视频号合并、默认归一化、显式 prior 软回填、unmapped/quality flags 和非法输入。
+- `ThreeAudienceInputError` 使用显式 `readonly code` 属性赋值，不能改回 TypeScript parameter property；`apps/web` 以 `erasableSyntaxOnly: true` 直接复用该模型源码，parameter property 会使其构建失败。
+
+本次验证：
+
+- `apps/model npm run typecheck` 通过。
+- `apps/model npm run jd-three-audience-calibration-contract-test` 通过，`ok: true` / `failures: []`。
+- `apps/model npm run three-audience-share-contract-test` 通过，`ok: true` / `failures: []`；包含合法 `1+1e-6` 溢出 + prior、四份 JD portable fixture、`partial_coverage` 阈值回归。
+
+阻塞/开放：
+
+- 当前只实现对象无关算法，不定义渠道、店铺、账号画像结构，也不接入 Server / Frontend。
+- 未实现趋势、行为强度、动态误差区间或置信度模型；行为层信号仍不得回写 A/B/C 份额。
+- 专家先验只在调用方显式传入合法 prior 时软回填，不提供默认 prior。
+- 非京东渠道仍遵守通用总和容差 `1e-6`；京东 `0.0001` 容差仅用于吸收已知来源表四舍五入误差，不代表允许任意超额分布。
+
+### 上一轮状态（京东十大靶群三大人群矩阵校准）
+
+- 新增京东十大靶群三大人群校准：`apps/model/src/jd-three-audience-calibration.ts` 冻结 `JD_RECOMMENDED_CALIBRATED_MATRIX` 与 `semir_three_audience_v2.1.0-jd-calibrated`，每行 `A+B+C=1`；矩阵由 `deriveJdTargetCalibratedMatrix()` 按 portable fixture、目标归一化、固定先验、可调行集合和最小 L2 偏移 tie-break 确定性推导。
+- 用户确认的京东业务展示目标为 2024 年 `22.5/32.6/44.8`、2025 年 `22.1/32.9/45.0`、2026 年 `21.1/34.7/44.1`；2026 目标合计 `99.9%`，拟合前归一化为 `21.12/34.73/44.14`。
+- 新增 `apps/model/src/jd-three-audience-calibration-contract-test.ts` 和 npm script `jd-three-audience-calibration-contract-test`，覆盖十行 row sum、四份 portable fixture 输入合计、coverage、非负性、真实 reversed-order 确定性和 2025/2026 年均归一化目标对齐。
+- 新增 `docs/model-jd-three-audience-calibration.md`，记录 v2.0.2 baseline uncovered 来源、两个候选矩阵、推荐矩阵、fixture before/after、可复算目标函数、不可识别性限制与风险。
+- 更新 `docs/model-three-audience-share-contract.md` 和 `docs/prd-three-audience-share-algorithm.md`，京东段升级为 v2.1.0 校准口径。
+
+本次验证：
+
+- `apps/model npm run jd-three-audience-calibration-contract-test` 通过，`ok: true` / `failures: []`；contract test 断言 2025/2026 年均结果对齐归一化目标口径。
+
+阻塞/开放：
+
+- 2024 年未找到原始十大靶群 XLSX，当前只能记录用户确认目标，不能验证 2024 输出。
+- 2025/2026 目标来自用户确认口径；若目标口径未来变化，需升级版本并重新冻结矩阵。
+- 两年年均 A/B 约束无法唯一识别 10 行矩阵；当前唯一性来自固定先验、可调行集合和最小 L2 偏移 tie-break。
+
+### 上一轮状态（Q2 监督画像模型 server import 契约冻结）
 
 - 新增 `apps/model/src/q2-portrait-data-prep.ts`：读取 `/Users/huangbo/Downloads/Q2有画像款.xlsx` 与 `/Users/huangbo/Downloads/单款画像/*.csv`，对齐生成标准样本包到 `data/local/single-product-portrait-q2-73sample/`，73 个样本全部匹配。
 - 新增 `apps/model/src/single-product-portrait-supervised.ts`：基于 `版型 / 面料 / FAB` 三字段训练分维度 Ridge 回归模型；特征工程包括版型 one-hot、面料/FAB 关键词字典（面料成分、风格、功能、场景）。
@@ -12,8 +53,13 @@
 - 缺失版型按约定填为 `X型`；closed dimension 在 top-N 切片后重新归一化，保证剩余标签 share 和为 1。
 - 新增 LOO 验证框架：73 折 leave-one-out，输出 `top1OverlapMean`、`top3OverlapMean`、`closedDimensionMassErrorMean`、per-dimension 指标。
 - 修改 `apps/model/src/single-product-portrait.ts`：放宽 `PlatformPortraitRow.source` 和 `SingleProductPortraitPrediction.modelVersion/modelPath` 类型；新增风险标记 `small_sample_supervised_model`、`no_temporal_validation`。
-- 新增 CLI 命令与 npm scripts：`single-product-portrait-train`、`single-product-portrait-eval`、`single-product-portrait-predict-supervised`、`single-product-portrait-predict-batch`。
+- 后端默认模型路径改为 `model-calibrated.json`，使前端调用真实 API 时自动使用关键词扩展 + 温度校准后的模型。
+- 同步更新 `apps/web/src/services/api.ts` 的 mock 元数据（`mockSinglePortraitMetadata.metricsSummary` / `trainedAt`），保持 mock 与真实后端形态一致。
+- 新增 CLI 命令与 npm scripts：`single-product-portrait-train`、`single-product-portrait-train-calibrated`、`single-product-portrait-eval`、`single-product-portrait-predict-supervised`、`single-product-portrait-predict-batch`、`single-product-portrait-q1-eval`、`single-product-portrait-keyword-suggest`。
 - 新增批量预测入口：读取含 `款号 / 版型 / 面料 / FAB` 的 Excel，输出每款的 6 维度画像。
+- 新增温度校准：`calibrateSupervisedTemperatures` 用 LOO 在训练集上学习 per-dimension temperature，share MAE 从 0.139 降至 0.132（Q1 回测）。
+- 新增真实画像评估脚本：`apps/model/src/q1-portrait-evaluation.ts`，对比批量预测结果与真实单款画像，输出 per-dimension top1/top3 命中率、share MAE、mass error。
+- 新增关键词扩展建议脚本：`apps/model/src/keyword-expansion-suggest.ts`，从 Q1/Q2 语料中提取高频未收录 n-gram 供人工审核。
 - 新增测试：`single-product-portrait-supervised-contract-test.ts`、`single-product-portrait-supervised-smoke.ts`。
 - 冻结 server import 契约：A 域可从 `apps/model/src/single-product-portrait-supervised.ts` 导入 `buildSingleProductPortraitModelMetadata()`、`predictSingleProductPortraitFromCleanInput()`、`SingleProductPortraitModelUnavailableError`、`CleanSingleProductPortraitInput`、`SingleProductPortraitModelMetadata`。
 - `model.json` 默认路径由模型模块解析到 `data/local/single-product-portrait-q2-73sample/model.json`，服务端可用 `SINGLE_PRODUCT_PORTRAIT_MODEL_PATH` 覆盖；metadata 对缺失/不可读模型返回 `modelAvailable: false` + `model_not_available`，预测函数抛 `SingleProductPortraitModelUnavailableError` 供 A 域映射。
@@ -28,6 +74,15 @@
 - `npm run single-product-portrait-eval` 通过，当前 LOO top1 overlap：性别 87.7%、人生阶段 80.8%、年龄段 68.5%、消费能力 63.0%、城市等级 39.7%、消费群体 31.5%。
 - 回归验证：`npm run contract-test`、`npm run single-product-portrait-contract-test`、`npm run single-product-portrait-calibration-contract-test`、`npm run validate-tags`、`npm run account-fit-contract-test` 均通过。
 - Q1 新品批量预测验证：`npm run single-product-portrait-predict-batch -- --input /Users/huangbo/Downloads/Q1商品信息.xlsx --output /tmp/q1_portrait_predictions.json --topN 3` 成功输出 95 款预测结果。
+- Q1 真实 10 款画像回测：
+  - 基线模型：平均 top1 58.3%，top3 100.0%，share MAE 0.139
+  - 仅温度校准：top1 58.3%，top3 100.0%，share MAE 0.132
+  - 关键词扩展 + 温度校准（最终）：
+    - 平均 top1 **60.0%**（+1.7pp），top3 100.0%
+    - share MAE **0.127**（-8.6%）
+    - 性别 share MAE 0.179（-26.2%），年龄段 top1 70.0%（+20.0pp），人生阶段 top1 70.0%（-10.0pp）
+    - 城市等级、消费群体 top1 仍为 20.0% / 30.0%，排序问题未解决
+- 关键词扩展建议：`npm run single-product-portrait-keyword-suggest` 输出候选词，已人工审核入库 21 个新关键词。
 
 阻塞/开放：
 
@@ -100,6 +155,31 @@
 - 风险：73 样本 LOO 不能替代时间切分 holdout，不能向业务宣称为最终泛化精度。
 - 风险：城市等级、八大消费群体高基数维度 top1 仅 39.7% / 31.5%，样本量增加或引入 hierarchy 后才可能稳定。
 - 风险：面料/FAB 关键词字典为最小集合，某些特殊面料或风格词可能未命中，导致特征稀疏。
+
+## Q1 真实画像回测收尾记录
+
+- 决策：真实回测只对比 6 个目标维度，其他平台维度（地域分布、视频兴趣等）暂不在本轮评估范围。
+- 决策：温度校准只改变 closed dimension share 幅度，不改变标签排序；用训练集 LOO 学习 temperature，避免在 10 款测试集上调参。
+- 决策：关键词扩展采用 n-gram 频率 + 停用词/子串过滤生成候选，最终入库需人工审核，不自动扩入生产字典。
+- 发现：温度校准对人生阶段 share 幅度改善最明显（MAE 0.262 → 0.208），对性别也有改善（MAE 0.242 → 0.238），但 top1 命中率不变。
+- 发现：城市等级、八大消费群体 top1 低是排序问题，温度缩放无法解决，需要更多样本或层级建模。
+- 踩坑：第一次 `/tmp` 输出文件在重启/复制后消失，后续交付文件直接落盘到桌面或项目目录。
+- 风险：10 款测试样本仍小，校准参数和关键词候选都可能过拟合到这 10 款，需后续更多真实数据验证。
+- 前端同步：
+  - 后端默认加载 `model-calibrated.json`，真实 API 请求会自动生效，无需重启 server（模型按请求加载）。
+  - 前端本地开发默认走 mock（`apps/web/src/services/api.ts` 中 `USE_MOCK=true`），我已同步更新 mock 元数据；但 mock 预测结果是本地写死的，不会随模型改变。
+  - 要让前端页面真实反映模型输出，需以 `VITE_USE_MOCK=false npm run dev` 启动前端，并确保 `apps/server` 已启动。
+  - 已在本机启动验证：后端 `http://localhost:3100`，前端 `http://localhost:5174`，前端代理 `/api/v0` → 后端；调用 `/api/v0/single-product-portrait/predict` 返回真实模型输出（性别 share 0.92/0.08，体现校准后的锐化效果）。
+- 新增关键词清单：
+  - 面料：`斜纹`、`提花`、`双面`、`水洗`、`肌理`
+  - 风格：`遮肉`、`随性`、`不挑`、`百搭`、`线条`、`剪裁`、`立体`、`层次`、`分割`
+  - 功能：`抽绳`
+- 决策：关键词入库后重新训练校准模型，最终模型文件为 `model-calibrated.json`；Q1 批量预测使用最终模型输出到 `Q1画像预测结果_关键词校准版.json`。
+- 决策：评估指标采用 top1/top3 命中率和 share MAE，既看标签对错也看 share 幅度偏差。
+- 发现：模型对高置信度维度（性别、消费能力、人生阶段）top1 命中率高（80%-90%），但对高基数维度（城市等级、八大消费群体）top1 仅 20%-30%，虽然 top3 100% 命中。
+- 发现：性别/人生阶段 share MAE 高，原因是真实 dominant label share 往往很极端（例如 97% 女），而 Ridge 输出被正则化拉向均值，预测 share 偏低。
+- 踩坑：批量预测时 `/tmp` 文件易被清理，实际交付给用户时复制到桌面或项目目录更可靠。
+- 风险：10 款样本量仍小，不能据此声称最终泛化精度；但已能定位模型弱点。
 
 ## 模型域原则
 

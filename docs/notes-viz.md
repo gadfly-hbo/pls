@@ -2,9 +2,20 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-09（T0003 / V-PORTRAIT-FE-3 完成 Dashboard 单品画像预测 UI，专用 API adapter、mock/real E2E 与下载闭环已通过验证）
+最近更新：2026-07-10（T0007 完成：在渠道对象库详情页新增“三大人群”本地估算 Tab，CSV/Markdown/XLSX 解析、七渠道算法、先验与定向 E2E 均通过验证）
 
 进度：
+
+- `T0007 / semir-three-audience-local-estimator` (frontend) 已完成：
+  - T0008 批准后，以 `../../../model/src/three-audience-share` 正确路径复用 `estimateSemirThreeAudienceShares` 及类型，未复制算法。
+  - 在 `ChannelObjectLibrary` 详情 Header 的“编辑”后新增“三大人群”Tab。
+  - 新增 `apps/web/src/utils/three-audience-local-parser.ts`：CSV / Markdown 首个 GFM 表格 / XLSX 首张表解析、有限同义列名候选、行级严格校验（空标签、重复、非数值、负数、大于 100%）、渠道总和容差。
+  - 页面支持文件选择器、文件夹选择器（列出候选文件后由用户明确选择，不自动合并）、列映射确认/更改、七渠道选择、可选 A/B/C 先验、结果展示（A/B/C、coverage/uncovered、algorithmVersion、mode、qualityFlags、unmappedSegments）。
+  - **返修修订**：增加显式“确认列映射”按钮；文件解析或列映射变更后未确认时禁用计算，确认后才构建并校验行级输入、显示渠道与先验面板及计算按钮。`CHANNEL_SYSTEM` 改为 `Record<ThreeAudienceChannel, NativeSegmentSystem>` 并移除 `as any`。
+  - 明确标注“文件和结果仅在当前浏览器会话保留，不上传、不落库”。
+  - 使用现有 panel / metric-card / alert-banner / data-table-wrapper 风格，390px 下无页面级横向溢出。
+  - 新增 `apps/web/e2e/three-audience-local-estimator.spec.ts`：覆盖 Tab 可达、CSV 解析与天猫计算、Markdown、XLSX、非法输入阻止、mock 无后端请求、390px 无溢出；补充确认列映射门槛断言。
+  - 验证通过：`apps/web` `npm run build`、`npm run lint`、定向 Playwright 7 passed、全量 `npm run smoke` 25 passed / 6 skipped；`apps/model` `npm run three-audience-share-contract-test` 通过。
 
 - `T0003 / V-PORTRAIT-FE-3` (Dashboard 单品画像预测 UI) 已完成：
   - 在“新品预测”工作台内新增 metadata 驱动的 `单品画像预测` 区域，支持 `单款预测` / `批量预测` 模式切换，不新增一级导航。

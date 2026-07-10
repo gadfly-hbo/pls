@@ -190,6 +190,15 @@ npm run single-product-portrait-train
 npm run single-product-portrait-eval
 ```
 
+Train with per-dimension temperature calibration (recommended):
+
+```bash
+npm run single-product-portrait-train-calibrated
+# outputs model-calibrated.json with learned temperatures
+```
+
+The backend now loads `model-calibrated.json` by default. The baseline `model.json` is still produced by `single-product-portrait-train` if you need it.
+
 Predict a new product:
 
 ```bash
@@ -211,9 +220,17 @@ Server import contract:
 Batch predict from an Excel with `款号 / 版型 / 面料 / FAB` columns:
 
 ```bash
+# baseline model
 npm run single-product-portrait-predict-batch -- \
   --input /Users/huangbo/Downloads/Q1商品信息.xlsx \
   --output /tmp/q1_portrait_predictions.json \
+  --topN 3
+
+# calibrated model
+npm run single-product-portrait-predict-batch -- \
+  --input /Users/huangbo/Downloads/Q1商品信息.xlsx \
+  --model ../../data/local/single-product-portrait-q2-73sample/model-calibrated.json \
+  --output /tmp/q1_portrait_predictions_calibrated.json \
   --topN 3
 ```
 
@@ -249,16 +266,16 @@ Evaluation uses leave-one-out on the 73 samples and reports:
 - `closedDimensionMassErrorMean`
 - Per-dimension `top1Overlap`, `top3Overlap`, `massError`
 
-Current LOO results:
+Current LOO results (after keyword expansion + temperature calibration):
 
 | Dimension | top1 overlap | top3 overlap |
 |---|---|---|
-| 预测性别 | 87.7% | 100.0% |
-| 预测人生阶段 | 80.8% | 100.0% |
-| 预测年龄段 | 68.5% | 80.4% |
+| 预测性别 | 95.9% | 100.0% |
+| 预测人生阶段 | 83.6% | 100.0% |
+| 预测年龄段 | 72.6% | 77.6% |
 | 预测消费能力 | 63.0% | 100.0% |
-| 城市等级 | 39.7% | 77.6% |
-| 八大消费群体 | 31.5% | 81.3% |
+| 城市等级 | 34.2% | 74.9% |
+| 八大消费群体 | 34.2% | 80.8% |
 
 Risk flags:
 
@@ -277,6 +294,24 @@ Run tests:
 ```bash
 npm run single-product-portrait-supervised-contract-test
 npm run single-product-portrait-supervised-smoke
+```
+
+Evaluate against real held-out portraits (Q1 10-sample example):
+
+```bash
+npm run single-product-portrait-predict-batch -- \
+  --input /Users/huangbo/Downloads/Q1商品信息.xlsx \
+  --output /Users/huangbo/Desktop/Q1画像预测结果.json \
+  --topN 3
+
+npm run single-product-portrait-q1-eval -- \
+  --predictions /Users/huangbo/Desktop/Q1画像预测结果.json
+```
+
+Suggest keyword dictionary expansions from Q1/Q2 corpus:
+
+```bash
+npm run single-product-portrait-keyword-suggest
 ```
 
 ## C3 Follow-Up

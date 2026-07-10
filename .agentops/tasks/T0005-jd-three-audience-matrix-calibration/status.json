@@ -1,0 +1,16 @@
+{
+  "id": "T0005",
+  "slug": "jd-three-audience-matrix-calibration",
+  "status": "approved",
+  "assignee": "opencode",
+  "domain": "algorithm",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-10T03:27:22.941Z",
+  "updated_at": "2026-07-10T05:16:04.606Z",
+  "base_ref": "3b3baee267cf0ccf3eb8987b6245e3f7f8cfa245",
+  "dirty_at_creation": true,
+  "batch": "semir-three-audience-v2",
+  "sequence": 1,
+  "domain_memory": "agentops/memory/opencode-algorithm.md"
+}

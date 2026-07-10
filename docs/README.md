@@ -20,6 +20,9 @@
 | [model-plan.md](model-plan.md) | M | 商品画像预测、商品 × 渠道匹配算法、回测指标 |
 | [channel-profile-2.0-plan.md](channel-profile-2.0-plan.md) | X 总控 | 渠道画像 2.0 对象库、活动/场景、导入、匹配权重和第一期范围 |
 | [model-p6-channel-entity-fit-contract.md](model-p6-channel-entity-fit-contract.md) | M | 渠道画像 2.0 商品适配与活动/场景权重匹配契约 |
+| [prd-three-audience-share-algorithm.md](prd-three-audience-share-algorithm.md) | X 总控 | 森马三大人群占比算法基础迭代目标、边界与验收 |
+| [model-three-audience-share-contract.md](model-three-audience-share-contract.md) | X 总控 | 森马三大人群七渠道映射、coverage、可选 prior 与测试契约 |
+| [prd-three-audience-local-estimator-ui.md](prd-three-audience-local-estimator-ui.md) | X 总控 | 渠道对象详情中的本地文件解析、渠道选择与三大人群估算界面边界 |
 | [single-product-portrait-algorithm-contract.md](single-product-portrait-algorithm-contract.md) | X 总控 | 单品商品属性到平台人群画像的规则 baseline contract、输出形态、验证标准和实现任务边界 |
 | [prd-single-product-portrait-frontend.md](prd-single-product-portrait-frontend.md) | X 总控 | Q2 监督单品画像模型前端落地 PRD、单款/批量预测、metadata、API、错误码和任务拆分 |
 | [p5-portrait-baseline-acceptance.md](p5-portrait-baseline-acceptance.md) | X 总控 | 单品画像规则 baseline 总体验收、第一期展示边界和后续任务顺序 |

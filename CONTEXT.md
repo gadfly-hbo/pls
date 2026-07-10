@@ -16,6 +16,10 @@ _Avoid_: label, crowd word, arbitrary tag
 An external platform's audience profile shape preserved in its original dimensions and labels before any PLS taxonomy projection.
 _Avoid_: profile tag, normalized taxonomy output
 
+**Native Audience Segment Distribution**:
+A platform-native population segmentation and its shares, preserved with the platform system identity before any PLS taxonomy projection or cross-platform comparison.
+_Avoid_: profile tags, inferred demographic segments, behavior signals
+
 **Taxonomy Bridge**:
 A controlled projection from an external platform portrait label into an existing PLS Profile Tag, with confidence and explicit unmapped handling.
 _Avoid_: taxonomy expansion, label rewrite
@@ -35,3 +39,7 @@ _Avoid_: wide table row
 **Derived Result**:
 A result produced by PLS from source data, such as prediction, match result, recommendation, or review.
 _Avoid_: source data, master data
+
+**Three Audience Segment Estimate**:
+A Semir-specific Derived Result that estimates the shares of 质感流行派、都市体面家 and 百搭优选客 from a supported Native Audience Segment Distribution under a versioned mapping matrix.
+_Avoid_: source audience distribution, mutually exclusive user identity, profile tags

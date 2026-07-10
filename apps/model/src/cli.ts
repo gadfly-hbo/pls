@@ -21,6 +21,8 @@ import {
   trainSupervisedPortraitModel,
   loadSupervisedTrainingData,
   batchPredictSupervisedPortraits,
+  calibrateSupervisedTemperatures,
+  applySupervisedTemperatures,
 } from "./single-product-portrait-supervised.js";
 
 const [command, ...args] = process.argv.slice(2);
@@ -83,6 +85,16 @@ if (command === "predict") {
   const model = trainSupervisedPortraitModel({ samples, targetsByDimension, alpha });
   saveSupervisedModel(model, outputPath);
   printJson({ trained: true, outputPath, sampleCount: model.sampleCount, dimensions: model.dimensionModels.map((d) => d.labelType) });
+} else if (command === "single-product-portrait-train-calibrated") {
+  const packagePath = getArg("--package") ?? "../../data/local/single-product-portrait-q2-73sample";
+  const outputPath = getArg("--output") ?? "../../data/local/single-product-portrait-q2-73sample/model-calibrated.json";
+  const alpha = Number(getArg("--alpha") ?? "1.0");
+  const { samples, targetsByDimension } = loadSupervisedTrainingData(packagePath);
+  const model = trainSupervisedPortraitModel({ samples, targetsByDimension, alpha });
+  const calibration = calibrateSupervisedTemperatures({ packagePath, alpha });
+  const calibratedModel = applySupervisedTemperatures(model, calibration.temperatures);
+  saveSupervisedModel(calibratedModel, outputPath);
+  printJson({ trained: true, calibrated: true, outputPath, sampleCount: calibratedModel.sampleCount, temperatures: calibration.temperatures, perDimensionMse: calibration.perDimensionMse });
 } else if (command === "single-product-portrait-eval") {
   const packagePath = getArg("--package") ?? "../../data/local/single-product-portrait-q2-73sample";
   const alpha = Number(getArg("--alpha") ?? "1.0");
@@ -109,5 +121,5 @@ if (command === "predict") {
     printJson(results);
   }
 } else {
-  throw new Error("Usage: cli.ts <predict|match|backtest|validate-tags|segment-calibration|token-governance|single-product-portrait|single-product-portrait-calibrate|single-product-portrait-train|single-product-portrait-eval|single-product-portrait-predict-supervised|single-product-portrait-predict-batch> [--sku ...] [--mode demo|cutoff] [--input path] [--cutoff timeWindow] [--xlsx path] [--csv path] [--output path] [--package path] [--model path] [--fit ...] [--fabric ...] [--fab ...] [--alpha number] [--topN number]");
+  throw new Error("Usage: cli.ts <predict|match|backtest|validate-tags|segment-calibration|token-governance|single-product-portrait|single-product-portrait-calibrate|single-product-portrait-train|single-product-portrait-train-calibrated|single-product-portrait-eval|single-product-portrait-predict-supervised|single-product-portrait-predict-batch> [--sku ...] [--mode demo|cutoff] [--input path] [--cutoff timeWindow] [--xlsx path] [--csv path] [--output path] [--package path] [--model path] [--fit ...] [--fabric ...] [--fab ...] [--alpha number] [--topN number]");
 }

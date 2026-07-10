@@ -1,0 +1,16 @@
+{
+  "id": "T0007",
+  "slug": "three-audience-local-estimator-ui",
+  "status": "approved",
+  "assignee": "kilo",
+  "domain": "frontend",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-10T06:20:24.815Z",
+  "updated_at": "2026-07-10T07:28:39.934Z",
+  "base_ref": "3b3baee267cf0ccf3eb8987b6245e3f7f8cfa245",
+  "dirty_at_creation": true,
+  "batch": "semir-three-audience-local-estimator",
+  "sequence": 1,
+  "domain_memory": "agentops/memory/kilo-frontend.md"
+}

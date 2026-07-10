@@ -29,7 +29,7 @@ import { loadSingleProductPortraitSamplePackage, type PortraitSamplePackage } fr
 export const SUPERVISED_PORTRAIT_MODEL_VERSION = "single-product-portrait-supervised-ridge-0.1";
 export const SINGLE_PRODUCT_PORTRAIT_DEFAULT_MODEL_PATH = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  "../../../data/local/single-product-portrait-q2-73sample/model.json",
+  "../../../data/local/single-product-portrait-q2-73sample/model-calibrated.json",
 );
 export const SINGLE_PRODUCT_PORTRAIT_MODEL_PATH_ENV = "SINGLE_PRODUCT_PORTRAIT_MODEL_PATH";
 export const SINGLE_PRODUCT_PORTRAIT_REQUIRED_COLUMNS = ["款号", "版型", "面料", "FAB"] as const;
@@ -69,6 +69,7 @@ export interface DimensionModel {
   featureMean: number[];
   featureStd: number[];
   alpha: number;
+  temperature?: number; // post-hoc calibration temperature for closed dimensions
 }
 
 export interface SupervisedPortraitModel {
@@ -138,12 +139,12 @@ export class SingleProductPortraitModelUnavailableError extends Error {
 }
 
 export const SUPERVISED_PORTRAIT_METRICS_SUMMARY: SupervisedPortraitMetricsSummary[] = [
-  { labelType: "预测性别", top1Overlap: 0.877, top3Overlap: 1.0 },
-  { labelType: "预测人生阶段", top1Overlap: 0.808, top3Overlap: 1.0 },
-  { labelType: "预测年龄段", top1Overlap: 0.685, top3Overlap: 0.804 },
+  { labelType: "预测性别", top1Overlap: 0.959, top3Overlap: 1.0 },
+  { labelType: "预测人生阶段", top1Overlap: 0.836, top3Overlap: 1.0 },
+  { labelType: "预测年龄段", top1Overlap: 0.726, top3Overlap: 0.776 },
   { labelType: "预测消费能力", top1Overlap: 0.63, top3Overlap: 1.0 },
-  { labelType: "城市等级", top1Overlap: 0.397, top3Overlap: 0.776 },
-  { labelType: "八大消费群体", top1Overlap: 0.315, top3Overlap: 0.813 },
+  { labelType: "城市等级", top1Overlap: 0.342, top3Overlap: 0.749 },
+  { labelType: "八大消费群体", top1Overlap: 0.342, top3Overlap: 0.808 },
 ];
 
 export type SupervisedPortraitInput = PortraitTrainingSample;
@@ -204,7 +205,7 @@ const FIT_TYPE_CATEGORIES: Record<string, string[]> = {
   o_line: ["O型"],
 };
 
-const FABRIC_KEYWORDS: Array<{ keyword: string; canonical: string }> = [
+export const FABRIC_KEYWORDS: Array<{ keyword: string; canonical: string }> = [
   { keyword: "棉", canonical: "fabric_cotton" },
   { keyword: "氨纶", canonical: "fabric_spandex" },
   { keyword: "莱赛尔", canonical: "fabric_lyocell" },
@@ -228,9 +229,14 @@ const FABRIC_KEYWORDS: Array<{ keyword: string; canonical: string }> = [
   { keyword: "混纺", canonical: "fabric_blend" },
   { keyword: "交织", canonical: "fabric_blend" },
   { keyword: "混交", canonical: "fabric_blend" },
+  { keyword: "斜纹", canonical: "fabric_twill" },
+  { keyword: "提花", canonical: "fabric_jacquard" },
+  { keyword: "双面", canonical: "fabric_double_face" },
+  { keyword: "水洗", canonical: "fabric_washed" },
+  { keyword: "肌理", canonical: "fabric_texture" },
 ];
 
-const STYLE_KEYWORDS: Array<{ keyword: string; canonical: string }> = [
+export const STYLE_KEYWORDS: Array<{ keyword: string; canonical: string }> = [
   { keyword: "复古", canonical: "style_vintage" },
   { keyword: "怀旧", canonical: "style_vintage" },
   { keyword: "休闲", canonical: "style_casual" },
@@ -283,9 +289,18 @@ const STYLE_KEYWORDS: Array<{ keyword: string; canonical: string }> = [
   { keyword: "法式", canonical: "style_french" },
   { keyword: "优雅", canonical: "style_elegant" },
   { keyword: "温柔", canonical: "style_gentle" },
+  { keyword: "遮肉", canonical: "style_slimming" },
+  { keyword: "随性", canonical: "style_casual" },
+  { keyword: "不挑", canonical: "style_versatile" },
+  { keyword: "百搭", canonical: "style_versatile" },
+  { keyword: "线条", canonical: "style_slimming" },
+  { keyword: "剪裁", canonical: "style_designer" },
+  { keyword: "立体", canonical: "style_designer" },
+  { keyword: "层次", canonical: "style_designer" },
+  { keyword: "分割", canonical: "style_designer" },
 ];
 
-const FUNCTION_KEYWORDS: Array<{ keyword: string; canonical: string }> = [
+export const FUNCTION_KEYWORDS: Array<{ keyword: string; canonical: string }> = [
   { keyword: "三防", canonical: "func_waterproof" },
   { keyword: "防护", canonical: "func_protective" },
   { keyword: "凉感", canonical: "func_cooling" },
@@ -299,9 +314,10 @@ const FUNCTION_KEYWORDS: Array<{ keyword: string; canonical: string }> = [
   { keyword: "保暖", canonical: "func_warm" },
   { keyword: "垂坠", canonical: "func_drape" },
   { keyword: "挺括", canonical: "func_structured" },
+  { keyword: "抽绳", canonical: "func_adjustable" },
 ];
 
-const SCENE_KEYWORDS: Array<{ keyword: string; canonical: string }> = [
+export const SCENE_KEYWORDS: Array<{ keyword: string; canonical: string }> = [
   { keyword: "日常", canonical: "scene_daily" },
   { keyword: "约会", canonical: "scene_date" },
   { keyword: "聚会", canonical: "scene_party" },
@@ -610,7 +626,7 @@ export function trainSupervisedPortraitModel(options: {
 // Prediction
 // ---------------------------------------------------------------------------
 
-function predictDimension(model: DimensionModel, features: Record<string, number>): PlatformPortraitRow[] {
+function computeDimensionScores(model: DimensionModel, features: Record<string, number>): number[] {
   const featureVector = model.featureNames.map((name) => features[name] ?? 0);
   const standardized = featureVector.map((v, j) => (v - model.featureMean[j]!) / model.featureStd[j]!);
 
@@ -622,17 +638,29 @@ function predictDimension(model: DimensionModel, features: Record<string, number
     }
     scores.push(score);
   }
+  return scores;
+}
 
-  // Clip negatives
-  const clipped = scores.map((s) => Math.max(0, s));
+function softmaxWithTemperature(scores: number[], temperature: number): number[] {
+  if (temperature <= 0 || !Number.isFinite(temperature)) {
+    const clipped = scores.map((s) => Math.max(0, s));
+    const total = clipped.reduce((a, b) => a + b, 0);
+    return total > 0 ? clipped.map((s) => s / total) : clipped.map(() => 1 / clipped.length);
+  }
+  const maxScore = Math.max(...scores);
+  const expScores = scores.map((s) => Math.exp((s - maxScore) / temperature));
+  const total = expScores.reduce((a, b) => a + b, 0);
+  return total > 0 ? expScores.map((s) => s / total) : scores.map(() => 1 / scores.length);
+}
 
-  // Normalize closed dimensions
+function predictDimension(model: DimensionModel, features: Record<string, number>): PlatformPortraitRow[] {
+  const scores = computeDimensionScores(model, features);
+
   let shares: number[];
   if (model.isClosed) {
-    const total = clipped.reduce((a, b) => a + b, 0);
-    shares = total > 0 ? clipped.map((s) => s / total) : clipped.map(() => 1 / clipped.length);
+    shares = softmaxWithTemperature(scores, model.temperature ?? 1.0);
   } else {
-    shares = clipped.map((s) => Math.min(1, s));
+    shares = scores.map((s) => Math.min(1, Math.max(0, s)));
   }
 
   return model.labels.map((label, i) => ({
@@ -873,6 +901,118 @@ function aggregateSupervisedMetrics(
     closedDimensionMassErrorMean: closedMassErrorMean,
     dimensionCoverageRate,
     perDimension,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Temperature calibration for closed dimensions
+// ---------------------------------------------------------------------------
+
+export interface CalibrateSupervisedOptions {
+  packagePath: string;
+  alpha?: number;
+  temperatures?: number[];
+}
+
+export interface SupervisedCalibrationResult {
+  temperatures: Record<string, number>;
+  perDimensionMse: Record<string, number>;
+}
+
+function mseShares(predicted: number[], actual: number[]): number {
+  const len = Math.max(predicted.length, actual.length);
+  let sum = 0;
+  for (let i = 0; i < len; i++) {
+    sum += ((predicted[i] ?? 0) - (actual[i] ?? 0)) ** 2;
+  }
+  return sum / len;
+}
+
+export function calibrateSupervisedTemperatures(options: CalibrateSupervisedOptions): SupervisedCalibrationResult {
+  const { packagePath, alpha = 1.0, temperatures = [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 3.0, 5.0] } = options;
+  const { samples, targetsByDimension } = loadSupervisedTrainingData(packagePath);
+
+  if (samples.length < 5) {
+    return { temperatures: {}, perDimensionMse: {} };
+  }
+
+  // Collect per-dimension (scores, actualShares) pairs from LOO folds
+  const dimObservations = new Map<string, { scores: number[][]; actualShares: number[][] }>();
+  for (const labelType of SUPERVISED_TARGET_DIMENSIONS) {
+    dimObservations.set(labelType, { scores: [], actualShares: [] });
+  }
+
+  for (let i = 0; i < samples.length; i++) {
+    const heldOut = samples[i]!;
+    const trainSamples = [...samples.slice(0, i), ...samples.slice(i + 1)];
+
+    const trainTargets = new Map<string, Map<string, number[]>>();
+    for (const [labelType, dimMap] of targetsByDimension) {
+      const newDimMap = new Map<string, number[]>();
+      for (const [label, values] of dimMap) {
+        newDimMap.set(label, values.filter((_, idx) => idx !== i));
+      }
+      trainTargets.set(labelType, newDimMap);
+    }
+
+    const trainModel = trainSupervisedPortraitModel({ samples: trainSamples, targetsByDimension: trainTargets, alpha });
+    const features = extractSupervisedFeatures(heldOut);
+
+    for (const dimModel of trainModel.dimensionModels) {
+      if (!dimModel.isClosed) continue;
+      const obs = dimObservations.get(dimModel.labelType);
+      if (!obs) continue;
+
+      const scores = computeDimensionScores(dimModel, features);
+      const actualShares = dimModel.labels.map((label) => {
+        const values = targetsByDimension.get(dimModel.labelType)?.get(label);
+        return values?.[i] ?? 0;
+      });
+
+      obs.scores.push(scores);
+      obs.actualShares.push(actualShares);
+    }
+  }
+
+  const result: SupervisedCalibrationResult = { temperatures: {}, perDimensionMse: {} };
+
+  for (const labelType of SUPERVISED_TARGET_DIMENSIONS) {
+    const obs = dimObservations.get(labelType);
+    if (!obs || obs.scores.length === 0) continue;
+
+    let bestT = 1.0;
+    let bestMse = Infinity;
+
+    for (const t of temperatures) {
+      let mseSum = 0;
+      for (let k = 0; k < obs.scores.length; k++) {
+        const predShares = softmaxWithTemperature(obs.scores[k]!, t);
+        mseSum += mseShares(predShares, obs.actualShares[k]!);
+      }
+      const mse = mseSum / obs.scores.length;
+      if (mse < bestMse) {
+        bestMse = mse;
+        bestT = t;
+      }
+    }
+
+    result.temperatures[labelType] = bestT;
+    result.perDimensionMse[labelType] = bestMse;
+  }
+
+  return result;
+}
+
+export function applySupervisedTemperatures(
+  model: SupervisedPortraitModel,
+  temperatures: Record<string, number>,
+): SupervisedPortraitModel {
+  return {
+    ...model,
+    dimensionModels: model.dimensionModels.map((dim) => ({
+      ...dim,
+      temperature: temperatures[dim.labelType] ?? dim.temperature,
+    })),
   };
 }
 
