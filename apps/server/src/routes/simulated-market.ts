@@ -63,7 +63,7 @@ simulatedMarket.post("/runs", idempotencyMiddleware(), async (c) => {
 
   let run: SimulationRun;
   try {
-    run = runSimulatedMarket(body, { workspaceId: wsId, runId, generatedAt });
+    run = await runSimulatedMarket(body, { workspaceId: wsId, runId, generatedAt });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return invalidInput(c, message);

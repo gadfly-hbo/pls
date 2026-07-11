@@ -7,6 +7,18 @@
 //   (POST /admin/database/rebuild) and does NOT touch ws_demo.
 // - All simulation_run rows are written to the temporary workspace(s) only.
 // - The server must expose /admin/database/rebuild with the standard admin token.
+//
+// Phases:
+// - Phase 1: SIMULATED_MARKET_FAKE_LLM=true -> expects provider=minimax success with modelVersion=minimax-m3.
+// - Phase 2: SIMULATED_MARKET_FAKE_LLM=false with no MINIMAX_API_KEY -> expects
+//   deterministic fallback with both deterministic_fallback_used and
+//   llm_unavailable_fallback_used quality flags.
+// - Phase 3: SIMULATED_MARKET_FAKE_LLM=true with SIMULATED_MARKET_MODEL overridden -> expects
+//   run.modelVersion to reflect the configured model name.
+// - Phase 4: SIMULATED_MARKET_LLM_TIMEOUT_MS=abc123 -> expects server to handle invalid
+//   timeout gracefully (fallback to default) and still serve requests.
+// - Phase 5 (optional): RUN_SIMULATED_MARKET_LIVE_LLM=1 + MINIMAX_API_KEY -> calls real Minimax
+//   and expects provider=minimax. Skipped unless explicitly enabled.
 
 import { spawn } from "node:child_process";
 import { resolve, dirname } from "node:path";
@@ -56,11 +68,11 @@ function httpGet(url, timeoutMs = 5000) {
   });
 }
 
-async function startServer(attempt = 0) {
+async function startServer(extraEnv = {}, attempt = 0) {
   const maxAttempts = 5;
   const port = 4200 + Math.floor(Math.random() * 1000);
   const base = `http://127.0.0.1:${port}/api/v0`;
-  const env = { ...process.env, PORT: String(port) };
+  const env = { ...process.env, PORT: String(port), ...extraEnv };
   const child = spawn(process.execPath, ["--import", "tsx", "src/index.ts"], {
     cwd: SERVER_DIR,
     env,
@@ -93,7 +105,7 @@ async function startServer(attempt = 0) {
 
   if (attempt < maxAttempts - 1) {
     console.log(`Server start attempt ${attempt + 1} failed (port ${port}), retrying...`);
-    return startServer(attempt + 1);
+    return startServer(extraEnv, attempt + 1);
   }
   throw new Error(`Server failed to start after ${maxAttempts} attempts.\n${output}`);
 }
@@ -154,11 +166,22 @@ async function setupWorkspaces() {
   await rebuildWorkspace(WS_OTHER);
 }
 
-async function main() {
-  console.log(`Smoke simulated-market API`);
-  console.log(`Precondition: this script creates isolated temporary workspaces via /admin/database/rebuild and does not touch ws_demo.`);
+function buildValidBody(agents) {
+  return {
+    sourceType: "manual_strategy",
+    strategyText:
+      "本季主打修身显瘦通勤连衣裙，采用高支棉面料，主打简约通勤与多场景穿搭，定价中档，计划通过抖音直播间与天猫旗舰店同步首发。",
+    marketContext: {
+      channelEntityId: "douyin:shop:semir_official",
+      contextText: "抖音直播首发 + 天猫旗舰店",
+    },
+    targetAgentSet: agents,
+  };
+}
 
-  const server = await startServer();
+async function runLlmSuccessPhase() {
+  console.log("\n>>> Phase 1: fake LLM success path");
+  const server = await startServer({ SIMULATED_MARKET_FAKE_LLM: "true" });
 
   try {
     await setupWorkspaces();
@@ -186,25 +209,12 @@ async function main() {
       body: { strategyText: "short", marketContext: {}, targetAgentSet: [] },
     });
     assert("invalid run returns 400", invalidRun.status === 400, invalidRun.body);
-    assert(
-      "invalid run error code",
-      invalidRun.body?.code === "invalid_input",
-      invalidRun.body
-    );
+    assert("invalid run error code", invalidRun.body?.code === "invalid_input", invalidRun.body);
 
-    // --- create a valid run ---
+    // --- create a valid run with fake LLM ---
     const idemKey = `smoke-sim-${Date.now()}`;
     const agents = templates.body.data.agents.slice(0, 2);
-    const validBody = {
-      sourceType: "manual_strategy",
-      strategyText:
-        "本季主打修身显瘦通勤连衣裙，采用高支棉面料，主打简约通勤与多场景穿搭，定价中档，计划通过抖音直播间与天猫旗舰店同步首发。",
-      marketContext: {
-        channelEntityId: "douyin:shop:semir_official",
-        contextText: "抖音直播首发 + 天猫旗舰店",
-      },
-      targetAgentSet: agents,
-    };
+    const validBody = buildValidBody(agents);
 
     const createRun = await request("POST", "/simulated-market/runs", {
       body: validBody,
@@ -215,14 +225,11 @@ async function main() {
     assert("run has runId", typeof run?.runId === "string", run);
     assert("run has workspaceId", run?.workspaceId === WS_MAIN, run);
     assert("run status is succeeded", run?.status === "succeeded", run);
+    assert("run provider is minimax", run?.provider === "minimax", run);
+    assert("run modelVersion is minimax-m3", run?.modelVersion === "minimax-m3", run);
     assert(
-      "run provider is deterministic_fallback",
-      run?.provider === "deterministic_fallback",
-      run
-    );
-    assert(
-      "run qualityFlags include fallback flag",
-      Array.isArray(run?.qualityFlags) && run.qualityFlags.includes("deterministic_fallback_used"),
+      "run qualityFlags do not include deterministic fallback flag",
+      Array.isArray(run?.qualityFlags) && !run.qualityFlags.includes("deterministic_fallback_used"),
       run
     );
     assert(
@@ -280,11 +287,7 @@ async function main() {
     const otherDetail = await request("GET", `/simulated-market/runs/${run.runId}`, {
       workspace: WS_OTHER,
     });
-    assert(
-      "cross-workspace run returns 404",
-      otherDetail.status === 404,
-      otherDetail.body
-    );
+    assert("cross-workspace run returns 404", otherDetail.status === 404, otherDetail.body);
 
     // --- run not found ---
     const notFoundRun = await request("GET", "/simulated-market/runs/sim_nonexistent");
@@ -303,6 +306,185 @@ async function main() {
   } finally {
     await stopServer(server.child);
   }
+}
+
+async function runFallbackPhase() {
+  console.log("\n>>> Phase 2: provider missing / failure fallback path");
+  // Ensure no real key is configured and fake LLM is disabled so the server falls back.
+  const server = await startServer({
+    SIMULATED_MARKET_FAKE_LLM: "false",
+    MINIMAX_API_KEY: "",
+  });
+
+  try {
+    const templates = await request("GET", "/simulated-market/agent-templates");
+    assert("fallback agent-templates returns 200", templates.status === 200, templates.body);
+
+    const agents = templates.body?.data?.agents?.slice(0, 2);
+    const validBody = buildValidBody(agents);
+
+    const fallbackRun = await request("POST", "/simulated-market/runs", {
+      body: validBody,
+    });
+    assert("fallback create run returns 200", fallbackRun.status === 200, fallbackRun.body);
+    const run = fallbackRun.body?.data;
+    assert("fallback run status is succeeded", run?.status === "succeeded", run);
+    assert(
+      "fallback run provider is deterministic_fallback",
+      run?.provider === "deterministic_fallback",
+      run
+    );
+    assert(
+      "fallback run qualityFlags include deterministic_fallback_used",
+      Array.isArray(run?.qualityFlags) && run.qualityFlags.includes("deterministic_fallback_used"),
+      run
+    );
+    assert(
+      "fallback run qualityFlags include llm_unavailable_fallback_used",
+      Array.isArray(run?.qualityFlags) &&
+        run.qualityFlags.includes("llm_unavailable_fallback_used"),
+      run
+    );
+    assert(
+      "fallback run has overall scores",
+      typeof run?.result?.overall?.acceptanceScore === "number" &&
+        typeof run?.result?.overall?.purchaseIntentScore === "number" &&
+        typeof run?.result?.overall?.confidence === "number",
+      run
+    );
+    assert(
+      "fallback run has agent feedback",
+      Array.isArray(run?.result?.agentFeedback) && run.result.agentFeedback.length === agents.length,
+      run
+    );
+  } finally {
+    await stopServer(server.child);
+  }
+}
+
+async function runCustomModelPhase() {
+  console.log("\n>>> Phase 3: custom SIMULATED_MARKET_MODEL flows to modelVersion");
+  const customModel = "minimax-m3-custom";
+  const server = await startServer({
+    SIMULATED_MARKET_FAKE_LLM: "true",
+    SIMULATED_MARKET_MODEL: customModel,
+  });
+
+  try {
+    const templates = await request("GET", "/simulated-market/agent-templates");
+    assert("custom model agent-templates returns 200", templates.status === 200, templates.body);
+
+    const agents = templates.body?.data?.agents?.slice(0, 2);
+    const validBody = buildValidBody(agents);
+
+    const customRun = await request("POST", "/simulated-market/runs", {
+      body: validBody,
+    });
+    assert("custom model create run returns 200", customRun.status === 200, customRun.body);
+    const run = customRun.body?.data;
+    assert("custom model run provider is minimax", run?.provider === "minimax", run);
+    assert(
+      "custom model run modelVersion matches SIMULATED_MARKET_MODEL",
+      run?.modelVersion === customModel,
+      run
+    );
+  } finally {
+    await stopServer(server.child);
+  }
+}
+
+async function runInvalidTimeoutPhase() {
+  console.log("\n>>> Phase 4: invalid SIMULATED_MARKET_LLM_TIMEOUT_MS is handled gracefully");
+  const server = await startServer({
+    SIMULATED_MARKET_FAKE_LLM: "true",
+    SIMULATED_MARKET_LLM_TIMEOUT_MS: "abc123",
+  });
+
+  try {
+    const templates = await request("GET", "/simulated-market/agent-templates");
+    assert("invalid timeout agent-templates returns 200", templates.status === 200, templates.body);
+
+    const agents = templates.body?.data?.agents?.slice(0, 2);
+    const validBody = buildValidBody(agents);
+
+    const invalidTimeoutRun = await request("POST", "/simulated-market/runs", {
+      body: validBody,
+    });
+    assert(
+      "invalid timeout create run returns 200",
+      invalidTimeoutRun.status === 200,
+      invalidTimeoutRun.body
+    );
+    const run = invalidTimeoutRun.body?.data;
+    assert("invalid timeout run status is succeeded", run?.status === "succeeded", run);
+    assert("invalid timeout run provider is minimax", run?.provider === "minimax", run);
+    assert(
+      "invalid timeout run has agent feedback",
+      Array.isArray(run?.result?.agentFeedback) && run.result.agentFeedback.length === agents.length,
+      run
+    );
+  } finally {
+    await stopServer(server.child);
+  }
+}
+
+async function runLiveMinimaxPhase() {
+  const liveEnabled = process.env.RUN_SIMULATED_MARKET_LIVE_LLM === "1";
+  const hasKey = Boolean(process.env.MINIMAX_API_KEY);
+
+  if (!liveEnabled) {
+    console.log("\n>>> Phase 5: live Minimax smoke skipped (set RUN_SIMULATED_MARKET_LIVE_LLM=1 + MINIMAX_API_KEY to enable)");
+    return;
+  }
+
+  if (!hasKey) {
+    console.log("\n>>> Phase 5: live Minimax smoke skipped (MINIMAX_API_KEY not configured)");
+    return;
+  }
+
+  console.log("\n>>> Phase 5: live Minimax smoke (real network call)");
+  const server = await startServer({
+    SIMULATED_MARKET_FAKE_LLM: "false",
+  });
+
+  try {
+    const templates = await request("GET", "/simulated-market/agent-templates");
+    assert("live minimax agent-templates returns 200", templates.status === 200, templates.body);
+
+    const agents = templates.body?.data?.agents?.slice(0, 1);
+    const validBody = buildValidBody(agents);
+
+    const liveRun = await request("POST", "/simulated-market/runs", {
+      body: validBody,
+    });
+    assert("live minimax create run returns 200", liveRun.status === 200, liveRun.body);
+    const run = liveRun.body?.data;
+    assert("live minimax run status is succeeded", run?.status === "succeeded", run);
+    assert("live minimax run provider is minimax", run?.provider === "minimax", run);
+    assert(
+      "live minimax run qualityFlags do not include fallback flag",
+      Array.isArray(run?.qualityFlags) && !run.qualityFlags.includes("deterministic_fallback_used"),
+      run
+    );
+  } finally {
+    await stopServer(server.child);
+  }
+}
+
+async function main() {
+  console.log(`Smoke simulated-market API`);
+  console.log(
+    `Precondition: this script creates isolated temporary workspaces via /admin/database/rebuild and does not touch ws_demo.`
+  );
+  console.log(
+    `Phase 1 uses SIMULATED_MARKET_FAKE_LLM=true; Phase 2 uses no fake LLM and no MINIMAX_API_KEY; Phase 3 overrides SIMULATED_MARKET_MODEL; Phase 4 uses invalid SIMULATED_MARKET_LLM_TIMEOUT_MS; Phase 5 (optional) calls live Minimax when RUN_SIMULATED_MARKET_LIVE_LLM=1.`
+  );
+
+  await runLlmSuccessPhase();
+  await runFallbackPhase();
+  await runCustomModelPhase();
+  await runInvalidTimeoutPhase();
+  await runLiveMinimaxPhase();
 
   const ok = failed === 0;
   console.log(

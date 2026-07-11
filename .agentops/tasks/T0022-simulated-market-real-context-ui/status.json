@@ -1,0 +1,19 @@
+{
+  "id": "T0022",
+  "slug": "simulated-market-real-context-ui",
+  "status": "approved",
+  "assignee": "kilo",
+  "domain": "frontend",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-11T10:29:57.483Z",
+  "updated_at": "2026-07-11T11:42:51.850Z",
+  "base_ref": "68c28c67f991d533e04248542f34566fbd4c2184",
+  "dirty_at_creation": true,
+  "batch": "simulated-market-llm-v2",
+  "sequence": 3,
+  "depends_on": [
+    "T0021"
+  ],
+  "domain_memory": "agentops/memory/kilo-frontend.md"
+}

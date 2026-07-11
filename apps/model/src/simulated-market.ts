@@ -84,17 +84,29 @@ export interface SimulatedMarketOptions {
   generatedAt?: string;
 }
 
+export interface SimulatedMarketPrompt {
+  systemPrompt: string;
+  userPrompt: string;
+}
+
+export interface SimulatedMarketLlmResponseShape {
+  raw: string;
+}
+
 export const SIMULATED_MARKET_FALLBACK_PROVIDER = "deterministic_fallback";
 export const SIMULATED_MARKET_FALLBACK_MODEL_VERSION = "deterministic-fallback-0.1";
+export const SIMULATED_MARKET_LLM_PROVIDER = "minimax";
+export const SIMULATED_MARKET_LLM_MODEL_VERSION = "minimax-m3";
 
 export const DEFAULT_QUALITY_FLAGS = {
   strategyTextTooShort: "strategy_text_too_short",
   missingTargetAgentProfile: "missing_target_agent_profile",
   missingMarketContext: "missing_market_context",
   deterministicFallbackUsed: "deterministic_fallback_used",
+  llmUnavailableFallbackUsed: "llm_unavailable_fallback_used",
 } as const;
 
-const MIN_STRATEGY_TEXT_LENGTH = 10;
+export const MIN_STRATEGY_TEXT_LENGTH = 10;
 
 interface AgentTemplateSeed {
   segmentCode: SegmentCode;
@@ -189,37 +201,10 @@ export function runDeterministicSimulatedMarket(
 ): SimulationRun {
   validateSimulatedMarketInput(input);
 
-  const qualityFlags: string[] = [];
-
-  if (input.strategyText.trim().length < MIN_STRATEGY_TEXT_LENGTH) {
-    qualityFlags.push(DEFAULT_QUALITY_FLAGS.strategyTextTooShort);
-  }
-
-  const hasAgentProfile = input.targetAgentSet.every(
-    (agent) =>
-      agent.profile &&
-      (Array.isArray(agent.profile.preferences) ||
-        Array.isArray(agent.profile.concerns) ||
-        Array.isArray(agent.profile.decisionFactors)),
-  );
-  if (!hasAgentProfile) {
-    qualityFlags.push(DEFAULT_QUALITY_FLAGS.missingTargetAgentProfile);
-  }
-
-  const marketContextText = [
-    input.marketContext.channelEntityId,
-    input.marketContext.marketingEventId,
-    input.marketContext.businessScenarioId,
-    input.marketContext.contextText,
-  ]
-    .filter((value) => typeof value === "string" && value.trim().length > 0)
-    .join(" ");
-
-  if (marketContextText.length === 0) {
-    qualityFlags.push(DEFAULT_QUALITY_FLAGS.missingMarketContext);
-  }
-
+  const qualityFlags: string[] = collectInputQualityFlags(input);
   qualityFlags.push(DEFAULT_QUALITY_FLAGS.deterministicFallbackUsed);
+
+  const marketContextText = buildMarketContextText(input);
 
   const agentFeedback = input.targetAgentSet.map((agent) =>
     simulateAgentFeedback(agent, input.strategyText),
@@ -241,6 +226,336 @@ export function runDeterministicSimulatedMarket(
     generatedAt: options.generatedAt ?? new Date().toISOString(),
     qualityFlags: [...new Set(qualityFlags)].sort(),
   };
+}
+
+function buildMarketContextText(input: SimulatedMarketInput): string {
+  return [
+    input.marketContext.channelEntityId,
+    input.marketContext.marketingEventId,
+    input.marketContext.businessScenarioId,
+    input.marketContext.contextText,
+  ]
+    .filter((value) => typeof value === "string" && value.trim().length > 0)
+    .join(" ");
+}
+
+function collectInputQualityFlags(input: SimulatedMarketInput): string[] {
+  const qualityFlags: string[] = [];
+
+  if (input.strategyText.trim().length < MIN_STRATEGY_TEXT_LENGTH) {
+    qualityFlags.push(DEFAULT_QUALITY_FLAGS.strategyTextTooShort);
+  }
+
+  const hasAgentProfile = input.targetAgentSet.every(
+    (agent) =>
+      agent.profile &&
+      (Array.isArray(agent.profile.preferences) ||
+        Array.isArray(agent.profile.concerns) ||
+        Array.isArray(agent.profile.decisionFactors)),
+  );
+  if (!hasAgentProfile) {
+    qualityFlags.push(DEFAULT_QUALITY_FLAGS.missingTargetAgentProfile);
+  }
+
+  const marketContextText = buildMarketContextText(input);
+  if (marketContextText.length === 0) {
+    qualityFlags.push(DEFAULT_QUALITY_FLAGS.missingMarketContext);
+  }
+
+  return qualityFlags;
+}
+
+export function buildSimulatedMarketPrompt(input: SimulatedMarketInput): SimulatedMarketPrompt {
+  validateSimulatedMarketInput(input);
+
+  const systemPrompt = `你是 PLS 模拟市场引擎。你的任务是以多个目标用户 agent 的身份，对给定的商品/渠道/活动策略进行投放前模拟反馈。
+
+你必须逐一扮演输入中的每一个目标用户 agent，分别输出他们对该策略的接受度、购买或互动意向、正面驱动因素、主要顾虑、代表性反馈摘要和可行动调整建议。
+
+输出必须是严格合法的 JSON，且完全符合指定的 schema。不要添加 schema 以外的字段，不要输出解释性文字，只输出 JSON。
+
+重要约束：
+- 模拟结果是 Derived Result，仅用于策略压力测试，不是真实销售事实、真实用户反馈或 AB test 结果。
+- 每个 agent 的反馈必须独立、具体，反映该 agent 的画像偏好、顾虑和决策因素。
+- agentFeedback 数组必须包含且仅包含输入中的全部 agent，不得遗漏、重复或引入未知 agent。
+- 分数必须合法：acceptanceScore / purchaseIntentScore 为 0-100 的数值；confidence 为 0-1 的数值。`;
+
+  const marketContextLines = [
+    input.marketContext.channelEntityId ? `渠道对象: ${input.marketContext.channelEntityId}` : "",
+    input.marketContext.marketingEventId ? `活动类型: ${input.marketContext.marketingEventId}` : "",
+    input.marketContext.businessScenarioId ? `业务场景: ${input.marketContext.businessScenarioId}` : "",
+    input.marketContext.contextText ? `场景补充: ${input.marketContext.contextText}` : "",
+  ].filter((line) => line.length > 0);
+
+  const agentDescriptions = input.targetAgentSet
+    .map((agent) => {
+      const lines: string[] = [`agentId: ${agent.agentId}`, `name: ${agent.name}`, `sourceType: ${agent.sourceType}`];
+      if (agent.sourceRef?.segmentCode) lines.push(`segmentCode: ${agent.sourceRef.segmentCode}`);
+      if (agent.sourceRef?.segmentName) lines.push(`segmentName: ${agent.sourceRef.segmentName}`);
+      if (agent.profile?.demographics?.length) lines.push(`demographics: ${agent.profile.demographics.join("、")}`);
+      if (agent.profile?.preferences?.length) lines.push(`preferences: ${agent.profile.preferences.join("、")}`);
+      if (agent.profile?.concerns?.length) lines.push(`concerns: ${agent.profile.concerns.join("、")}`);
+      if (agent.profile?.decisionFactors?.length) lines.push(`decisionFactors: ${agent.profile.decisionFactors.join("、")}`);
+      return lines.join("\n");
+    })
+    .join("\n\n");
+
+  const jsonSchema = JSON.stringify(
+    {
+      overall: {
+        acceptanceScore: 0,
+        purchaseIntentScore: 0,
+        confidence: 0,
+        opportunitySummary: ["string"],
+        riskSummary: ["string"],
+        recommendedAdjustments: ["string"],
+      },
+      agentFeedback: [
+        {
+          agentId: "string",
+          acceptanceScore: 0,
+          purchaseIntentScore: 0,
+          positiveDrivers: ["string"],
+          objections: ["string"],
+          quoteSummary: "string",
+          suggestedAdjustment: "string",
+        },
+      ],
+    },
+    null,
+    2,
+  );
+
+  const userPrompt = `## 策略方案
+${input.strategyText}
+
+## 市场场景
+${marketContextLines.length > 0 ? marketContextLines.join("\n") : "（未提供额外场景描述）"}
+
+## 目标用户 agent
+${agentDescriptions}
+
+## 输出要求
+请严格输出以下 JSON schema，不要添加 schema 以外的字段，只返回 JSON 对象。模拟结果是 Derived Result，不是真实销售或 AB test 事实。
+
+\`\`\`json
+${jsonSchema}
+\`\`\``;
+
+  return { systemPrompt, userPrompt };
+}
+
+export function buildFakeSimulatedMarketLlmResponse(input: SimulatedMarketInput): string {
+  const overall = {
+    acceptanceScore: 72,
+    purchaseIntentScore: 65,
+    confidence: 0.75,
+    opportunitySummary: ["目标人群整体接受度处于可推进区间。", "购买意向正向，可进一步测试转化抓手。"],
+    riskSummary: ["需补充更具体的价格和渠道场景描述。"],
+    recommendedAdjustments: ["补充商品细节以提升置信度。", "针对分人群偏好增加解释。"],
+  };
+
+  const agentFeedback = input.targetAgentSet.map((agent) => ({
+    agentId: agent.agentId,
+    acceptanceScore: 70,
+    purchaseIntentScore: 63,
+    positiveDrivers: [`策略与 ${agent.name} 的偏好方向一致`],
+    objections: ["希望看到更多具体场景说明"],
+    quoteSummary: `${agent.name} 认为策略整体可接受，但期待更多细节。`,
+    suggestedAdjustment: `针对 ${agent.name} 补充其关注的核心决策因素说明。`,
+  }));
+
+  return JSON.stringify({ overall, agentFeedback }, null, 2);
+}
+
+export function parseSimulatedMarketLlmResponse(raw: string, expectedAgentIds: string[]): SimulatedMarketResult {
+  if (typeof raw !== "string") {
+    throw new Error("LLM response must be a string");
+  }
+
+  const parsed = parseJsonFromRaw(raw);
+
+  if (!isRecord(parsed)) {
+    throw new Error("LLM response must be a JSON object");
+  }
+
+  const overall = parseOverall(parsed.overall);
+  const agentFeedback = parseAgentFeedback(parsed.agentFeedback, expectedAgentIds);
+
+  return { overall, agentFeedback };
+}
+
+export function runLlmSimulatedMarket(
+  input: SimulatedMarketInput,
+  llmResponse: string,
+  options: SimulatedMarketOptions = {},
+): SimulationRun {
+  validateSimulatedMarketInput(input);
+
+  const expectedAgentIds = input.targetAgentSet.map((agent) => agent.agentId);
+  const result = parseSimulatedMarketLlmResponse(llmResponse, expectedAgentIds);
+  const qualityFlags = collectInputQualityFlags(input);
+
+  return {
+    runId: options.runId ?? randomUUID(),
+    workspaceId: options.workspaceId ?? "default",
+    status: "succeeded",
+    inputSnapshot: input,
+    result,
+    provider: SIMULATED_MARKET_LLM_PROVIDER,
+    modelVersion: SIMULATED_MARKET_LLM_MODEL_VERSION,
+    generatedAt: options.generatedAt ?? new Date().toISOString(),
+    qualityFlags: [...new Set(qualityFlags)].sort(),
+  };
+}
+
+function parseJsonFromRaw(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const codeFenceMatch = raw.match(/\`\`\`(?:json)?\s*([\s\S]*?)\s*\`\`\`/);
+    if (codeFenceMatch?.[1]) {
+      try {
+        return JSON.parse(codeFenceMatch[1]);
+      } catch {
+        throw new Error("LLM response contains invalid JSON inside code fence");
+      }
+    }
+    throw new Error("LLM response is not valid JSON");
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isValidScore(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
+}
+
+function isValidConfidence(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
+function parseOverall(value: unknown): SimulatedMarketResult["overall"] {
+  if (!isRecord(value)) {
+    throw new Error("overall must be a JSON object");
+  }
+
+  const acceptanceScore = value.acceptanceScore;
+  if (!isValidScore(acceptanceScore)) {
+    throw new Error(`overall.acceptanceScore must be a finite number between 0 and 100, got ${acceptanceScore}`);
+  }
+
+  const purchaseIntentScore = value.purchaseIntentScore;
+  if (!isValidScore(purchaseIntentScore)) {
+    throw new Error(`overall.purchaseIntentScore must be a finite number between 0 and 100, got ${purchaseIntentScore}`);
+  }
+
+  const confidence = value.confidence;
+  if (!isValidConfidence(confidence)) {
+    throw new Error(`overall.confidence must be a finite number between 0 and 1, got ${confidence}`);
+  }
+
+  const opportunitySummary = value.opportunitySummary;
+  if (!isStringArray(opportunitySummary)) {
+    throw new Error("overall.opportunitySummary must be an array of strings");
+  }
+
+  const riskSummary = value.riskSummary;
+  if (!isStringArray(riskSummary)) {
+    throw new Error("overall.riskSummary must be an array of strings");
+  }
+
+  const recommendedAdjustments = value.recommendedAdjustments;
+  if (!isStringArray(recommendedAdjustments)) {
+    throw new Error("overall.recommendedAdjustments must be an array of strings");
+  }
+
+  return { acceptanceScore, purchaseIntentScore, confidence, opportunitySummary, riskSummary, recommendedAdjustments };
+}
+
+function parseAgentFeedback(value: unknown, expectedAgentIds: string[]): SimulatedMarketResult["agentFeedback"] {
+  if (!Array.isArray(value)) {
+    throw new Error("agentFeedback must be an array");
+  }
+
+  if (value.length !== expectedAgentIds.length) {
+    throw new Error(`agentFeedback must contain exactly ${expectedAgentIds.length} agents, got ${value.length}`);
+  }
+
+  const seenAgentIds = new Set<string>();
+  const result: SimulatedMarketResult["agentFeedback"] = [];
+
+  for (const item of value) {
+    if (!isRecord(item)) {
+      throw new Error("Each agentFeedback item must be a JSON object");
+    }
+
+    const agentId = item.agentId;
+    if (typeof agentId !== "string" || agentId.length === 0) {
+      throw new Error("Each agentFeedback item must have a non-empty string agentId");
+    }
+
+    if (!expectedAgentIds.includes(agentId)) {
+      throw new Error(`Unexpected agentId in agentFeedback: ${agentId}`);
+    }
+
+    if (seenAgentIds.has(agentId)) {
+      throw new Error(`Duplicate agentId in agentFeedback: ${agentId}`);
+    }
+    seenAgentIds.add(agentId);
+
+    const feedback = parseAgentFeedbackItem(item);
+    result.push({ agentId, ...feedback });
+  }
+
+  const missingAgentIds = expectedAgentIds.filter((id) => !seenAgentIds.has(id));
+  if (missingAgentIds.length > 0) {
+    throw new Error(`Missing agentFeedback for agents: ${missingAgentIds.join(", ")}`);
+  }
+
+  return result;
+}
+
+function parseAgentFeedbackItem(
+  item: Record<string, unknown>,
+): Omit<SimulatedMarketResult["agentFeedback"][number], "agentId"> {
+  const acceptanceScore = item.acceptanceScore;
+  if (!isValidScore(acceptanceScore)) {
+    throw new Error(`agentFeedback.acceptanceScore must be a finite number between 0 and 100, got ${acceptanceScore}`);
+  }
+
+  const purchaseIntentScore = item.purchaseIntentScore;
+  if (!isValidScore(purchaseIntentScore)) {
+    throw new Error(`agentFeedback.purchaseIntentScore must be a finite number between 0 and 100, got ${purchaseIntentScore}`);
+  }
+
+  const positiveDrivers = item.positiveDrivers;
+  if (!isStringArray(positiveDrivers)) {
+    throw new Error("agentFeedback.positiveDrivers must be an array of strings");
+  }
+
+  const objections = item.objections;
+  if (!isStringArray(objections)) {
+    throw new Error("agentFeedback.objections must be an array of strings");
+  }
+
+  const quoteSummary = item.quoteSummary;
+  if (typeof quoteSummary !== "string" || quoteSummary.length === 0) {
+    throw new Error("agentFeedback.quoteSummary must be a non-empty string");
+  }
+
+  const suggestedAdjustment = item.suggestedAdjustment;
+  if (typeof suggestedAdjustment !== "string" || suggestedAdjustment.length === 0) {
+    throw new Error("agentFeedback.suggestedAdjustment must be a non-empty string");
+  }
+
+  return { acceptanceScore, purchaseIntentScore, positiveDrivers, objections, quoteSummary, suggestedAdjustment };
 }
 
 function normalizeText(text: string): string {

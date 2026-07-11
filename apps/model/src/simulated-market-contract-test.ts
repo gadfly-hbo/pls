@@ -1,9 +1,15 @@
 import {
   buildDefaultTargetUserAgents,
+  buildFakeSimulatedMarketLlmResponse,
+  buildSimulatedMarketPrompt,
+  parseSimulatedMarketLlmResponse,
   runDeterministicSimulatedMarket,
+  runLlmSimulatedMarket,
   validateSimulatedMarketInput,
   SIMULATED_MARKET_FALLBACK_PROVIDER,
   SIMULATED_MARKET_FALLBACK_MODEL_VERSION,
+  SIMULATED_MARKET_LLM_PROVIDER,
+  SIMULATED_MARKET_LLM_MODEL_VERSION,
   DEFAULT_QUALITY_FLAGS,
   type SimulatedMarketInput,
   type TargetUserAgent,
@@ -145,6 +151,170 @@ function main() {
   const manualRun = runDeterministicSimulatedMarket(manualInput, { runId: "run-manual" });
   assert(manualRun.result!.agentFeedback.length === 1, "Expected one manual agent feedback", failures, "manual_agent_feedback_count");
   assert(manualRun.qualityFlags.includes(DEFAULT_QUALITY_FLAGS.deterministicFallbackUsed), "Missing fallback flag for manual agent", failures, "manual_agent_fallback_flag");
+
+  // Case: LLM prompt includes all target agents and strategy text
+  const prompt = buildSimulatedMarketPrompt(validInput);
+  assert(prompt.systemPrompt.length > 0, "Expected non-empty system prompt", failures, "llm_prompt_system_non_empty");
+  assert(prompt.userPrompt.includes(validInput.strategyText), "User prompt must include strategy text", failures, "llm_prompt_strategy_text");
+  for (const agent of validInput.targetAgentSet) {
+    assert(prompt.userPrompt.includes(agent.agentId), `User prompt must include agent ${agent.agentId}`, failures, `llm_prompt_agent_${agent.agentId}`);
+    assert(prompt.userPrompt.includes(agent.name), `User prompt must include agent name ${agent.name}`, failures, `llm_prompt_agent_name_${agent.agentId}`);
+  }
+  assert(prompt.userPrompt.includes("agentFeedback"), "User prompt must include agentFeedback schema", failures, "llm_prompt_schema");
+  assert(prompt.userPrompt.includes("Derived Result"), "User prompt must remind derived result", failures, "llm_prompt_derived_result");
+
+  // Case: LLM fake response success
+  const fakeResponse = buildFakeSimulatedMarketLlmResponse(validInput);
+  const llmRun = runLlmSimulatedMarket(validInput, fakeResponse, { workspaceId: "ws-llm", runId: "run-llm-1" });
+  assert(llmRun.runId === "run-llm-1", `runId mismatch: ${llmRun.runId}`, failures, "llm_run_runId");
+  assert(llmRun.workspaceId === "ws-llm", `workspaceId mismatch: ${llmRun.workspaceId}`, failures, "llm_run_workspaceId");
+  assert(llmRun.status === "succeeded", `Expected status succeeded, got ${llmRun.status}`, failures, "llm_run_status");
+  assert(llmRun.provider === SIMULATED_MARKET_LLM_PROVIDER, `Expected provider ${SIMULATED_MARKET_LLM_PROVIDER}, got ${llmRun.provider}`, failures, "llm_run_provider");
+  assert(llmRun.modelVersion === SIMULATED_MARKET_LLM_MODEL_VERSION, `Expected modelVersion ${SIMULATED_MARKET_LLM_MODEL_VERSION}, got ${llmRun.modelVersion}`, failures, "llm_run_modelVersion");
+  assert(!llmRun.qualityFlags.includes(DEFAULT_QUALITY_FLAGS.deterministicFallbackUsed), "LLM run must not contain deterministic fallback flag", failures, "llm_run_no_fallback_flag");
+  assert(llmRun.result !== undefined, "Missing LLM result", failures, "llm_run_result_exists");
+  const llmResult = llmRun.result!;
+  assert(llmResult.overall.acceptanceScore === 72, `Expected overall acceptance 72, got ${llmResult.overall.acceptanceScore}`, failures, "llm_overall_acceptance");
+  assert(llmResult.overall.purchaseIntentScore === 65, `Expected overall purchase intent 65, got ${llmResult.overall.purchaseIntentScore}`, failures, "llm_overall_purchase_intent");
+  assert(llmResult.overall.confidence === 0.75, `Expected confidence 0.75, got ${llmResult.overall.confidence}`, failures, "llm_overall_confidence");
+  assert(llmResult.agentFeedback.length === validInput.targetAgentSet.length, `LLM agentFeedback count mismatch: ${llmResult.agentFeedback.length}`, failures, "llm_agent_feedback_count");
+  const llmAgentIds = llmResult.agentFeedback.map((agent) => agent.agentId);
+  const expectedAgentIds = validInput.targetAgentSet.map((agent) => agent.agentId);
+  assert(
+    llmAgentIds.length === expectedAgentIds.length && llmAgentIds.every((id) => expectedAgentIds.includes(id)),
+    "LLM agentFeedback must cover all expected agents",
+    failures,
+    "llm_agent_feedback_coverage",
+  );
+
+  // Case: LLM response wrapped in markdown code fence
+  const fencedResponse = "```json\n" + fakeResponse + "\n```";
+  const fencedRun = runLlmSimulatedMarket(validInput, fencedResponse, { runId: "run-llm-fenced" });
+  assert(fencedRun.status === "succeeded", "Expected fenced response to parse successfully", failures, "llm_fenced_response_success");
+  assert(fencedRun.result!.agentFeedback.length === validInput.targetAgentSet.length, "Fenced response must cover all agents", failures, "llm_fenced_agent_count");
+
+  // Case: invalid JSON fails with explicit error
+  assertThrows(
+    () => parseSimulatedMarketLlmResponse("not-json", expectedAgentIds),
+    "Expected error for invalid JSON",
+    failures,
+    "llm_invalid_json_error",
+  );
+
+  // Case: missing agentFeedback field fails
+  assertThrows(
+    () => parseSimulatedMarketLlmResponse(JSON.stringify({ overall: llmResult.overall }), expectedAgentIds),
+    "Expected error for missing agentFeedback",
+    failures,
+    "llm_missing_agent_feedback_error",
+  );
+
+  // Case: agent mismatch (unknown agent) fails
+  const unknownAgentResponse = JSON.stringify({
+    overall: llmResult.overall,
+    agentFeedback: [
+      ...llmResult.agentFeedback,
+      {
+        agentId: "agent-unknown",
+        acceptanceScore: 50,
+        purchaseIntentScore: 50,
+        positiveDrivers: ["x"],
+        objections: ["y"],
+        quoteSummary: "unknown",
+        suggestedAdjustment: "unknown",
+      },
+    ],
+  });
+  assertThrows(
+    () => parseSimulatedMarketLlmResponse(unknownAgentResponse, expectedAgentIds),
+    "Expected error for unknown agentId",
+    failures,
+    "llm_unknown_agent_error",
+  );
+
+  // Case: missing agent in feedback fails
+  const missingAgentResponse = JSON.stringify({
+    overall: llmResult.overall,
+    agentFeedback: llmResult.agentFeedback.slice(1),
+  });
+  assertThrows(
+    () => parseSimulatedMarketLlmResponse(missingAgentResponse, expectedAgentIds),
+    "Expected error for missing agent",
+    failures,
+    "llm_missing_agent_error",
+  );
+
+  // Case: duplicate agent in feedback fails
+  const duplicateAgentResponse = JSON.stringify({
+    overall: llmResult.overall,
+    agentFeedback: [llmResult.agentFeedback[0], llmResult.agentFeedback[0]],
+  });
+  assertThrows(
+    () => parseSimulatedMarketLlmResponse(duplicateAgentResponse, [expectedAgentIds[0], expectedAgentIds[0]]),
+    "Expected error for duplicate agentId",
+    failures,
+    "llm_duplicate_agent_error",
+  );
+
+  // Case: out-of-range scores fail (reject strategy, not clamp)
+  const outOfRangeScoreResponse = JSON.stringify({
+    overall: {
+      ...llmResult.overall,
+      acceptanceScore: 150,
+    },
+    agentFeedback: llmResult.agentFeedback,
+  });
+  assertThrows(
+    () => parseSimulatedMarketLlmResponse(outOfRangeScoreResponse, expectedAgentIds),
+    "Expected error for out-of-range overall acceptance score",
+    failures,
+    "llm_score_out_of_range_error",
+  );
+
+  // Case: negative agent score fails
+  const negativeAgentScoreResponse = JSON.stringify({
+    overall: llmResult.overall,
+    agentFeedback: [
+      {
+        ...llmResult.agentFeedback[0],
+        acceptanceScore: -5,
+      },
+      ...llmResult.agentFeedback.slice(1),
+    ],
+  });
+  assertThrows(
+    () => parseSimulatedMarketLlmResponse(negativeAgentScoreResponse, expectedAgentIds),
+    "Expected error for negative agent acceptance score",
+    failures,
+    "llm_negative_agent_score_error",
+  );
+
+  // Case: confidence out of range fails
+  const outOfRangeConfidenceResponse = JSON.stringify({
+    overall: {
+      ...llmResult.overall,
+      confidence: 1.5,
+    },
+    agentFeedback: llmResult.agentFeedback,
+  });
+  assertThrows(
+    () => parseSimulatedMarketLlmResponse(outOfRangeConfidenceResponse, expectedAgentIds),
+    "Expected error for out-of-range confidence",
+    failures,
+    "llm_confidence_out_of_range_error",
+  );
+
+  // Case: empty agent feedback array fails
+  const emptyFeedbackResponse = JSON.stringify({
+    overall: llmResult.overall,
+    agentFeedback: [],
+  });
+  assertThrows(
+    () => parseSimulatedMarketLlmResponse(emptyFeedbackResponse, expectedAgentIds),
+    "Expected error for empty agentFeedback",
+    failures,
+    "llm_empty_feedback_error",
+  );
 
   // Report
   console.log(JSON.stringify({ ok: failures.length === 0, failures }, null, 2));

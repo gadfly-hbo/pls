@@ -3311,6 +3311,53 @@ h1, h2, h3, h4, h5, h6 {
   gap: 10px;
 }
 
+.sim-market-context-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.sim-market-context-row__select {
+  flex: 0 1 55%;
+  min-width: 0;
+}
+
+.sim-market-context-row__input {
+  flex: 1 1 45%;
+  min-width: 0;
+}
+
+.sim-market-context-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.sim-provider-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sim-provider-badge--llm {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.sim-provider-badge--fallback {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
 @media (max-width: 1024px) {
   .sim-workbench__body {
     grid-template-columns: 1fr;
@@ -3359,6 +3406,49 @@ h1, h2, h3, h4, h5, h6 {
 
   .sim-manual-persona__form {
     grid-template-columns: 1fr;
+  }
+
+  .sim-market-context-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sim-market-context-row__select,
+  .sim-market-context-row__input {
+    width: 100%;
+  }
+}
+
+@media (max-width: 390px) {
+  .sim-report__header,
+  .sim-report__quality,
+  .sim-report__decision-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sim-report__decision-hint {
+    white-space: normal;
+  }
+
+  .sim-report__quality-flags {
+    margin-left: 0;
+  }
+
+  .sim-report__scores {
+    gap: 8px;
+  }
+
+  .sim-score-ring__value {
+    font-size: 22px;
+  }
+
+  .sim-feedback-card__header {
+    flex-direction: column;
+  }
+
+  .sim-feedback-card__scores {
+    white-space: normal;
   }
 }
 

@@ -72,7 +72,7 @@ function setupSimulatedMarketRouteFallbacks(route: Route) {
           provider: 'deterministic_fallback',
           modelVersion: 'deterministic-fallback-0.1',
           generatedAt: new Date().toISOString(),
-          qualityFlags: ['deterministic_fallback_used'],
+            qualityFlags: ['llm_unavailable_fallback_used'],
         },
       }),
     });

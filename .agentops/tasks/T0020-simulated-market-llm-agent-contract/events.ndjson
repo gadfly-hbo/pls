@@ -1,0 +1,4 @@
+{"timestamp":"2026-07-11T10:29:43.974Z","type":"task_created","task_id":"T0020","actor":"codex","resulting_status":"queued","note":"worktree was dirty at task creation"}
+{"timestamp":"2026-07-11T10:35:37.139Z","type":"task_claimed","task_id":"T0020","actor":"opencode","resulting_status":"running"}
+{"timestamp":"2026-07-11T11:01:06.637Z","type":"handoff_submitted","task_id":"T0020","actor":"opencode","resulting_status":"handoff_ready"}
+{"timestamp":"2026-07-11T11:02:59.138Z","type":"review_decision","task_id":"T0020","actor":"codex","resulting_status":"approved","note":"Approved: implementation stays within allowed model/doc paths, model validation passed, LLM parser rejects malformed/agent-mismatched output, fallback remains explicit. Accepted out-of-scope dirty data/workspaces/ws_demo/db.sqlite as pre-existing unrelated worktree change, not part of this task. Memory candidates not accepted because lifecycle metadata is missing."}

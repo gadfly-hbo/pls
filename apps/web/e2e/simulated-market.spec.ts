@@ -1,5 +1,9 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 
+const PLACEHOLDER_CHANNEL_ENTITY = 'account:mock_account_douyin_style';
+const PLACEHOLDER_MARKETING_EVENT = 'marketing_event:mock_event_618';
+const PLACEHOLDER_BUSINESS_SCENARIO = 'business_scenario:new_product_launch:mock_style';
+
 function setupApiRouteFallbacks(page: Page) {
   return page.route('/api/v0/**', async (route: Route) => {
     const url = new URL(route.request().url());
@@ -37,6 +41,7 @@ function setupApiRouteFallbacks(page: Page) {
 
     if (path === '/api/v0/simulated-market/runs' && method === 'POST') {
       const body = route.request().postDataJSON();
+      const useLlm = body.marketContext?.channelEntityId === PLACEHOLDER_CHANNEL_ENTITY;
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -53,7 +58,7 @@ function setupApiRouteFallbacks(page: Page) {
               overall: {
                 acceptanceScore: 62,
                 purchaseIntentScore: 55,
-                confidence: 0.65,
+                confidence: useLlm ? 0.78 : 0.65,
                 opportunitySummary: ['机会点'],
                 riskSummary: ['风险点'],
                 recommendedAdjustments: ['建议'],
@@ -70,10 +75,10 @@ function setupApiRouteFallbacks(page: Page) {
                 },
               ],
             },
-            provider: 'deterministic_fallback',
-            modelVersion: 'deterministic-fallback-0.1',
+            provider: useLlm ? 'minimax' : 'deterministic_fallback',
+            modelVersion: useLlm ? 'minimax-m3' : 'deterministic-fallback-0.1',
             generatedAt: new Date().toISOString(),
-            qualityFlags: ['deterministic_fallback_used'],
+            qualityFlags: useLlm ? [] : ['llm_unavailable_fallback_used'],
           },
         }),
       });
@@ -86,6 +91,22 @@ function setupApiRouteFallbacks(page: Page) {
         body: JSON.stringify({
           code: 'ok',
           requestId: 'r-test-list-runs',
+          generatedAt: new Date().toISOString(),
+          data: {
+            items: [],
+            page: { cursor: null, nextCursor: null, pageSize: 20, hasMore: false },
+          },
+        }),
+      });
+    }
+
+    if (path === '/api/v0/channel-objects' && method === 'GET') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 'ok',
+          requestId: 'r-test-channel-objects',
           generatedAt: new Date().toISOString(),
           data: {
             items: [],
@@ -109,23 +130,28 @@ function setupApiRouteFallbacks(page: Page) {
   });
 }
 
+function collectErrors(page: Page): string[] {
+  const errors: string[] = [];
+  page.on('pageerror', (err) => {
+    console.error('PAGE ERROR:', err.message);
+    errors.push(err.message);
+  });
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') {
+      if (!msg.text().includes('favicon.ico')) {
+        console.error('CONSOLE ERROR:', msg.text());
+        errors.push(msg.text());
+      }
+    }
+  });
+  return errors;
+}
+
 test.describe('Simulated Market Workbench', () => {
-  test('completes a simulation in mock mode', async ({ page }) => {
+  test('shows LLM agent label when a real channel object is selected in mock mode', async ({ page }) => {
     test.skip(process.env.VITE_USE_MOCK === 'false', 'This test is intended for mock mode only');
 
-    const errors: string[] = [];
-    page.on('pageerror', (err) => {
-      console.error('PAGE ERROR:', err.message);
-      errors.push(err.message);
-    });
-    page.on('console', (msg) => {
-      if (msg.type() === 'error') {
-        if (!msg.text().includes('favicon.ico')) {
-          console.error('CONSOLE ERROR:', msg.text());
-          errors.push(msg.text());
-        }
-      }
-    });
+    const errors = collectErrors(page);
 
     await page.goto('/');
     await expect(page.getByText('PLS 工作台')).toBeVisible();
@@ -144,7 +170,9 @@ test.describe('Simulated Market Workbench', () => {
     await expect(page.locator('label:has-text("B / 都市体面家") input[type="checkbox"]')).toBeChecked();
     await expect(page.locator('label:has-text("C / 百搭优选客") input[type="checkbox"]')).toBeChecked();
 
-    await page.getByPlaceholder('douyin:shop:semir_official').fill('douyin:shop:semir_official');
+    await page.getByTestId('market-context-select-channelEntityId').selectOption(PLACEHOLDER_CHANNEL_ENTITY);
+    await page.getByTestId('market-context-select-marketingEventId').selectOption(PLACEHOLDER_MARKETING_EVENT);
+    await page.getByTestId('market-context-select-businessScenarioId').selectOption(PLACEHOLDER_BUSINESS_SCENARIO);
     await page.getByPlaceholder('描述本次模拟的渠道、活动、预算或库存约束等业务重点').fill('抖音直播首发 + 天猫旗舰店');
 
     await page.getByRole('button', { name: '运行模拟' }).click();
@@ -155,11 +183,32 @@ test.describe('Simulated Market Workbench', () => {
     await expect(page.getByText('置信度', { exact: true })).toBeVisible();
     await expect(page.getByText('分 Agent 反馈')).toBeVisible();
     await expect(page.getByText('agent-template-a')).toBeVisible();
-    await expect(page.locator('.sim-report__quality-value').filter({ hasText: 'deterministic_fallback' })).toBeVisible();
+    await expect(page.locator('.sim-report__quality-value').filter({ hasText: 'minimax / minimax-m3' })).toBeVisible();
+    await expect(page.locator('.sim-provider-badge--llm')).toBeVisible();
 
-    await page.locator('button:has-text("历史记录")').click();
-    await expect(page.getByText('历史模拟记录')).toBeVisible();
-    await expect(page.locator('.sim-history__item').first()).toBeVisible();
+    expect(errors).toHaveLength(0);
+  });
+
+  test('shows fallback warning when a manual channel ID is used in mock mode', async ({ page }) => {
+    test.skip(process.env.VITE_USE_MOCK === 'false', 'This test is intended for mock mode only');
+
+    const errors = collectErrors(page);
+
+    await page.goto('/');
+    await page.locator('button[title="模拟市场"]').first().click();
+    await expect(page.getByText('模拟市场工作台')).toBeVisible();
+
+    await page.getByPlaceholder('粘贴商品、渠道、活动、价格、卖点、分货或投放建议等策略文本').fill(
+      '本季主打修身显瘦通勤连衣裙，采用高支棉面料，主打简约通勤与多场景穿搭。'
+    );
+
+    await page.getByTestId('market-context-input-channelEntityId').fill('manual_unverified_channel_id');
+    await page.getByRole('button', { name: '运行模拟' }).click();
+
+    await expect(page.getByText('策略压力测试报告')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('.sim-provider-badge--fallback')).toBeVisible();
+    await expect(page.locator('.alert-banner--warning').filter({ hasText: 'deterministic fallback' })).toBeVisible();
+    await expect(page.locator('.sim-report__quality-value').filter({ hasText: 'deterministic_fallback' })).toBeVisible();
 
     expect(errors).toHaveLength(0);
   });
@@ -256,7 +305,7 @@ test.describe('Simulated Market Workbench', () => {
               provider: 'deterministic_fallback',
               modelVersion: 'deterministic-fallback-0.1',
               generatedAt: new Date().toISOString(),
-              qualityFlags: ['deterministic_fallback_used'],
+              qualityFlags: ['llm_unavailable_fallback_used'],
             },
           }),
         });
@@ -269,6 +318,22 @@ test.describe('Simulated Market Workbench', () => {
           body: JSON.stringify({
             code: 'ok',
             requestId: 'r-test-list-runs',
+            generatedAt: new Date().toISOString(),
+            data: {
+              items: [],
+              page: { cursor: null, nextCursor: null, pageSize: 20, hasMore: false },
+            },
+          }),
+        });
+      }
+
+      if (path === '/api/v0/channel-objects' && method === 'GET') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 'ok',
+            requestId: 'r-test-channel-objects',
             generatedAt: new Date().toISOString(),
             data: {
               items: [],

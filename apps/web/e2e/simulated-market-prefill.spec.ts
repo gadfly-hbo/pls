@@ -72,7 +72,7 @@ function setupSimulatedMarketRouteFallbacks(route: Route) {
           provider: 'deterministic_fallback',
           modelVersion: 'deterministic-fallback-0.1',
           generatedAt: new Date().toISOString(),
-          qualityFlags: ['deterministic_fallback_used'],
+            qualityFlags: ['llm_unavailable_fallback_used'],
         },
       }),
     });
@@ -411,7 +411,7 @@ test.describe('Simulated Market Prefill from Upstream Workbenches', () => {
     await expect(page.locator('input[placeholder="例如 pred_20260701_0001"]')).toHaveValue('match_test_001');
     await expect(page.locator('textarea').first()).toContainText('SKU: MOCK_SKU_001');
     await expect(page.locator('textarea').first()).toContainText('渠道: mock_douyin_live_001');
-    await expect(page.locator('input[placeholder="douyin:shop:semir_official"]')).toHaveValue('mock_douyin_live_001');
+    await expect(page.locator('input[placeholder="account:mock_account_douyin_style"]')).toHaveValue('mock_douyin_live_001');
 
     // No auto-run
     await expect(page.getByRole('button', { name: '运行模拟' })).toBeVisible();

@@ -21,12 +21,26 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import type {
+  ChannelObject,
   SimulationRun,
   TargetUserAgent,
   SimulatedMarketInput,
   SimulatedMarketAgentFeedback,
   SimulatedMarketPrefill,
 } from '../types';
+
+const REAL_CHANNEL_OBJECT_EXAMPLES: Record<'channelEntityId' | 'marketingEventId' | 'businessScenarioId', string> = {
+  channelEntityId: 'account:mock_account_douyin_style',
+  marketingEventId: 'marketing_event:mock_event_618',
+  businessScenarioId: 'business_scenario:new_product_launch:mock_style',
+};
+
+const MARKET_CONTEXT_LABELS: Record<keyof SimulatedMarketInput['marketContext'], string> = {
+  channelEntityId: '渠道对象 ID',
+  marketingEventId: '营销活动 ID',
+  businessScenarioId: '业务场景 ID',
+  contextText: '场景补充说明',
+};
 
 type ViewTab = 'config' | 'history';
 
@@ -64,6 +78,86 @@ function getStatusBadgeClass(status: SimulationRun['status']): string {
 function getAgentInitial(name: string): string {
   const match = name.match(/[A-C]/);
   return match ? match[0] : name.charAt(0);
+}
+
+function isLlmAgentRun(run: SimulationRun): boolean {
+  return run.provider === 'minimax' && run.modelVersion === 'minimax-m3';
+}
+
+function isFallbackRun(run: SimulationRun): boolean {
+  return run.qualityFlags.some((flag) => flag.includes('fallback'));
+}
+
+function ProviderBadge({ run }: { run: SimulationRun }) {
+  if (isLlmAgentRun(run)) {
+    return (
+      <span className="sim-provider-badge sim-provider-badge--llm">
+        <Sparkles size={12} />
+        LLM agent 模拟
+      </span>
+    );
+  }
+  return (
+    <span className="sim-provider-badge sim-provider-badge--fallback">
+      <AlertTriangle size={12} />
+      {run.provider}
+    </span>
+  );
+}
+
+function FallbackWarning({ run }: { run: SimulationRun }) {
+  if (!isFallbackRun(run)) return null;
+  return (
+    <div className="alert-banner alert-banner--warning">
+      <AlertTriangle size={16} />
+      <span>当前运行使用 deterministic fallback 兜底，不是 LLM agent 模拟结果。结果属于 Derived Result，不承诺真实市场反馈。</span>
+    </div>
+  );
+}
+
+type MarketContextKey = keyof SimulatedMarketInput['marketContext'];
+
+function MarketContextSelector({
+  field,
+  value,
+  options,
+  onChange,
+  placeholder,
+}: {
+  field: MarketContextKey;
+  value: string;
+  options: ChannelObject[];
+  onChange: (val: string) => void;
+  placeholder: string;
+}) {
+  const selected = options.find((o) => o.canonicalObjectKey === value);
+  const selectValue = selected ? value : '';
+
+  return (
+    <div className="sim-market-context-row">
+      <select
+        className="form-control sim-market-context-row__select"
+        data-testid={`market-context-select-${field}`}
+        value={selectValue}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">手动输入 / 未选择</option>
+        {options.map((o) => (
+          <option key={o.canonicalObjectKey} value={o.canonicalObjectKey}>
+            {o.displayName} ({o.canonicalObjectKey})
+          </option>
+        ))}
+      </select>
+      <input
+        className="form-control sim-market-context-row__input"
+        data-testid={`market-context-input-${field}`}
+        type="text"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
 }
 
 function getAgentColorClass(name: string): string {
@@ -158,6 +252,22 @@ export default function SimulatedMarketWorkbench({ initialPrefill, goToFlywheel 
   const [creatingDecision, setCreatingDecision] = useState(false);
   const [decisionError, setDecisionError] = useState<string | null>(null);
 
+  const [channelObjects, setChannelObjects] = useState<ChannelObject[]>([]);
+  const [channelObjectsLoading, setChannelObjectsLoading] = useState(false);
+
+  const channelEntityOptions = useMemo(
+    () => (channelObjects ?? []).filter((o) => o.targetObject === 'ChannelEntity'),
+    [channelObjects]
+  );
+  const marketingEventOptions = useMemo(
+    () => (channelObjects ?? []).filter((o) => o.objectType === 'marketing_event'),
+    [channelObjects]
+  );
+  const businessScenarioOptions = useMemo(
+    () => (channelObjects ?? []).filter((o) => o.objectType === 'business_scenario'),
+    [channelObjects]
+  );
+
   const selectedAgents = useMemo(() => {
     const fromTemplates = templates.filter((t) => selectedAgentIds.has(t.agentId));
     return [...fromTemplates, ...manualPersonas];
@@ -190,6 +300,25 @@ export default function SimulatedMarketWorkbench({ initialPrefill, goToFlywheel 
       }
     };
     load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadChannelObjects = async () => {
+      setChannelObjectsLoading(true);
+      try {
+        const res = await api.getChannelObjects({ pageSize: 100 });
+        if (!cancelled) setChannelObjects(res.data.items);
+      } catch (err) {
+        if (!cancelled) console.error(err);
+      } finally {
+        if (!cancelled) setChannelObjectsLoading(false);
+      }
+    };
+    loadChannelObjects();
     return () => {
       cancelled = true;
     };
@@ -598,42 +727,43 @@ export default function SimulatedMarketWorkbench({ initialPrefill, goToFlywheel 
               <div className="sim-panel__header">
                 <Info size={16} />
                 <h3>市场场景</h3>
+                {channelObjectsLoading && <Loader2 size={14} className="sim-spin" />}
               </div>
               <div className="sim-panel__body">
                 <div className="sim-form-grid">
                   <div className="sim-form-row">
-                    <label className="sim-form-label">渠道对象 ID</label>
-                    <input
-                      className="form-control"
-                      type="text"
-                      placeholder="douyin:shop:semir_official"
+                    <label className="sim-form-label">{MARKET_CONTEXT_LABELS.channelEntityId}</label>
+                    <MarketContextSelector
+                      field="channelEntityId"
                       value={channelEntityId}
-                      onChange={(e) => setChannelEntityId(e.target.value)}
+                      options={channelEntityOptions}
+                      onChange={setChannelEntityId}
+                      placeholder={REAL_CHANNEL_OBJECT_EXAMPLES.channelEntityId}
                     />
                   </div>
                   <div className="sim-form-row">
-                    <label className="sim-form-label">营销活动 ID</label>
-                    <input
-                      className="form-control"
-                      type="text"
-                      placeholder="event_001"
+                    <label className="sim-form-label">{MARKET_CONTEXT_LABELS.marketingEventId}</label>
+                    <MarketContextSelector
+                      field="marketingEventId"
                       value={marketingEventId}
-                      onChange={(e) => setMarketingEventId(e.target.value)}
+                      options={marketingEventOptions}
+                      onChange={setMarketingEventId}
+                      placeholder={REAL_CHANNEL_OBJECT_EXAMPLES.marketingEventId}
                     />
                   </div>
                   <div className="sim-form-row">
-                    <label className="sim-form-label">业务场景 ID</label>
-                    <input
-                      className="form-control"
-                      type="text"
-                      placeholder="scenario_001"
+                    <label className="sim-form-label">{MARKET_CONTEXT_LABELS.businessScenarioId}</label>
+                    <MarketContextSelector
+                      field="businessScenarioId"
                       value={businessScenarioId}
-                      onChange={(e) => setBusinessScenarioId(e.target.value)}
+                      options={businessScenarioOptions}
+                      onChange={setBusinessScenarioId}
+                      placeholder={REAL_CHANNEL_OBJECT_EXAMPLES.businessScenarioId}
                     />
                   </div>
                 </div>
                 <div className="sim-form-row">
-                  <label className="sim-form-label">场景补充说明</label>
+                  <label className="sim-form-label">{MARKET_CONTEXT_LABELS.contextText}</label>
                   <textarea
                     className="form-control sim-textarea"
                     rows={2}
@@ -641,6 +771,10 @@ export default function SimulatedMarketWorkbench({ initialPrefill, goToFlywheel 
                     onChange={(e) => setContextText(e.target.value)}
                     placeholder="描述本次模拟的渠道、活动、预算或库存约束等业务重点"
                   />
+                </div>
+                <div className="sim-market-context-hint">
+                  <Info size={12} />
+                  <span>从下拉框选择真实对象时，ID 会同步填入；手动填写/未选择时，ID 不做存在性校验。</span>
                 </div>
               </div>
             </section>
@@ -769,6 +903,8 @@ export default function SimulatedMarketWorkbench({ initialPrefill, goToFlywheel 
                   </div>
                 )}
 
+                <FallbackWarning run={selectedRun} />
+
                 <div className="sim-report__quality">
                   <div className="sim-report__quality-label">
                     <Info size={14} />
@@ -777,6 +913,7 @@ export default function SimulatedMarketWorkbench({ initialPrefill, goToFlywheel 
                   <div className="sim-report__quality-value">
                     {selectedRun.provider} / {selectedRun.modelVersion}
                   </div>
+                  <ProviderBadge run={selectedRun} />
                   {selectedRun.qualityFlags.length > 0 && (
                     <div className="sim-report__quality-flags">
                       {selectedRun.qualityFlags.map((flag, idx) => (

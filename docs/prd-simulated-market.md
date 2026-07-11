@@ -26,6 +26,16 @@
 
 说明：新品预测结果页、人货匹配结果页和经营飞轮中的衔接入口在当前产品中不视为已完成能力。本轮只记录为后续衔接点，不作为模拟市场一期验收阻塞。
 
+## 二期口径
+
+二期将模拟市场模型层从「deterministic fallback 即主实现」升级为「LLM agent 模拟优先、deterministic fallback 兜底」。
+
+- 默认路径由 LLM（`provider=minimax`，`modelVersion=minimax-m3`）扮演每个目标用户 agent，输出结构化 `SimulationRun` / `SimulatedMarketResult`。
+- `apps/model` 负责 prompt 构建、LLM 响应解析、结果装配和 fallback 兼容；真实 Minimax provider 网络调用由 `apps/server` 在后续任务接入。
+- 上游 caller 只有在 LLM 调用成功时才允许使用 `provider=minimax` / `modelVersion=minimax-m3`；模型层 fallback 不得冒充 LLM。
+- deterministic fallback 保留为兜底与离线测试路径，provider 不可用时输出 `llm_unavailable_fallback_used`。
+- 输出仍是 Derived Result，不是真实销售事实、真实用户反馈或 AB test 结果。
+
 ## 做
 
 - 支持手动输入策略方案，包含商品、渠道、活动、价格、卖点、分货或投放建议等文本。

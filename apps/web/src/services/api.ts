@@ -76,7 +76,7 @@ const mockSimulatedMarketAgentTemplates: TargetUserAgent[] = [
   },
 ];
 
-function buildMockSimulatedMarketResult(input: SimulatedMarketInput): SimulatedMarketResult {
+function buildMockSimulatedMarketResult(input: SimulatedMarketInput, useLlm = false): SimulatedMarketResult {
   const agentFeedback = input.targetAgentSet.map((agent) => {
     const preferences = agent.profile?.preferences ?? [];
     const concerns = agent.profile?.concerns ?? [];
@@ -96,32 +96,46 @@ function buildMockSimulatedMarketResult(input: SimulatedMarketInput): SimulatedM
 
   const avgAcceptance = Math.round(agentFeedback.reduce((sum, a) => sum + a.acceptanceScore, 0) / agentFeedback.length);
   const avgPurchase = Math.round(agentFeedback.reduce((sum, a) => sum + a.purchaseIntentScore, 0) / agentFeedback.length);
+  const confidence = useLlm ? 0.78 : 0.62;
 
   return {
     overall: {
       acceptanceScore: avgAcceptance,
       purchaseIntentScore: avgPurchase,
-      confidence: 0.62,
-      opportunitySummary: ['目标人群整体接受度处于可推进区间，可作为策略压力测试基础。'],
+      confidence,
+      opportunitySummary: useLlm
+        ? ['目标人群整体接受度处于可推进区间，LLM agent 对策略语义理解较好。']
+        : ['目标人群整体接受度处于可推进区间，可作为策略压力测试基础。'],
       riskSummary: ['策略为模拟预测，不代表真实市场反馈。'],
-      recommendedAdjustments: ['补充策略文本中的商品、价格、渠道、活动卖点细节。', '在市场场景中补充渠道、活动类型和预算/库存约束。'],
+      recommendedAdjustments: useLlm
+        ? ['结合 LLM 反馈中的核心顾虑，优化卖点与定价表述。', '在市场场景中补充渠道、活动类型和预算/库存约束。']
+        : ['补充策略文本中的商品、价格、渠道、活动卖点细节。', '在市场场景中补充渠道、活动类型和预算/库存约束。'],
     },
     agentFeedback,
   };
 }
 
+function isMockChannelEntity(canonicalObjectKey: string | undefined): boolean {
+  if (!canonicalObjectKey) return false;
+  seedMockChannelObjects();
+  return db.channelObjects.some(
+    (o) => o.canonicalObjectKey === canonicalObjectKey && o.targetObject === 'ChannelEntity'
+  );
+}
+
 function buildMockSimulatedMarketRun(input: SimulatedMarketInput): SimulationRun {
   const runId = `sim_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const useLlm = isMockChannelEntity(input.marketContext?.channelEntityId);
   const run: SimulationRun = {
     runId,
     workspaceId: 'ws_demo',
     status: 'succeeded',
     inputSnapshot: input,
-    result: buildMockSimulatedMarketResult(input),
-    provider: 'deterministic_fallback',
-    modelVersion: 'deterministic-fallback-0.1',
+    result: buildMockSimulatedMarketResult(input, useLlm),
+    provider: useLlm ? 'minimax' : 'deterministic_fallback',
+    modelVersion: useLlm ? 'minimax-m3' : 'deterministic-fallback-0.1',
     generatedAt: new Date().toISOString(),
-    qualityFlags: ['deterministic_fallback_used'],
+    qualityFlags: useLlm ? [] : ['llm_unavailable_fallback_used'],
   };
   db.simulatedMarketRuns.push(run);
   return run;
@@ -537,6 +551,78 @@ const mockChannelObjects: ChannelObject[] = [
     duplicateCandidateKeys: [],
     manualReviewStatus: 'unreviewed',
     qualityFlags: ['generated_key_needs_review'],
+    source: 'mock_channel_object_library',
+    sourceType: 'mock',
+  },
+  {
+    workspaceId: 'ws_demo',
+    objectType: 'account',
+    sourceStableKey: 'mock_account_douyin_style',
+    keySource: 'provided',
+    canonicalObjectKey: 'account:mock_account_douyin_style',
+    objectVersionId: 'ws_demo:account:mock_account_douyin_style:v1',
+    dataVersion: 'v1',
+    sourceBatchId: 'batch_channel_objects_v1',
+    generatedAt: '2026-07-01T00:00:00Z',
+    timeWindow: '2026-05-01/2026-06-30',
+    displayName: 'Mock Douyin 风格账号',
+    platformName: '抖音',
+    platformType: 'content_ecommerce',
+    entityStatus: 'active',
+    targetObject: 'ChannelEntity',
+    entityAttributes: { platformId: 'platform:douyin', contentFormats: ['live', 'short_video'] },
+    possibleDuplicate: false,
+    duplicateCandidateKeys: [],
+    manualReviewStatus: 'confirmed_distinct',
+    qualityFlags: [],
+    source: 'mock_channel_object_library',
+    sourceType: 'mock',
+  },
+  {
+    workspaceId: 'ws_demo',
+    objectType: 'marketing_event',
+    sourceStableKey: 'mock_event_618',
+    keySource: 'provided',
+    canonicalObjectKey: 'marketing_event:mock_event_618',
+    objectVersionId: 'ws_demo:marketing_event:mock_event_618:v1',
+    dataVersion: 'v1',
+    sourceBatchId: 'batch_channel_objects_v1',
+    generatedAt: '2026-07-01T00:00:00Z',
+    timeWindow: '2026-06-01/2026-06-20',
+    displayName: 'Mock 618 大促',
+    platformName: null,
+    platformType: null,
+    entityStatus: 'active',
+    targetObject: 'MarketingEvent',
+    entityAttributes: { eventType: 'platform_promotion', customTags: ['大促', '满减'] },
+    possibleDuplicate: false,
+    duplicateCandidateKeys: [],
+    manualReviewStatus: 'confirmed_distinct',
+    qualityFlags: [],
+    source: 'mock_channel_object_library',
+    sourceType: 'mock',
+  },
+  {
+    workspaceId: 'ws_demo',
+    objectType: 'business_scenario',
+    sourceStableKey: 'new_product_launch_mock_style',
+    keySource: 'generated_from_name',
+    canonicalObjectKey: 'business_scenario:new_product_launch:mock_style',
+    objectVersionId: 'ws_demo:business_scenario:new_product_launch:mock_style:v1',
+    dataVersion: 'v1',
+    sourceBatchId: 'batch_channel_objects_v1',
+    generatedAt: '2026-07-01T00:00:00Z',
+    timeWindow: '2026-07-01/2026-09-30',
+    displayName: 'Mock 新品风格首发',
+    platformName: null,
+    platformType: null,
+    entityStatus: 'active',
+    targetObject: 'BusinessScenario',
+    entityAttributes: { scenarioType: 'new_product_launch', description: '新品风格首发场景' },
+    possibleDuplicate: false,
+    duplicateCandidateKeys: [],
+    manualReviewStatus: 'confirmed_distinct',
+    qualityFlags: [],
     source: 'mock_channel_object_library',
     sourceType: 'mock',
   },
