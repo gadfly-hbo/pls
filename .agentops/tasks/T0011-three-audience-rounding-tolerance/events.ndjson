@@ -1,0 +1,4 @@
+{"timestamp":"2026-07-10T08:37:02.197Z","type":"task_created","task_id":"T0011","actor":"codex","resulting_status":"queued","note":"worktree was dirty at task creation"}
+{"timestamp":"2026-07-10T08:55:21.401Z","type":"task_claimed","task_id":"T0011","actor":"opencode","resulting_status":"running"}
+{"timestamp":"2026-07-10T08:59:38.710Z","type":"handoff_submitted","task_id":"T0011","actor":"opencode","resulting_status":"handoff_ready"}
+{"timestamp":"2026-07-10T09:03:12.306Z","type":"review_decision","task_id":"T0011","actor":"codex","resulting_status":"approved","note":"Approved: unified seven-channel input total tolerance to 1e-4 plus 1e-12, exported reusable tolerance helper, and added contract coverage for within-tolerance normalization and explicit over-tolerance failure. Verified apps/model typecheck and three-audience-share-contract-test."}

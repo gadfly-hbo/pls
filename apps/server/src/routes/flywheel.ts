@@ -9,19 +9,97 @@ const flywheel = new Hono();
 
 function parseJson<T>(raw: string, fallback: T): T { try { return JSON.parse(raw) as T; } catch { return fallback; } }
 
+// A-P7-SIM-2: decision provenance from simulated market runs.
+const SIMULATION_SOURCE_TYPES = [
+  "product_channel_match",
+  "single_product_portrait",
+  "campaign_product_strategy",
+  "manual_strategy",
+] as const;
+type SimulationSourceType = (typeof SIMULATION_SOURCE_TYPES)[number];
+
+function isSimulationSourceType(value: unknown): value is SimulationSourceType {
+  return typeof value === "string" && (SIMULATION_SOURCE_TYPES as readonly string[]).includes(value);
+}
+
+function safeStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value ?? {});
+  } catch {
+    return "{}";
+  }
+}
+
+function buildSimulationSummaryFromRun(run: Record<string, unknown>): Record<string, unknown> {
+  const result = parseJson<Record<string, unknown>>(String(run.result ?? "{}"), {});
+  const overall = (result.overall ?? {}) as Record<string, unknown>;
+  return {
+    acceptanceScore: overall.acceptanceScore ?? null,
+    purchaseIntentScore: overall.purchaseIntentScore ?? null,
+    confidence: overall.confidence ?? null,
+    opportunitySummary: overall.opportunitySummary ?? [],
+    riskSummary: overall.riskSummary ?? [],
+    recommendedAdjustments: overall.recommendedAdjustments ?? [],
+  };
+}
+
 // --- Decision Records ---
-// POST /operations/decisions — create decision from match suggestion
+// POST /operations/decisions — create decision from match suggestion or simulated market run
 flywheel.post("/decisions", async (c) => {
   const wsId = c.get("workspaceId") as string;
   const body = (await c.req.json()) as Record<string, unknown>;
   const skuId = body.skuId as string; const channelId = body.channelId as string;
   const recommendation = body.recommendation as string;
   if (!skuId || !channelId || !recommendation) return invalidInput(c, "skuId, channelId, recommendation required");
+
+  const simulationRunId = body.simulationRunId as string | undefined;
+  const sourceTypeRaw = body.sourceType as string | undefined;
+  const sourceRef = body.sourceRef;
+  const simulationSummaryRaw = body.simulationSummary;
+
   const db = openDb(wsId);
+
+  let matchId = String(body.matchId ?? "");
+  let simulationRunIdValidated: string | null = null;
+  let resolvedSourceType: string | null = null;
+  let resolvedSourceRef = sourceRef;
+  let resolvedSimulationSummary: Record<string, unknown> | null = null;
+
+  if (simulationRunId) {
+    const run = db.prepare("SELECT * FROM simulation_run WHERE run_id = ? AND workspace_id = ?").get(simulationRunId, wsId) as Record<string, unknown> | undefined;
+    if (!run) {
+      db.close();
+      return notFound(c, `Simulation run ${simulationRunId} not found`);
+    }
+    simulationRunIdValidated = simulationRunId;
+    resolvedSourceType = sourceTypeRaw ?? (run.input_snapshot ? parseJson<Record<string, unknown>>(String(run.input_snapshot), {}).sourceType as string : null) ?? null;
+    if (resolvedSourceType && !isSimulationSourceType(resolvedSourceType)) {
+      db.close();
+      return invalidInput(c, `sourceType must be one of ${SIMULATION_SOURCE_TYPES.join(", ")}`, "sourceType");
+    }
+    const runInputSnapshot = parseJson<Record<string, unknown>>(String(run.input_snapshot ?? "{}"), {});
+    resolvedSourceRef = sourceRef ?? runInputSnapshot.sourceRef ?? {};
+    resolvedSimulationSummary = simulationSummaryRaw !== undefined && simulationSummaryRaw !== null
+      ? (simulationSummaryRaw as Record<string, unknown>)
+      : buildSimulationSummaryFromRun(run);
+  } else {
+    if (sourceTypeRaw && !isSimulationSourceType(sourceTypeRaw)) {
+      db.close();
+      return invalidInput(c, `sourceType must be one of ${SIMULATION_SOURCE_TYPES.join(", ")}`, "sourceType");
+    }
+    resolvedSourceType = sourceTypeRaw ?? null;
+    resolvedSourceRef = sourceRef ?? {};
+    resolvedSimulationSummary = simulationSummaryRaw !== undefined && simulationSummaryRaw !== null
+      ? (simulationSummaryRaw as Record<string, unknown>)
+      : null;
+  }
+
   const decisionId = `dec_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-  db.prepare(`INSERT INTO decision_record (decision_id,workspace_id,match_id,sku_id,channel_id,recommendation,rationale,decision_type,status,created_by) VALUES (?,?,?,?,?,?,?,?,?,?)`).run(
-    decisionId, wsId, String(body.matchId ?? ""), skuId, channelId, recommendation,
-    String(body.rationale ?? ""), String(body.decisionType ?? "launch"), "pending", String(body.createdBy ?? "")
+  db.prepare(`INSERT INTO decision_record (decision_id,workspace_id,match_id,simulation_run_id,sku_id,channel_id,recommendation,rationale,decision_type,source_type,source_ref,simulation_summary,status,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+    decisionId, wsId, matchId, simulationRunIdValidated, skuId, channelId, recommendation,
+    String(body.rationale ?? ""), String(body.decisionType ?? "launch"),
+    resolvedSourceType, safeStringify(resolvedSourceRef), safeStringify(resolvedSimulationSummary),
+    "pending", String(body.createdBy ?? "")
   );
   writeAudit(db, { workspaceId: wsId, actor: "api", requestId: c.get("requestId") ?? "", resourceType: "decision", resourceId: decisionId, event: "create" });
   db.close();
@@ -39,7 +117,10 @@ flywheel.get("/decisions", (c) => {
   if (skuId) { conds.push("sku_id = ?"); params.push(skuId); }
   const rows = db.prepare(`SELECT * FROM decision_record WHERE ${conds.join(" AND ")} ORDER BY created_at DESC LIMIT ?`).all(...params, pageSize) as Array<Record<string, unknown>>;
   const items = rows.map(r => ({
-    decisionId: r.decision_id, matchId: r.match_id, skuId: r.sku_id, channelId: r.channel_id,
+    decisionId: r.decision_id, matchId: r.match_id, simulationRunId: r.simulation_run_id,
+    sourceType: r.source_type, sourceRef: parseJson(String(r.source_ref ?? "{}"), {}),
+    simulationSummary: parseJson(String(r.simulation_summary ?? "{}"), {}),
+    skuId: r.sku_id, channelId: r.channel_id,
     recommendation: r.recommendation, rationale: r.rationale, decisionType: r.decision_type,
     status: r.status, createdBy: r.created_by, createdAt: r.created_at, updatedAt: r.updated_at,
   }));
@@ -59,7 +140,10 @@ flywheel.get("/decisions/:decisionId", (c) => {
   const reviews = db.prepare("SELECT * FROM strategy_review WHERE decision_id = ? AND workspace_id = ? ORDER BY created_at").all(did, wsId) as Array<Record<string, unknown>>;
   db.close();
   return ok(c, {
-    decisionId: r.decision_id, matchId: r.match_id, skuId: r.sku_id, channelId: r.channel_id,
+    decisionId: r.decision_id, matchId: r.match_id, simulationRunId: r.simulation_run_id,
+    sourceType: r.source_type, sourceRef: parseJson(String(r.source_ref ?? "{}"), {}),
+    simulationSummary: parseJson(String(r.simulation_summary ?? "{}"), {}),
+    skuId: r.sku_id, channelId: r.channel_id,
     recommendation: r.recommendation, rationale: r.rationale, decisionType: r.decision_type,
     status: r.status, createdBy: r.created_by, createdAt: r.created_at, updatedAt: r.updated_at,
     actions: actions.map(a => ({

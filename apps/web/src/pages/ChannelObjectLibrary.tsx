@@ -8,6 +8,7 @@ import {
   parseMarkdownTable,
   parseXlsx,
   pickColumn,
+  threeAudienceInputTotalTolerance,
   validateAndBuildSegments,
   validateShareTotal,
   formatShareAsPercent,
@@ -187,11 +188,12 @@ export default function ChannelObjectLibrary() {
   const [threeAudienceParsed, setThreeAudienceParsed] = useState<{ headers: string[]; rows: Record<string, string>[] } | null>(null);
   const [threeAudienceLabelColumn, setThreeAudienceLabelColumn] = useState('');
   const [threeAudienceShareColumn, setThreeAudienceShareColumn] = useState('');
-  const [threeAudienceChannel, setThreeAudienceChannel] = useState<ThreeAudienceChannel>('tmall');
+  const [threeAudienceChannel, setThreeAudienceChannel] = useState<ThreeAudienceChannel | ''>('');
   const [threeAudiencePriorA, setThreeAudiencePriorA] = useState('');
   const [threeAudiencePriorB, setThreeAudiencePriorB] = useState('');
   const [threeAudiencePriorC, setThreeAudiencePriorC] = useState('');
-  const [threeAudienceSegments, setThreeAudienceSegments] = useState<{ label: string; rawShare: string; share: number }[]>([]);
+  const [threeAudienceSegments, setThreeAudienceSegments] = useState<{ rowNumber: number; label: string; rawShare: string; share: number }[]>([]);
+  const [threeAudienceIgnoredRows, setThreeAudienceIgnoredRows] = useState(0);
   const [threeAudienceErrors, setThreeAudienceErrors] = useState<{ rowNumber: number; reason: string }[]>([]);
   const [threeAudienceTotalError, setThreeAudienceTotalError] = useState<string | null>(null);
   const [threeAudienceResult, setThreeAudienceResult] = useState<ThreeAudienceEstimateResult | null>(null);
@@ -349,6 +351,7 @@ export default function ChannelObjectLibrary() {
     setThreeAudienceShareColumn('');
     setThreeAudienceMappingConfirmed(false);
     setThreeAudienceSegments([]);
+    setThreeAudienceIgnoredRows(0);
     setThreeAudienceErrors([]);
     setThreeAudienceTotalError(null);
     setThreeAudienceResult(null);
@@ -358,12 +361,14 @@ export default function ChannelObjectLibrary() {
   const buildThreeAudienceSegments = (
     rows: Record<string, string>[],
     labelColumn: string,
-    shareColumn: string
+    shareColumn: string,
+    channel: ThreeAudienceChannel
   ) => {
-    const { segments, errors } = validateAndBuildSegments(rows, { labelColumn, shareColumn });
+    const { segments, errors, ignoredRows } = validateAndBuildSegments(rows, { labelColumn, shareColumn }, channel);
     setThreeAudienceSegments(segments);
     setThreeAudienceErrors(errors);
-    const totalError = validateShareTotal(segments, threeAudienceChannel);
+    setThreeAudienceIgnoredRows(ignoredRows);
+    const totalError = validateShareTotal(segments, channel);
     setThreeAudienceTotalError(totalError);
   };
 
@@ -391,6 +396,7 @@ export default function ChannelObjectLibrary() {
       setThreeAudienceShareColumn(detectedShare ?? (parsed.headers[1] || ''));
       setThreeAudienceMappingConfirmed(false);
       setThreeAudienceSegments([]);
+      setThreeAudienceIgnoredRows(0);
       setThreeAudienceErrors([]);
       setThreeAudienceTotalError(null);
     } catch (err: any) {
@@ -429,6 +435,7 @@ export default function ChannelObjectLibrary() {
     setThreeAudienceShareColumn(shareColumn);
     setThreeAudienceMappingConfirmed(false);
     setThreeAudienceSegments([]);
+    setThreeAudienceIgnoredRows(0);
     setThreeAudienceErrors([]);
     setThreeAudienceTotalError(null);
     setThreeAudienceResult(null);
@@ -436,25 +443,26 @@ export default function ChannelObjectLibrary() {
   };
 
   const handleThreeAudienceConfirmMapping = () => {
-    if (!threeAudienceParsed) return;
-    buildThreeAudienceSegments(threeAudienceParsed.rows, threeAudienceLabelColumn, threeAudienceShareColumn);
+    if (!threeAudienceParsed || !threeAudienceChannel) return;
+    buildThreeAudienceSegments(threeAudienceParsed.rows, threeAudienceLabelColumn, threeAudienceShareColumn, threeAudienceChannel);
     setThreeAudienceMappingConfirmed(true);
     setThreeAudienceResult(null);
     setThreeAudienceAlgorithmError(null);
   };
 
-  const handleThreeAudienceChannelChange = (channel: ThreeAudienceChannel) => {
+  const handleThreeAudienceChannelChange = (channel: ThreeAudienceChannel | '') => {
     setThreeAudienceChannel(channel);
-    if (threeAudienceSegments.length > 0) {
-      const totalError = validateShareTotal(threeAudienceSegments, channel);
-      setThreeAudienceTotalError(totalError);
-    }
+    setThreeAudienceMappingConfirmed(false);
+    setThreeAudienceSegments([]);
+    setThreeAudienceIgnoredRows(0);
+    setThreeAudienceErrors([]);
+    setThreeAudienceTotalError(null);
     setThreeAudienceResult(null);
     setThreeAudienceAlgorithmError(null);
   };
 
   const handleThreeAudienceCalculate = () => {
-    if (threeAudienceErrors.length > 0 || threeAudienceTotalError || threeAudienceSegments.length === 0) return;
+    if (!threeAudienceChannel || threeAudienceErrors.length > 0 || threeAudienceTotalError || threeAudienceSegments.length === 0) return;
     setThreeAudienceLoading(true);
     setThreeAudienceResult(null);
     setThreeAudienceAlgorithmError(null);
@@ -1181,10 +1189,15 @@ export default function ChannelObjectLibrary() {
     if (!detail) return null;
     const canCalculate =
       threeAudienceMappingConfirmed &&
+      threeAudienceChannel !== '' &&
       threeAudienceSegments.length > 0 &&
       threeAudienceErrors.length === 0 &&
       !threeAudienceTotalError &&
       isThreeAudiencePriorValid();
+    const canConfirmMapping = threeAudienceChannel !== '' && threeAudienceLabelColumn !== '' && threeAudienceShareColumn !== '';
+    const threeAudienceTotalLimitLabel = threeAudienceChannel
+      ? formatShareAsPercent(1 + threeAudienceInputTotalTolerance(threeAudienceChannel))
+      : '约 100.10%';
 
     return (
       <div className="workbench-detail">
@@ -1256,6 +1269,20 @@ export default function ChannelObjectLibrary() {
             <h3 className="panel__title">列映射</h3>
             <div className="form-group" style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <div style={{ flex: 1, minWidth: 140 }}>
+                <label>渠道</label>
+                <select
+                  className="form-control"
+                  data-testid="three-audience-channel"
+                  value={threeAudienceChannel}
+                  onChange={(e) => handleThreeAudienceChannelChange(e.target.value as ThreeAudienceChannel | '')}
+                >
+                  <option value="">请选择渠道</option>
+                  {THREE_AUDIENCE_CHANNELS.map((ch) => (
+                    <option key={ch.value} value={ch.value}>{ch.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ flex: 1, minWidth: 140 }}>
                 <label>标签列</label>
                 <select
                   className="form-control"
@@ -1287,6 +1314,7 @@ export default function ChannelObjectLibrary() {
                 className="btn btn-primary"
                 data-testid="three-audience-confirm-mapping"
                 onClick={handleThreeAudienceConfirmMapping}
+                disabled={!canConfirmMapping}
                 style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6 }}
               >
                 <Calculator size={14} /> 确认列映射
@@ -1294,7 +1322,7 @@ export default function ChannelObjectLibrary() {
             )}
             {threeAudienceMappingConfirmed && (
               <div className="alert-banner alert-banner--success" style={{ marginTop: 12, background: 'var(--background)' }}>
-                <span>列映射已确认，可继续选择渠道并计算。</span>
+                <span>列映射已确认，已忽略 {threeAudienceIgnoredRows} 行非该渠道原生人群标签；占比合计约 {threeAudienceTotalLimitLabel} 以内按四舍五入误差处理。</span>
               </div>
             )}
           </div>
@@ -1314,9 +1342,9 @@ export default function ChannelObjectLibrary() {
                   </tr>
                 </thead>
                 <tbody>
-                  {threeAudienceSegments.map((segment, index) => (
+                  {threeAudienceSegments.map((segment) => (
                     <tr key={segment.label}>
-                      <td>{index + 2}</td>
+                      <td>{segment.rowNumber}</td>
                       <td>{segment.label}</td>
                       <td>{segment.rawShare}</td>
                       <td>{formatShareAsPercent(segment.share)}</td>
@@ -1349,23 +1377,8 @@ export default function ChannelObjectLibrary() {
 
         {threeAudienceMappingConfirmed && threeAudienceParsed && threeAudienceParsed.headers.length > 0 && (
           <div className="panel">
-            <h3 className="panel__title">渠道与专家先验</h3>
-            <div className="form-group" style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label>渠道</label>
-                <select
-                  className="form-control"
-                  data-testid="three-audience-channel"
-                  value={threeAudienceChannel}
-                  onChange={(e) => handleThreeAudienceChannelChange(e.target.value as ThreeAudienceChannel)}
-                >
-                  {THREE_AUDIENCE_CHANNELS.map((ch) => (
-                    <option key={ch.value} value={ch.value}>{ch.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="form-group" style={{ marginTop: 12 }}>
+            <h3 className="panel__title">专家先验</h3>
+            <div className="form-group">
               <label>专家先验 A/B/C（可选，三项和为 1）</label>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 <input

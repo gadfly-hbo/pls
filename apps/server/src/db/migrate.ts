@@ -12,6 +12,7 @@ import {
   NEW_PRODUCT_DDL,
   FLYWHEEL_DDL,
   CHANNEL_OBJECT_LIBRARY_DDL,
+  SIMULATED_MARKET_DDL,
 } from "./schema.js";
 
 const dataDir = resolve(import.meta.dirname, "../../../../data");
@@ -95,6 +96,22 @@ db.exec(CHANNEL_ENTITY_DDL);
 db.exec(NEW_PRODUCT_DDL);
 db.exec(FLYWHEEL_DDL);
 db.exec(CHANNEL_OBJECT_LIBRARY_DDL);
+db.exec(SIMULATED_MARKET_DDL);
+
+// A-P7-SIM-2: add decision provenance columns for simulated-market sources.
+const SIM_DECISION_COLS = [
+  `ALTER TABLE decision_record ADD COLUMN simulation_run_id TEXT`,
+  `ALTER TABLE decision_record ADD COLUMN source_type TEXT`,
+  `ALTER TABLE decision_record ADD COLUMN source_ref TEXT NOT NULL DEFAULT '{}'`,
+  `ALTER TABLE decision_record ADD COLUMN simulation_summary TEXT NOT NULL DEFAULT '{}'`,
+];
+for (const sql of SIM_DECISION_COLS) {
+  try {
+    db.exec(sql);
+  } catch {
+    // Column already exists
+  }
+}
 
 // Ensure workspace row exists
 db.prepare(

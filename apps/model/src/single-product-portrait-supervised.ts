@@ -80,6 +80,7 @@ export interface SupervisedPortraitModel {
   targetDimensions: string[];
   dimensionModels: DimensionModel[];
   featureExtractorVersion: string;
+  combinationFeatureNames: string[];
 }
 
 export interface SupervisedPortraitMetricsSummary {
@@ -140,11 +141,11 @@ export class SingleProductPortraitModelUnavailableError extends Error {
 
 export const SUPERVISED_PORTRAIT_METRICS_SUMMARY: SupervisedPortraitMetricsSummary[] = [
   { labelType: "预测性别", top1Overlap: 0.959, top3Overlap: 1.0 },
-  { labelType: "预测人生阶段", top1Overlap: 0.836, top3Overlap: 1.0 },
-  { labelType: "预测年龄段", top1Overlap: 0.726, top3Overlap: 0.776 },
-  { labelType: "预测消费能力", top1Overlap: 0.63, top3Overlap: 1.0 },
-  { labelType: "城市等级", top1Overlap: 0.342, top3Overlap: 0.749 },
-  { labelType: "八大消费群体", top1Overlap: 0.342, top3Overlap: 0.808 },
+  { labelType: "预测人生阶段", top1Overlap: 0.877, top3Overlap: 1.0 },
+  { labelType: "预测年龄段", top1Overlap: 0.726, top3Overlap: 0.79 },
+  { labelType: "预测消费能力", top1Overlap: 0.712, top3Overlap: 1.0 },
+  { labelType: "城市等级", top1Overlap: 0.411, top3Overlap: 0.74 },
+  { labelType: "八大消费群体", top1Overlap: 0.315, top3Overlap: 0.817 },
 ];
 
 export type SupervisedPortraitInput = PortraitTrainingSample;
@@ -360,7 +361,7 @@ function mergeCounts(...records: Record<string, number>[]): Record<string, numbe
   return Object.fromEntries(merged);
 }
 
-export function extractSupervisedFeatures(sample: PortraitTrainingSample): Record<string, number> {
+export function extractBaseSupervisedFeatures(sample: PortraitTrainingSample): Record<string, number> {
   const fitCategory = categorizeFitType(sample.fitType);
   const fitOneHot: Record<string, number> = { [`fit_${fitCategory}`]: 1 };
 
@@ -373,6 +374,93 @@ export function extractSupervisedFeatures(sample: PortraitTrainingSample): Recor
   const fabFabricFeatures = extractKeywords(sample.fab, FABRIC_KEYWORDS);
 
   return mergeCounts(fitOneHot, fabricFeatures, fabFabricFeatures, fabStyleFeatures, fabFunctionFeatures, fabSceneFeatures);
+}
+
+const COMBINATION_FEATURE_GROUPS = ["fit_", "fabric_", "style_", "func_", "scene_"];
+
+function getFeatureGroup(name: string): string | null {
+  for (const prefix of COMBINATION_FEATURE_GROUPS) {
+    if (name.startsWith(prefix)) return prefix;
+  }
+  return null;
+}
+
+function generateCombinationFeatures(
+  baseFeatures: Record<string, number>,
+  comboNames: Set<string>,
+): Record<string, number> {
+  const combos: Record<string, number> = {};
+  const keys = Object.keys(baseFeatures);
+  for (let i = 0; i < keys.length; i++) {
+    const k1 = keys[i]!;
+    if (baseFeatures[k1] === 0) continue;
+    const g1 = getFeatureGroup(k1);
+    if (!g1) continue;
+    for (let j = i + 1; j < keys.length; j++) {
+      const k2 = keys[j]!;
+      if (baseFeatures[k2] === 0) continue;
+      const g2 = getFeatureGroup(k2);
+      if (!g2 || g1 === g2) continue;
+      const comboKey = `${k1}__${k2}`;
+      if (comboNames.has(comboKey)) {
+        combos[comboKey] = 1;
+      }
+    }
+  }
+  return combos;
+}
+
+export function selectFrequentCombinationFeatures(
+  baseFeatureRecords: Record<string, number>[],
+  minFrequency = 3,
+): string[] {
+  const freq = new Map<string, number>();
+  for (const record of baseFeatureRecords) {
+    const seen = new Set<string>();
+    const keys = Object.keys(record);
+    for (let i = 0; i < keys.length; i++) {
+      const k1 = keys[i]!;
+      if (record[k1] === 0) continue;
+      const g1 = getFeatureGroup(k1);
+      if (!g1) continue;
+      for (let j = i + 1; j < keys.length; j++) {
+        const k2 = keys[j]!;
+        if (record[k2] === 0) continue;
+        const g2 = getFeatureGroup(k2);
+        if (!g2 || g1 === g2) continue;
+        const comboKey = `${k1}__${k2}`;
+        if (!seen.has(comboKey)) {
+          seen.add(comboKey);
+          freq.set(comboKey, (freq.get(comboKey) ?? 0) + 1);
+        }
+      }
+    }
+  }
+  return [...freq.entries()]
+    .filter(([, count]) => count >= minFrequency)
+    .map(([key]) => key)
+    .sort();
+}
+
+function addCombinationFeatures(
+  baseFeatures: Record<string, number>,
+  combinationFeatureNames: string[],
+): Record<string, number> {
+  if (combinationFeatureNames.length === 0) return baseFeatures;
+  const comboSet = new Set(combinationFeatureNames);
+  const comboFeatures = generateCombinationFeatures(baseFeatures, comboSet);
+  return mergeCounts(baseFeatures, comboFeatures);
+}
+
+export function extractSupervisedFeatures(
+  sample: PortraitTrainingSample,
+  combinationFeatureNames?: string[],
+): Record<string, number> {
+  const baseFeatures = extractBaseSupervisedFeatures(sample);
+  if (!combinationFeatureNames || combinationFeatureNames.length === 0) {
+    return baseFeatures;
+  }
+  return addCombinationFeatures(baseFeatures, combinationFeatureNames);
 }
 
 // ---------------------------------------------------------------------------
@@ -570,11 +658,18 @@ export function trainSupervisedPortraitModel(options: {
   samples: PortraitTrainingSample[];
   targetsByDimension: Map<string, Map<string, number[]>>;
   alpha?: number;
+  enableCombinationFeatures?: boolean;
+  minCombinationFreq?: number;
 }): SupervisedPortraitModel {
-  const { samples, targetsByDimension, alpha = 1.0 } = options;
+  const { samples, targetsByDimension, alpha = 1.0, enableCombinationFeatures = true, minCombinationFreq = 8 } = options;
 
-  // Build feature matrix
-  const featureRecords = samples.map((s) => extractSupervisedFeatures(s));
+  // Build base features and select frequent cross-field combinations
+  const baseFeatureRecords = samples.map((s) => extractBaseSupervisedFeatures(s));
+  const combinationFeatureNames = enableCombinationFeatures
+    ? selectFrequentCombinationFeatures(baseFeatureRecords, minCombinationFreq)
+    : [];
+
+  const featureRecords = baseFeatureRecords.map((base) => addCombinationFeatures(base, combinationFeatureNames));
   const featureNames = [...new Set(featureRecords.flatMap((r) => Object.keys(r)))].sort();
   const X = featureRecords.map((record) => featureNames.map((name) => record[name] ?? 0));
   const { scaled, means, stds } = standardize(X);
@@ -618,7 +713,8 @@ export function trainSupervisedPortraitModel(options: {
     fitTypes: [...new Set(samples.map((sample) => sample.fitType).filter(Boolean))].sort(),
     targetDimensions: [...SUPERVISED_TARGET_DIMENSIONS],
     dimensionModels,
-    featureExtractorVersion: "q2_supervised_v1",
+    featureExtractorVersion: "q2_supervised_v2",
+    combinationFeatureNames,
   };
 }
 
@@ -697,7 +793,7 @@ function buildEvidence(model: DimensionModel, labelIndex: number): PortraitEvide
 
 export function predictSupervisedPortrait(options: PredictSupervisedOptions): SingleProductPortraitPrediction {
   const { input, model, outputTopNPerDimension = 10 } = options;
-  const features = extractSupervisedFeatures(input);
+  const features = extractSupervisedFeatures(input, model.combinationFeatureNames);
 
   const platformPortraitRows: PlatformPortraitRow[] = [];
   for (const dimModel of model.dimensionModels) {
@@ -956,7 +1052,7 @@ export function calibrateSupervisedTemperatures(options: CalibrateSupervisedOpti
     }
 
     const trainModel = trainSupervisedPortraitModel({ samples: trainSamples, targetsByDimension: trainTargets, alpha });
-    const features = extractSupervisedFeatures(heldOut);
+    const features = extractSupervisedFeatures(heldOut, trainModel.combinationFeatureNames);
 
     for (const dimModel of trainModel.dimensionModels) {
       if (!dimModel.isClosed) continue;

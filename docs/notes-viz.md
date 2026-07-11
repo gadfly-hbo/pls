@@ -2,9 +2,21 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-10（T0007 完成：在渠道对象库详情页新增“三大人群”本地估算 Tab，CSV/Markdown/XLSX 解析、七渠道算法、先验与定向 E2E 均通过验证）
+最近更新：2026-07-10（T0012 完成：三大人群本地估算前端总和校验改为复用模型层容差）
 
 进度：
+
+- `T0012 / three-audience-tolerance-ui` (frontend) 已完成并经总控审核：
+  - 三大人群本地估算的 share 总和校验改为复用模型层 `threeAudienceInputTotalTolerance(channel)`，不在前端 parser 硬编码渠道容差。
+  - 页面确认列映射后提示占比合计约 `100.1%` 以内按四舍五入误差处理。
+  - E2E 补充抖音八大标签合计 `100.10%` 可计算，以及 `100.11%` 超容差阻断。
+  - 验证通过：`apps/web npm run build`、定向 Playwright 10 passed、`apps/model npm run three-audience-share-contract-test`。
+
+- `T0010 / three-audience-local-file-filter` (frontend) 已完成并经总控审核：
+  - 三大人群本地估算确认列映射前必须先选择渠道，避免默认按天猫体系过滤。
+  - `three-audience-local-parser` 复用模型层 `isSemirThreeAudienceNativeLabel`，先忽略非该渠道原生人群标签，再对保留行执行重复、share 和总和校验。
+  - 页面在确认后展示“已忽略 N 行非该渠道原生人群标签”，渠道或列映射变更会使既有确认与结果失效。
+  - E2E 补充抖音通用画像混合数据，覆盖八大原生标签保留、兴趣/地域/设备等无关标签忽略、无需专家先验即可计算；`apps/web npm run build`、定向 Playwright 8 passed、`apps/model npm run three-audience-share-contract-test` 均通过。
 
 - `T0007 / semir-three-audience-local-estimator` (frontend) 已完成：
   - T0008 批准后，以 `../../../model/src/three-audience-share` 正确路径复用 `estimateSemirThreeAudienceShares` 及类型，未复制算法。

@@ -126,6 +126,17 @@ test.describe('Single Product Portrait Real API Contract Test', () => {
     await page.locator('button.app-nav__item', { hasText: '新品预测' }).click();
     await expect(page.getByRole('heading', { name: '单品画像预测' })).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('sampleCount')).toBeVisible();
+    await expect(page.getByText('73')).toBeVisible();
+    await expect(page.getByText('LOO Top1')).toBeVisible();
+    await expect(page.getByText('LOO Top3')).toBeVisible();
+
+    const modelInfo = page.locator('.single-portrait-model-info');
+    await expect(modelInfo.getByRole('button', { name: '收起模型说明' })).toBeVisible();
+    await modelInfo.getByRole('button', { name: '收起模型说明' }).click();
+    await expect(modelInfo.getByRole('button', { name: '展开模型说明' })).toBeVisible();
+    await expect(modelInfo.getByText('LOO Top1')).not.toBeVisible();
+    await modelInfo.getByRole('button', { name: '展开模型说明' }).click();
+    await expect(modelInfo.getByText('LOO Top1')).toBeVisible();
 
     await page.getByLabel('款号').fill('REAL_SINGLE_001');
     await page.getByLabel('版型').selectOption('X型');

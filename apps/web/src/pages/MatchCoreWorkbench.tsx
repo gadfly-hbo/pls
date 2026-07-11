@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api';
-import type { HeatmapData, MatchResult, ChannelProfile } from '../types';
+import type { HeatmapData, MatchResult, ChannelProfile, SimulatedMarketPrefill } from '../types';
 import { translateChannel, translateTag } from '../utils/translate';
 
 function safeScore(value: unknown): number {
@@ -30,7 +30,32 @@ function getRecBadgeClass(rec: string): string {
   }
 }
 
-export default function MatchCoreWorkbench({ goToFlywheel }: { goToFlywheel?: (id?: string) => void }) {
+function buildMatchPrefill(matchDetail: MatchResult, channelName: string): SimulatedMarketPrefill {
+  const recMeta = getRecMeta(matchDetail.recommendation);
+  const posTags = matchDetail.positiveDrivers.map((d) => translateTag(d.tagId)).join('、') || '无';
+  const negTags = matchDetail.negativeDrivers.map((d) => translateTag(d.tagId)).join('、') || '无';
+  const risks = matchDetail.risks.join('、') || '无';
+
+  const strategyText = [
+    `SKU: ${matchDetail.skuId}`,
+    `渠道: ${matchDetail.channelId}${channelName ? `（${channelName}）` : ''}`,
+    `匹配分: ${(safeScore(matchDetail.matchScore) * 100).toFixed(1)}`,
+    `置信度: ${(safeScore(matchDetail.matchConfidence) * 100).toFixed(1)}%`,
+    `推荐策略: ${recMeta.label}`,
+    `相似/强契合标签: ${posTags}`,
+    `冲突/分歧标签: ${negTags}`,
+    `风险提示: ${risks}`,
+  ].join('\n');
+
+  return {
+    sourceType: 'product_channel_match',
+    sourceRef: { id: matchDetail.matchId, type: 'product_channel_match' },
+    strategyText,
+    marketContext: { channelEntityId: matchDetail.channelId },
+  };
+}
+
+export default function MatchCoreWorkbench({ goToFlywheel, goToSimulatedMarket }: { goToFlywheel?: (id?: string) => void; goToSimulatedMarket?: (prefill: SimulatedMarketPrefill) => void }) {
   const [mode, setMode] = useState<'sku-to-channel' | 'channel-to-sku'>('sku-to-channel');
   const [loading, setLoading] = useState(true);
   const [heatmapData, setHeatmapData] = useState<HeatmapData | null>(null);
@@ -363,12 +388,17 @@ export default function MatchCoreWorkbench({ goToFlywheel }: { goToFlywheel?: (i
               </div>
             </div>
           ) : (
-            <div className="match-workbench__right-content">
+              <div className="match-workbench__right-content">
               
               {/* Report Header + Actions */}
               <div className="flex-between" style={{ flexWrap: 'wrap', gap: 10 }}>
                 <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>匹配决策解释报告</h3>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button className="btn" onClick={() => {
+                    if (!matchDetail || !goToSimulatedMarket) return;
+                    const channel = channels.find((c) => c.channelId === matchDetail.channelId);
+                    goToSimulatedMarket(buildMatchPrefill(matchDetail, channel?.channelName ?? ''));
+                  }} disabled={!goToSimulatedMarket}>模拟目标用户反馈</button>
                   <button className="btn btn-primary" onClick={async () => {
                     try {
                       const res = await api.createDecision({

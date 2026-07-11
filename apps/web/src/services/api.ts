@@ -1,4 +1,4 @@
-import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord, DbOverview, DbTableInfo, DbSchemaInfo, DbSampleInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbOperationDryRunResult, DbOperationExecuteResult, CsvQualityReport, CsvIngestionExecuteResponse, ToolRun, SingleProductPortraitPrediction, SingleProductPortraitInput, SingleProductPortraitMetadata, SingleProductPortraitBatchPreview, SingleProductPortraitBatchExecute, ChannelObject, AudienceProfile, ProductFitProfile, ChannelObjectBinding } from '../types';
+import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord, DbOverview, DbTableInfo, DbSchemaInfo, DbSampleInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbOperationDryRunResult, DbOperationExecuteResult, CsvQualityReport, CsvIngestionExecuteResponse, ToolRun, SingleProductPortraitPrediction, SingleProductPortraitInput, SingleProductPortraitMetadata, SingleProductPortraitBatchPreview, SingleProductPortraitBatchExecute, ChannelObject, AudienceProfile, ProductFitProfile, ChannelObjectBinding, TargetUserAgent, SimulatedMarketInput, SimulatedMarketResult, SimulatedMarketRunListResponse, SimulationRun, SimulatedMarketSourceType, CreateDecisionInput } from '../types';
 
 // Feature flag for local mock vs real backend
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
@@ -31,7 +31,101 @@ const db = {
   audienceProfiles: [] as AudienceProfile[],
   productFitProfiles: [] as ProductFitProfile[],
   channelObjectBindings: [] as ChannelObjectBinding[],
+  simulatedMarketRuns: [] as SimulationRun[],
 };
+
+const mockSimulatedMarketAgentTemplates: TargetUserAgent[] = [
+  {
+    agentId: 'agent-template-a',
+    name: 'A / 质感流行派',
+    sourceType: 'three_audience_segment',
+    sourceRef: { segmentCode: 'A', segmentName: '质感流行派', profileVersion: 'v1' },
+    profile: {
+      demographics: ['京东平台目标人群'],
+      preferences: ['设计感', '质感', '细节工艺', '潮流趋势', '小众风格'],
+      concerns: ['撞款', '廉价感', '跟风'],
+      decisionFactors: ['面料质感', '剪裁细节', '品牌调性', '潮流度'],
+    },
+    weight: 1,
+  },
+  {
+    agentId: 'agent-template-b',
+    name: 'B / 都市体面家',
+    sourceType: 'three_audience_segment',
+    sourceRef: { segmentCode: 'B', segmentName: '都市体面家', profileVersion: 'v1' },
+    profile: {
+      demographics: ['京东平台目标人群'],
+      preferences: ['通勤', '商务休闲', '简约', '得体', '多场合适用'],
+      concerns: ['不够正式', '难打理', '不适合上班'],
+      decisionFactors: ['版型合体', '色彩稳重', '品牌信赖', '性价比'],
+    },
+    weight: 1,
+  },
+  {
+    agentId: 'agent-template-c',
+    name: 'C / 百搭优选客',
+    sourceType: 'three_audience_segment',
+    sourceRef: { segmentCode: 'C', segmentName: '百搭优选客', profileVersion: 'v1' },
+    profile: {
+      demographics: ['京东平台目标人群'],
+      preferences: ['基础款', '百搭', '舒适', '性价比', '耐穿'],
+      concerns: ['难搭配', '易过时', '价格高'],
+      decisionFactors: ['价格', '搭配率', '舒适度', '口碑'],
+    },
+    weight: 1,
+  },
+];
+
+function buildMockSimulatedMarketResult(input: SimulatedMarketInput): SimulatedMarketResult {
+  const agentFeedback = input.targetAgentSet.map((agent) => {
+    const preferences = agent.profile?.preferences ?? [];
+    const concerns = agent.profile?.concerns ?? [];
+    const score = Math.min(100, Math.max(0, 50 + Math.round(preferences.length * 3) - Math.round(concerns.length * 2)));
+    return {
+      agentId: agent.agentId,
+      acceptanceScore: score,
+      purchaseIntentScore: Math.min(100, Math.max(0, score - 8)),
+      positiveDrivers: preferences.length > 0 ? [`策略契合 ${preferences[0]} 偏好`] : ['策略定位可接受'],
+      objections: concerns.length > 0 ? [`可能触发 ${concerns[0]} 顾虑`] : ['未识别明显顾虑'],
+      quoteSummary: `${agent.name} 对策略接受度为 ${score}，购买意向为 ${Math.min(100, Math.max(0, score - 8))}。`,
+      suggestedAdjustment: score >= 60
+        ? `维持当前对 ${preferences[0] || '核心偏好'} 的表述。`
+        : `建议补充 ${preferences[0] || '偏好关键词'} 相关描述。`,
+    };
+  });
+
+  const avgAcceptance = Math.round(agentFeedback.reduce((sum, a) => sum + a.acceptanceScore, 0) / agentFeedback.length);
+  const avgPurchase = Math.round(agentFeedback.reduce((sum, a) => sum + a.purchaseIntentScore, 0) / agentFeedback.length);
+
+  return {
+    overall: {
+      acceptanceScore: avgAcceptance,
+      purchaseIntentScore: avgPurchase,
+      confidence: 0.62,
+      opportunitySummary: ['目标人群整体接受度处于可推进区间，可作为策略压力测试基础。'],
+      riskSummary: ['策略为模拟预测，不代表真实市场反馈。'],
+      recommendedAdjustments: ['补充策略文本中的商品、价格、渠道、活动卖点细节。', '在市场场景中补充渠道、活动类型和预算/库存约束。'],
+    },
+    agentFeedback,
+  };
+}
+
+function buildMockSimulatedMarketRun(input: SimulatedMarketInput): SimulationRun {
+  const runId = `sim_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const run: SimulationRun = {
+    runId,
+    workspaceId: 'ws_demo',
+    status: 'succeeded',
+    inputSnapshot: input,
+    result: buildMockSimulatedMarketResult(input),
+    provider: 'deterministic_fallback',
+    modelVersion: 'deterministic-fallback-0.1',
+    generatedAt: new Date().toISOString(),
+    qualityFlags: ['deterministic_fallback_used'],
+  };
+  db.simulatedMarketRuns.push(run);
+  return run;
+}
 
 const mockSinglePortraitMetadata: SingleProductPortraitMetadata = {
   modelAvailable: true,
@@ -254,13 +348,19 @@ function normalizeOperationDecision(row: Record<string, unknown>): DecisionRecor
     matchId: typeof row.matchId === 'string' && row.matchId ? row.matchId : undefined,
     skuId: String(row.skuId ?? ''),
     entityId: String(row.channelId ?? ''),
-    entityType: 'channel',
+    entityType: (typeof row.entityType === 'string' && ['channel', 'account', 'sku'].includes(row.entityType)) ? row.entityType as 'channel' | 'account' | 'sku' : 'channel',
+    recommendation: typeof row.recommendation === 'string' ? row.recommendation : undefined,
+    rationale: typeof row.rationale === 'string' ? row.rationale : undefined,
     status: toDecisionStatus(row, actions, reviews),
     owner: String(row.createdBy ?? '运营专员'),
     createdAt: String(row.createdAt ?? new Date().toISOString()),
     updatedAt: String(row.updatedAt ?? row.createdAt ?? new Date().toISOString()),
     actions,
     feedback,
+    simulationRunId: typeof row.simulationRunId === 'string' && row.simulationRunId ? row.simulationRunId : undefined,
+    sourceType: typeof row.sourceType === 'string' ? row.sourceType as SimulatedMarketSourceType : undefined,
+    sourceRef: typeof row.sourceRef === 'object' && row.sourceRef !== null && !Array.isArray(row.sourceRef) ? row.sourceRef as { id: string; type: string } : undefined,
+    simulationSummary: typeof row.simulationSummary === 'object' && row.simulationSummary !== null && !Array.isArray(row.simulationSummary) ? row.simulationSummary as SimulatedMarketResult['overall'] : undefined,
   };
 }
 
@@ -1455,29 +1555,46 @@ export const api = {
     return { code: 'ok', data: { matchResults: matches } };
   },
 
-  createDecision: async (data: any) => {
+  createDecision: async (data: CreateDecisionInput) => {
+    const channelId = data.channelId ?? data.entityId;
+    if (!channelId) {
+      throw new Error('channelId 或 entityId 必填');
+    }
     if (!USE_MOCK) {
       return fetchApi<{ decisionId: string; status: string }>('/operations/decisions', {
         method: 'POST',
         body: JSON.stringify({
           skuId: data.skuId,
-          channelId: data.entityId,
+          channelId,
           recommendation: data.recommendation,
           rationale: data.rationale,
           matchId: data.matchId,
+          simulationRunId: data.simulationRunId,
+          sourceType: data.sourceType,
+          sourceRef: data.sourceRef,
+          simulationSummary: data.simulationSummary,
           decisionType: 'launch',
           createdBy: data.owner ?? '运营专员',
         })
       });
     }
-    const newDecision = {
+    const newDecision: DecisionRecord = {
       decisionId: `dec_${Date.now()}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       status: 'pending_execution',
       owner: data.owner || 'System',
       actions: [],
-      ...data
+      skuId: data.skuId,
+      entityId: channelId,
+      entityType: data.entityType ?? 'channel',
+      recommendation: data.recommendation,
+      rationale: data.rationale,
+      matchId: data.matchId,
+      simulationRunId: data.simulationRunId,
+      sourceType: data.sourceType,
+      sourceRef: data.sourceRef,
+      simulationSummary: data.simulationSummary,
     };
     db.decisions.push(newDecision);
     return { code: 'ok', data: newDecision };
@@ -2322,7 +2439,60 @@ export const api = {
         status: 'success'
       } as DbOperationExecuteResult
     };
-  }
+  },
+
+  // ----------------------------------------------------
+  // Simulated Market API
+  // ----------------------------------------------------
+  getSimulatedMarketAgentTemplates: async (): Promise<{ code: string; data: { agents: TargetUserAgent[] } }> => {
+    if (!USE_MOCK) return fetchApi<{ agents: TargetUserAgent[] }>('/simulated-market/agent-templates');
+    return { code: 'ok', data: { agents: mockSimulatedMarketAgentTemplates } };
+  },
+
+  createSimulatedMarketRun: async (input: SimulatedMarketInput): Promise<{ code: string; data: SimulationRun }> => {
+    if (!USE_MOCK) {
+      return fetchApi<SimulationRun>('/simulated-market/runs', {
+        method: 'POST',
+        body: JSON.stringify(input),
+        headers: { 'Idempotency-Key': `sim_${Date.now()}` },
+      });
+    }
+    return { code: 'ok', data: buildMockSimulatedMarketRun(input) };
+  },
+
+  getSimulatedMarketRuns: async (cursor?: string, pageSize = 20): Promise<{ code: string; data: SimulatedMarketRunListResponse }> => {
+    if (!USE_MOCK) {
+      const qs = new URLSearchParams();
+      if (cursor) qs.append('cursor', cursor);
+      if (pageSize) qs.append('pageSize', String(pageSize));
+      return fetchApi<SimulatedMarketRunListResponse>(`/simulated-market/runs?${qs.toString()}`);
+    }
+    const all = [...db.simulatedMarketRuns].sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime());
+    const size = Math.min(pageSize, 100);
+    const startIdx = cursor ? all.findIndex(r => r.generatedAt < cursor) : 0;
+    const slice = all.slice(Math.max(0, startIdx), Math.max(0, startIdx) + size + 1);
+    const hasMore = slice.length > size;
+    const items = slice.slice(0, size);
+    return {
+      code: 'ok',
+      data: {
+        items,
+        page: {
+          cursor: cursor ?? null,
+          nextCursor: hasMore ? (items[items.length - 1]?.generatedAt) ?? null : null,
+          pageSize: size,
+          hasMore,
+        },
+      },
+    };
+  },
+
+  getSimulatedMarketRun: async (runId: string): Promise<{ code: string; data: SimulationRun }> => {
+    if (!USE_MOCK) return fetchApi<SimulationRun>(`/simulated-market/runs/${runId}`);
+    const run = db.simulatedMarketRuns.find(r => r.runId === runId);
+    if (!run) throw new Error(`Simulation run ${runId} not found`);
+    return { code: 'ok', data: run };
+  },
 };
 
 function getDbOpRoute(operation: string, target: string): { path: string; method: string } {

@@ -398,15 +398,37 @@ export interface DecisionRecord {
   decisionId: string;
   matchId?: string;
   skuId: string;
-  entityId: string; 
-  entityType: 'channel' | 'account';
+  entityId: string;
+  entityType: 'channel' | 'account' | 'sku';
+  recommendation?: string;
+  rationale?: string;
   status: 'pending_execution' | 'in_progress' | 'pending_review' | 'verified' | 'needs_adjustment';
   owner: string;
   createdAt: string;
   updatedAt: string;
   actions: ActionRecord[];
   feedback?: FeedbackRecord;
+  simulationRunId?: string;
+  sourceType?: SimulatedMarketSourceType;
+  sourceRef?: { id: string; type: string };
+  simulationSummary?: SimulatedMarketOverall;
 }
+
+export interface CreateDecisionInput {
+  skuId: string;
+  channelId?: string;
+  entityId?: string;
+  entityType?: 'channel' | 'account' | 'sku';
+  recommendation: string;
+  rationale?: string;
+  matchId?: string;
+  simulationRunId?: string;
+  sourceType?: SimulatedMarketSourceType;
+  sourceRef?: { id: string; type: string };
+  simulationSummary?: SimulatedMarketOverall;
+  owner?: string;
+}
+
 
 export interface ChannelObject {
   workspaceId: string;
@@ -674,4 +696,102 @@ export interface ToolRun {
   warnings: string[];
   errors: string[];
   qualityReport?: any;
+}
+
+export type SimulatedMarketSourceType =
+  | 'manual_strategy'
+  | 'single_product_portrait'
+  | 'product_channel_match'
+  | 'campaign_product_strategy';
+
+export type TargetAgentSourceType = 'three_audience_segment' | 'manual_persona';
+
+export interface TargetUserAgentSourceRef {
+  segmentCode?: 'A' | 'B' | 'C';
+  segmentName?: '质感流行派' | '都市体面家' | '百搭优选客';
+  profileVersion?: string;
+}
+
+export interface TargetUserAgentProfile {
+  demographics?: string[];
+  preferences?: string[];
+  concerns?: string[];
+  decisionFactors?: string[];
+}
+
+export interface TargetUserAgent {
+  agentId: string;
+  name: string;
+  sourceType: TargetAgentSourceType;
+  sourceRef?: TargetUserAgentSourceRef;
+  profile: TargetUserAgentProfile;
+  weight?: number;
+}
+
+export interface SimulatedMarketMarketContext {
+  channelEntityId?: string;
+  marketingEventId?: string;
+  businessScenarioId?: string;
+  contextText?: string;
+}
+
+export interface SimulatedMarketInput {
+  sourceType: SimulatedMarketSourceType;
+  sourceRef?: { id: string; type: string };
+  strategyText: string;
+  marketContext: SimulatedMarketMarketContext;
+  targetAgentSet: TargetUserAgent[];
+}
+
+export interface SimulatedMarketPrefill {
+  sourceType: SimulatedMarketSourceType;
+  sourceRef?: { id: string; type: string };
+  strategyText: string;
+  marketContext?: SimulatedMarketMarketContext;
+}
+
+export interface SimulatedMarketAgentFeedback {
+  agentId: string;
+  acceptanceScore: number;
+  purchaseIntentScore: number;
+  positiveDrivers: string[];
+  objections: string[];
+  quoteSummary: string;
+  suggestedAdjustment: string;
+}
+
+export interface SimulatedMarketOverall {
+  acceptanceScore: number;
+  purchaseIntentScore: number;
+  confidence: number;
+  opportunitySummary: string[];
+  riskSummary: string[];
+  recommendedAdjustments: string[];
+}
+
+export interface SimulatedMarketResult {
+  overall: SimulatedMarketOverall;
+  agentFeedback: SimulatedMarketAgentFeedback[];
+}
+
+export interface SimulationRun {
+  runId: string;
+  workspaceId: string;
+  status: 'pending' | 'running' | 'succeeded' | 'failed';
+  inputSnapshot: SimulatedMarketInput;
+  result?: SimulatedMarketResult;
+  provider: string;
+  modelVersion: string;
+  generatedAt: string;
+  qualityFlags: string[];
+}
+
+export interface SimulatedMarketRunListResponse {
+  items: SimulationRun[];
+  page: {
+    cursor: string | null;
+    nextCursor: string | null;
+    pageSize: number;
+    hasMore: boolean;
+  };
 }

@@ -1,0 +1,165 @@
+import {
+  buildDefaultTargetUserAgents,
+  runDeterministicSimulatedMarket,
+  validateSimulatedMarketInput,
+  SIMULATED_MARKET_FALLBACK_PROVIDER,
+  SIMULATED_MARKET_FALLBACK_MODEL_VERSION,
+  DEFAULT_QUALITY_FLAGS,
+  type SimulatedMarketInput,
+  type TargetUserAgent,
+} from "./simulated-market.js";
+
+interface TestFailure {
+  case: string;
+  reason: string;
+}
+
+function assert(condition: boolean, message: string, failures: TestFailure[], caseName: string) {
+  if (!condition) failures.push({ case: caseName, reason: message });
+}
+
+function makeValidInput(): SimulatedMarketInput {
+  return {
+    sourceType: "manual_strategy",
+    strategyText: "本季主推凉感面料通勤衬衫，面向都市人群，定价中端，通过京东渠道配合新品折扣活动主推。",
+    marketContext: {
+      channelEntityId: "jd",
+      marketingEventId: "new-season-launch",
+      contextText: "新品上市期，重点提升搜索转化与加购率。",
+    },
+    targetAgentSet: buildDefaultTargetUserAgents(),
+  };
+}
+
+function main() {
+  const failures: TestFailure[] = [];
+
+  // Case: default agents cover three segments
+  const defaultAgents = buildDefaultTargetUserAgents();
+  assert(defaultAgents.length === 3, `Expected 3 default agents, got ${defaultAgents.length}`, failures, "default_agent_count");
+  const segmentNames = new Set(defaultAgents.map((agent) => agent.sourceRef?.segmentName));
+  assert(segmentNames.has("质感流行派"), "Missing segment 质感流行派", failures, "default_agent_segment_a");
+  assert(segmentNames.has("都市体面家"), "Missing segment 都市体面家", failures, "default_agent_segment_b");
+  assert(segmentNames.has("百搭优选客"), "Missing segment 百搭优选客", failures, "default_agent_segment_c");
+  const segmentCodes = new Set(defaultAgents.map((agent) => agent.sourceRef?.segmentCode));
+  assert(segmentCodes.has("A"), "Missing segment code A", failures, "default_agent_code_a");
+  assert(segmentCodes.has("B"), "Missing segment code B", failures, "default_agent_code_b");
+  assert(segmentCodes.has("C"), "Missing segment code C", failures, "default_agent_code_c");
+  assert(defaultAgents.every((agent) => agent.sourceType === "three_audience_segment"), "Default agents must be from three_audience_segment", failures, "default_agent_source_type");
+
+  // Case: valid input succeeds and uses deterministic fallback
+  const validInput = makeValidInput();
+  const run = runDeterministicSimulatedMarket(validInput, { workspaceId: "ws-test", runId: "run-test-1" });
+  assert(run.runId === "run-test-1", `runId mismatch: ${run.runId}`, failures, "run_runId");
+  assert(run.workspaceId === "ws-test", `workspaceId mismatch: ${run.workspaceId}`, failures, "run_workspaceId");
+  assert(run.status === "succeeded", `Expected status succeeded, got ${run.status}`, failures, "run_status");
+  assert(run.provider === SIMULATED_MARKET_FALLBACK_PROVIDER, `Expected provider ${SIMULATED_MARKET_FALLBACK_PROVIDER}, got ${run.provider}`, failures, "run_provider");
+  assert(run.modelVersion === SIMULATED_MARKET_FALLBACK_MODEL_VERSION, `Expected modelVersion ${SIMULATED_MARKET_FALLBACK_MODEL_VERSION}, got ${run.modelVersion}`, failures, "run_modelVersion");
+  assert(run.qualityFlags.includes(DEFAULT_QUALITY_FLAGS.deterministicFallbackUsed), "Missing deterministic_fallback_used quality flag", failures, "run_quality_flag_fallback");
+  assert(new Date(run.generatedAt).getTime() > 0, "Invalid generatedAt", failures, "run_generatedAt");
+  assert(run.result !== undefined, "Missing result", failures, "run_result_exists");
+
+  const result = run.result!;
+
+  // Case: overall scores are in valid ranges
+  assert(result.overall.acceptanceScore >= 0 && result.overall.acceptanceScore <= 100, `acceptanceScore out of range: ${result.overall.acceptanceScore}`, failures, "overall_acceptance_range");
+  assert(result.overall.purchaseIntentScore >= 0 && result.overall.purchaseIntentScore <= 100, `purchaseIntentScore out of range: ${result.overall.purchaseIntentScore}`, failures, "overall_purchase_intent_range");
+  assert(result.overall.confidence >= 0 && result.overall.confidence <= 1, `confidence out of range: ${result.overall.confidence}`, failures, "overall_confidence_range");
+  assert(result.overall.opportunitySummary.length > 0, "Expected opportunitySummary", failures, "overall_opportunity_summary");
+  assert(result.overall.riskSummary.length >= 0, "Expected riskSummary array", failures, "overall_risk_summary");
+  assert(result.overall.recommendedAdjustments.length > 0, "Expected recommendedAdjustments", failures, "overall_recommended_adjustments");
+
+  // Case: agent feedback covers all agents
+  assert(result.agentFeedback.length === validInput.targetAgentSet.length, `agentFeedback count mismatch: ${result.agentFeedback.length}`, failures, "agent_feedback_count");
+  for (const agent of result.agentFeedback) {
+    assert(agent.acceptanceScore >= 0 && agent.acceptanceScore <= 100, `agent acceptanceScore out of range: ${agent.acceptanceScore}`, failures, `agent_acceptance_range_${agent.agentId}`);
+    assert(agent.purchaseIntentScore >= 0 && agent.purchaseIntentScore <= 100, `agent purchaseIntentScore out of range: ${agent.purchaseIntentScore}`, failures, `agent_intent_range_${agent.agentId}`);
+    assert(agent.positiveDrivers.length > 0, `agent positiveDrivers empty: ${agent.agentId}`, failures, `agent_positive_drivers_${agent.agentId}`);
+    assert(agent.objections.length > 0, `agent objections empty: ${agent.agentId}`, failures, `agent_objections_${agent.agentId}`);
+    assert(agent.quoteSummary.length > 0, `agent quoteSummary empty: ${agent.agentId}`, failures, `agent_quote_summary_${agent.agentId}`);
+    assert(agent.suggestedAdjustment.length > 0, `agent suggestedAdjustment empty: ${agent.agentId}`, failures, `agent_suggested_adjustment_${agent.agentId}`);
+  }
+
+  // Case: short strategy text triggers quality flag
+  const shortInput: SimulatedMarketInput = {
+    ...validInput,
+    strategyText: "短",
+  };
+  const shortRun = runDeterministicSimulatedMarket(shortInput, { runId: "run-short" });
+  assert(shortRun.qualityFlags.includes(DEFAULT_QUALITY_FLAGS.strategyTextTooShort), "Missing strategy_text_too_short for short input", failures, "short_strategy_quality_flag");
+  assert(shortRun.result!.overall.confidence < 0.6, "Expected lower confidence for short input", failures, "short_strategy_confidence");
+
+  // Case: missing market context triggers quality flag
+  const noContextInput: SimulatedMarketInput = {
+    ...validInput,
+    marketContext: {},
+  };
+  const noContextRun = runDeterministicSimulatedMarket(noContextInput, { runId: "run-no-context" });
+  assert(noContextRun.qualityFlags.includes(DEFAULT_QUALITY_FLAGS.missingMarketContext), "Missing missing_market_context flag", failures, "missing_context_quality_flag");
+
+  // Case: missing agent profile triggers quality flag
+  const emptyProfileAgent: TargetUserAgent = {
+    agentId: "agent-empty",
+    name: "Empty Agent",
+    sourceType: "manual_persona",
+    profile: {},
+  };
+  const emptyProfileInput: SimulatedMarketInput = {
+    ...validInput,
+    targetAgentSet: [emptyProfileAgent],
+  };
+  const emptyProfileRun = runDeterministicSimulatedMarket(emptyProfileInput, { runId: "run-empty-profile" });
+  assert(emptyProfileRun.qualityFlags.includes(DEFAULT_QUALITY_FLAGS.missingTargetAgentProfile), "Missing missing_target_agent_profile flag", failures, "missing_profile_quality_flag");
+
+  // Case: deterministic repeatability
+  const run1 = runDeterministicSimulatedMarket(validInput, { runId: "run-repeat-1", generatedAt: "2026-01-01T00:00:00.000Z" });
+  const run2 = runDeterministicSimulatedMarket(validInput, { runId: "run-repeat-2", generatedAt: "2026-01-01T00:00:00.000Z" });
+  assert(
+    JSON.stringify(run1.result) === JSON.stringify(run2.result),
+    "Deterministic output should be stable for same input",
+    failures,
+    "repeat_stability",
+  );
+
+  // Case: invalid inputs throw explicit errors
+  assertThrows(() => validateSimulatedMarketInput({} as SimulatedMarketInput), "Expected error for empty input", failures, "validate_empty_input");
+  assertThrows(() => validateSimulatedMarketInput({ ...validInput, sourceType: "invalid" as never }), "Expected error for invalid sourceType", failures, "validate_invalid_source_type");
+  assertThrows(() => validateSimulatedMarketInput({ ...validInput, targetAgentSet: [] }), "Expected error for empty targetAgentSet", failures, "validate_empty_agents");
+  assertThrows(() => validateSimulatedMarketInput({ ...validInput, targetAgentSet: [{ agentId: "", name: "", sourceType: "manual_persona", profile: {} }] }), "Expected error for missing agentId", failures, "validate_missing_agent_id");
+
+  // Case: manual persona agent works
+  const manualAgent: TargetUserAgent = {
+    agentId: "agent-manual",
+    name: "手写 Persona",
+    sourceType: "manual_persona",
+    profile: {
+      preferences: ["环保", "可持续"],
+      concerns: ["价格高"],
+      decisionFactors: ["材质说明"],
+    },
+  };
+  const manualInput: SimulatedMarketInput = {
+    ...validInput,
+    targetAgentSet: [manualAgent],
+  };
+  const manualRun = runDeterministicSimulatedMarket(manualInput, { runId: "run-manual" });
+  assert(manualRun.result!.agentFeedback.length === 1, "Expected one manual agent feedback", failures, "manual_agent_feedback_count");
+  assert(manualRun.qualityFlags.includes(DEFAULT_QUALITY_FLAGS.deterministicFallbackUsed), "Missing fallback flag for manual agent", failures, "manual_agent_fallback_flag");
+
+  // Report
+  console.log(JSON.stringify({ ok: failures.length === 0, failures }, null, 2));
+  process.exit(failures.length === 0 ? 0 : 1);
+}
+
+function assertThrows(fn: () => void, message: string, failures: TestFailure[], caseName: string) {
+  try {
+    fn();
+    failures.push({ case: caseName, reason: message });
+  } catch (error) {
+    if (error instanceof Error) {
+      assert(error.message.length > 0, "Thrown error should have a message", failures, caseName);
+    }
+  }
+}
+
+main();

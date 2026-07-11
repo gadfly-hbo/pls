@@ -35,6 +35,21 @@ function getActionTypeLabel(type: string): string {
   }
 }
 
+function translateSourceType(sourceType?: string): string {
+  switch (sourceType) {
+    case 'single_product_portrait': return '单品画像预测';
+    case 'product_channel_match': return '人货匹配结果';
+    case 'campaign_product_strategy': return '活动商品策略';
+    case 'manual_strategy': return '手动输入策略';
+    default: return sourceType || '未知';
+  }
+}
+
+function formatPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '-';
+  return `${(value * 100).toFixed(0)}%`;
+}
+
 export default function FlywheelWorkbench({ initialDecisionId }: { initialDecisionId?: string }) {
   const [decisions, setDecisions] = useState<DecisionRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -234,6 +249,85 @@ export default function FlywheelWorkbench({ initialDecisionId }: { initialDecisi
                   </div>
                 </div>
               </div>
+
+              {/* Simulation Source Summary */}
+              {selectedDecision.simulationRunId && (
+                <div className="panel flywheel-simulation-source">
+                  <div className="flex-between" style={{ flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+                    <h4 className="panel__title" style={{ margin: 0 }}>模拟市场来源摘要</h4>
+                    <span className="status-badge status-badge--warning">Derived Result / 非真实市场反馈</span>
+                  </div>
+
+                  <div className="metric-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', marginBottom: 12 }}>
+                    <div className="flywheel-meta-item">
+                      <div className="flywheel-meta-item__label">模拟运行 ID</div>
+                      <div className="flywheel-meta-item__value">{selectedDecision.simulationRunId}</div>
+                    </div>
+                    <div className="flywheel-meta-item">
+                      <div className="flywheel-meta-item__label">来源类型</div>
+                      <div className="flywheel-meta-item__value">{translateSourceType(selectedDecision.sourceType)}</div>
+                    </div>
+                    {selectedDecision.sourceRef && (
+                      <>
+                        <div className="flywheel-meta-item">
+                          <div className="flywheel-meta-item__label">来源引用 ID</div>
+                          <div className="flywheel-meta-item__value">{selectedDecision.sourceRef.id}</div>
+                        </div>
+                        <div className="flywheel-meta-item">
+                          <div className="flywheel-meta-item__label">来源引用类型</div>
+                          <div className="flywheel-meta-item__value">{selectedDecision.sourceRef.type}</div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {selectedDecision.simulationSummary && (
+                    <div className="metric-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', marginBottom: 12 }}>
+                      <div className="flywheel-meta-item">
+                        <div className="flywheel-meta-item__label">整体接受度</div>
+                        <div className="flywheel-meta-item__value">{selectedDecision.simulationSummary.acceptanceScore}</div>
+                      </div>
+                      <div className="flywheel-meta-item">
+                        <div className="flywheel-meta-item__label">购买/互动意向</div>
+                        <div className="flywheel-meta-item__value">{selectedDecision.simulationSummary.purchaseIntentScore}</div>
+                      </div>
+                      <div className="flywheel-meta-item">
+                        <div className="flywheel-meta-item__label">置信度</div>
+                        <div className="flywheel-meta-item__value">{formatPercent(selectedDecision.simulationSummary.confidence)}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedDecision.simulationSummary && (
+                    <div className="flywheel-simulation-summary-lists">
+                      {selectedDecision.simulationSummary.opportunitySummary.length > 0 && (
+                        <div className="flywheel-feedback-field">
+                          <strong>机会点：</strong>
+                          <ul className="risk-list" style={{ marginTop: 4 }}>
+                            {selectedDecision.simulationSummary.opportunitySummary.map((item, i) => <li key={i}>{item}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                      {selectedDecision.simulationSummary.riskSummary.length > 0 && (
+                        <div className="flywheel-feedback-field">
+                          <strong>风险点：</strong>
+                          <ul className="risk-list" style={{ marginTop: 4 }}>
+                            {selectedDecision.simulationSummary.riskSummary.map((item, i) => <li key={i}>{item}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                      {selectedDecision.simulationSummary.recommendedAdjustments.length > 0 && (
+                        <div className="flywheel-feedback-field">
+                          <strong>建议调整：</strong>
+                          <ul className="risk-list" style={{ marginTop: 4 }}>
+                            {selectedDecision.simulationSummary.recommendedAdjustments.map((item, i) => <li key={i}>{item}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Action Records */}
               <div className="panel">

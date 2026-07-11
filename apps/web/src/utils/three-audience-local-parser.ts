@@ -1,6 +1,11 @@
-import { estimateSemirThreeAudienceShares } from '../../../model/src/three-audience-share';
+import {
+  estimateSemirThreeAudienceShares,
+  isSemirThreeAudienceNativeLabel,
+  threeAudienceInputTotalTolerance,
+  type ThreeAudienceChannel,
+} from '../../../model/src/three-audience-share';
 
-export { estimateSemirThreeAudienceShares };
+export { estimateSemirThreeAudienceShares, isSemirThreeAudienceNativeLabel, threeAudienceInputTotalTolerance };
 export type {
   ThreeAudienceChannel,
   NativeSegmentSystem,
@@ -13,6 +18,7 @@ export type {
 } from '../../../model/src/three-audience-share';
 
 export interface ParsedSegmentRow {
+  rowNumber: number;
   label: string;
   rawShare: string;
   share: number;
@@ -136,11 +142,13 @@ export function pickColumn(
 
 export function validateAndBuildSegments(
   rows: Record<string, string>[],
-  mapping: ColumnMapping
-): { segments: ParsedSegmentRow[]; errors: FileParseError[] } {
+  mapping: ColumnMapping,
+  channel: ThreeAudienceChannel
+): { segments: ParsedSegmentRow[]; errors: FileParseError[]; ignoredRows: number } {
   const segments: ParsedSegmentRow[] = [];
   const errors: FileParseError[] = [];
   const seenLabels = new Set<string>();
+  let ignoredRows = 0;
 
   rows.forEach((row, index) => {
     const rowNumber = index + 2;
@@ -154,7 +162,12 @@ export function validateAndBuildSegments(
 
     const trimmedLabel = rawLabel.trim();
     if (trimmedLabel === '') {
-      errors.push({ rowNumber, reason: '标签为空' });
+      ignoredRows += 1;
+      return;
+    }
+
+    if (!isSemirThreeAudienceNativeLabel(channel, trimmedLabel)) {
+      ignoredRows += 1;
       return;
     }
 
@@ -180,15 +193,15 @@ export function validateAndBuildSegments(
       return;
     }
 
-    segments.push({ label: trimmedLabel, rawShare: rawShare.trim(), share });
+    segments.push({ rowNumber, label: trimmedLabel, rawShare: rawShare.trim(), share });
   });
 
-  return { segments, errors };
+  return { segments, errors, ignoredRows };
 }
 
-export function validateShareTotal(segments: ParsedSegmentRow[], channel: string): string | null {
+export function validateShareTotal(segments: ParsedSegmentRow[], channel: ThreeAudienceChannel): string | null {
   const total = segments.reduce((sum, s) => sum + s.share, 0);
-  const tolerance = channel === 'jd' ? 0.0001 + 1e-12 : 1e-6;
+  const tolerance = threeAudienceInputTotalTolerance(channel);
   if (total > 1 + tolerance) {
     return `输入占比合计 ${(total * 100).toFixed(2)}% 超过渠道容差（> ${((1 + tolerance) * 100).toFixed(4)}%）`;
   }

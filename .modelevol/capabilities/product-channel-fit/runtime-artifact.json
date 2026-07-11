@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "capability_id": "product-channel-fit",
+  "product_id": "pls",
+  "runtime_artifact_status": "locked_artifact_validated",
+  "environment_variable": "SINGLE_PRODUCT_PORTRAIT_MODEL_PATH",
+  "locked_artifact_path": "/Users/huangbo/Dev/ModelEvol/capabilities/product-channel-fit/artifacts/v0.4-2026-07-11-expanded-temporal-holdout/model-v0.4-20260711-expanded-temporal-holdout.json",
+  "locked_artifact_sha256": "7d12e9a34b0143840a4e11af6f8f90385abe5845a82c8cb5b8bc259fd1635eed",
+  "source_mutable_artifact_path": "/Users/huangbo/Dev/Projects/pls/data/local/single-product-portrait-q2-73sample/model-calibrated.json",
+  "runtime_code_default_changed": false,
+  "runtime_policy": {
+    "scheme": "conservative_with_strong_rule",
+    "formal_runtime_requires_env": true,
+    "pls_local_default_role": "fallback_legacy",
+    "manual_update_of_product_model_calibrated_json_allowed_as_formal_source": false,
+    "missing_env_considered_formal_mode": false
+  },
+  "validation": {
+    "last_run": {
+      "date": "2026-07-11",
+      "contract_test": {
+        "command": "SINGLE_PRODUCT_PORTRAIT_MODEL_PATH=/Users/huangbo/Dev/ModelEvol/capabilities/product-channel-fit/artifacts/v0.4-2026-07-11-expanded-temporal-holdout/model-v0.4-20260711-expanded-temporal-holdout.json npm run single-product-portrait-supervised-contract-test",
+        "status": "passed",
+        "result": {
+          "ok": true,
+          "failures": []
+        }
+      },
+      "smoke": {
+        "command": "SINGLE_PRODUCT_PORTRAIT_MODEL_PATH=/Users/huangbo/Dev/ModelEvol/capabilities/product-channel-fit/artifacts/v0.4-2026-07-11-expanded-temporal-holdout/model-v0.4-20260711-expanded-temporal-holdout.json npm run single-product-portrait-supervised-smoke",
+        "status": "passed_training_path",
+        "summary": {
+          "loo_status": "ok",
+          "folds": 73,
+          "top1_overlap": "94.5%",
+          "top3_overlap": "37.9%",
+          "closed_dimension_mass_error": 0.0039,
+          "note": "Existing PLS model smoke trains/evaluates the Q2-73 package and does not directly score the v0.4 artifact."
+        }
+      },
+      "server_api_smoke": {
+        "command": "SINGLE_PRODUCT_PORTRAIT_MODEL_PATH=/Users/huangbo/Dev/ModelEvol/capabilities/product-channel-fit/artifacts/v0.4-2026-07-11-expanded-temporal-holdout/model-v0.4-20260711-expanded-temporal-holdout.json npm run smoke:single-product-portrait",
+        "status": "passed",
+        "summary": {
+          "ok": true,
+          "passed": 70,
+          "failed": 0
+        }
+      }
+    }
+  }
+}

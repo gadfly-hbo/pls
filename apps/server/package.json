@@ -25,6 +25,8 @@
     "smoke:tools-import": "node scripts/smoke-tools-import.mjs",
     "smoke:single-product-portrait": "node scripts/smoke-single-product-portrait-api.mjs",
     "smoke:single-product-portrait-tool": "node scripts/smoke-single-product-portrait-tool.mjs",
+    "smoke:simulated-market": "node scripts/smoke-simulated-market.mjs",
+    "smoke:simulated-market-decision": "node scripts/smoke-simulated-market-decision.mjs",
     "import:douyin-bi": "node scripts/import-douyin-bi.mjs",
     "seed:data-sources": "node scripts/seed-data-sources.mjs",
     "sync:channel-entities": "node scripts/sync-channel-entities.mjs",

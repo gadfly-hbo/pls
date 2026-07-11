@@ -742,11 +742,15 @@ CREATE TABLE IF NOT EXISTS decision_record (
   decision_id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL REFERENCES workspace(workspace_id),
   match_id TEXT,
+  simulation_run_id TEXT,
   sku_id TEXT NOT NULL,
   channel_id TEXT NOT NULL,
   recommendation TEXT NOT NULL,
   rationale TEXT,
   decision_type TEXT NOT NULL DEFAULT 'launch',
+  source_type TEXT,
+  source_ref TEXT NOT NULL DEFAULT '{}',
+  simulation_summary TEXT NOT NULL DEFAULT '{}',
   status TEXT NOT NULL DEFAULT 'pending',
   created_by TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -998,6 +1002,29 @@ SELECT workspace_id, canonical_object_key AS channel_entity_id, object_type AS e
        source_stable_key AS upsert_key, created_at, created_at AS updated_at
 FROM channel_object_latest
 WHERE object_type IN ('platform', 'trade_area', 'store', 'account');
+`;
+
+// ============================================================================
+// A-P7-SIM-1: Simulated market runs.
+// Stores derived simulation results (not real sales/feedback facts).
+// Each row is a complete strategy stress-test run with input snapshot,
+// agent feedback, provider/model metadata and quality flags.
+// ============================================================================
+export const SIMULATED_MARKET_DDL = `
+CREATE TABLE IF NOT EXISTS simulation_run (
+  run_id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspace(workspace_id),
+  status TEXT NOT NULL DEFAULT 'pending',
+  input_snapshot TEXT NOT NULL DEFAULT '{}',
+  result TEXT,
+  provider TEXT,
+  model_version TEXT,
+  quality_flags TEXT NOT NULL DEFAULT '[]',
+  generated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_simulation_run_workspace ON simulation_run(workspace_id, generated_at DESC);
 `;
 
 // ============================================================================

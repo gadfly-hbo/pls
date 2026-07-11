@@ -1,0 +1,19 @@
+{
+  "id": "T0010",
+  "slug": "three-audience-local-file-filter",
+  "status": "approved",
+  "assignee": "kilo",
+  "domain": "frontend",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-10T08:15:21.713Z",
+  "updated_at": "2026-07-10T08:30:51.544Z",
+  "base_ref": "68bc75f50b8141d519be186f8333a479f9bd45de",
+  "dirty_at_creation": true,
+  "batch": "three-audience-native-filter",
+  "sequence": 2,
+  "depends_on": [
+    "T0009"
+  ],
+  "domain_memory": "agentops/memory/kilo-frontend.md"
+}

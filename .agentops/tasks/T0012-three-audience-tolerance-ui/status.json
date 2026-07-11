@@ -1,0 +1,19 @@
+{
+  "id": "T0012",
+  "slug": "three-audience-tolerance-ui",
+  "status": "approved",
+  "assignee": "kilo",
+  "domain": "frontend",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-10T08:37:17.697Z",
+  "updated_at": "2026-07-10T09:11:26.163Z",
+  "base_ref": "68bc75f50b8141d519be186f8333a479f9bd45de",
+  "dirty_at_creation": true,
+  "batch": "three-audience-rounding-tolerance",
+  "sequence": 2,
+  "depends_on": [
+    "T0011"
+  ],
+  "domain_memory": "agentops/memory/kilo-frontend.md"
+}

@@ -43,3 +43,19 @@ _Avoid_: source data, master data
 **Three Audience Segment Estimate**:
 A Semir-specific Derived Result that estimates the shares of 质感流行派、都市体面家 and 百搭优选客 from a supported Native Audience Segment Distribution under a versioned mapping matrix.
 _Avoid_: source audience distribution, mutually exclusive user identity, profile tags
+
+**Simulated Market**:
+A controlled decision-testing environment where a proposed product, channel, distribution, or campaign strategy is exposed to Target User Agents and returns simulated feedback as a Derived Result.
+_Avoid_: real market, live campaign, auto execution
+
+**Target User Agent**:
+A simulated consumer role generated from an approved audience profile, such as a brand's Three Audience Segment Estimate, and used only inside a Simulated Market run.
+_Avoid_: real customer, user account, platform user
+
+**Simulation Run**:
+A versioned execution record for one strategy tested against one Simulated Market setup, including input snapshot, target agents, assumptions, feedback, and quality flags.
+_Avoid_: campaign run, live experiment, AB test
+
+**Simulated Feedback**:
+A Derived Result summarizing predicted target-user reactions, objections, intent, risks, and strategy adjustment suggestions from a Simulation Run.
+_Avoid_: real feedback, sales result, conversion fact

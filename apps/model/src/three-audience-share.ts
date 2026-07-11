@@ -65,8 +65,7 @@ export class ThreeAudienceInputError extends Error {
 
 type Matrix = ReadonlyMap<string, ThreeAudienceWeights>;
 
-const INPUT_TOTAL_TOLERANCE = 1e-6;
-const JD_SOURCE_ROUNDING_TOLERANCE = 0.0001 + 1e-12;
+const INPUT_TOTAL_ROUNDING_TOLERANCE = 0.001 + 1e-12;
 
 const CHANNEL_SYSTEM: Record<ThreeAudienceChannel, NativeSegmentSystem> = {
   douyin: "douyin_eight",
@@ -202,6 +201,15 @@ export function estimateSemirThreeAudienceShares(input: ThreeAudienceEstimateInp
   };
 }
 
+export function isSemirThreeAudienceNativeLabel(channel: ThreeAudienceChannel, label: string): boolean {
+  return MATRIX_BY_CHANNEL[channel].has(normalizeLabel(channel, label));
+}
+
+export function threeAudienceInputTotalTolerance(channel: ThreeAudienceChannel): number;
+export function threeAudienceInputTotalTolerance(): number {
+  return INPUT_TOTAL_ROUNDING_TOLERANCE;
+}
+
 function validateInput(input: ThreeAudienceEstimateInput): void {
   if (input.brand !== "semir") throw new ThreeAudienceInputError("unsupported_brand", `Unsupported brand: ${input.brand}`);
   const expectedSystem = CHANNEL_SYSTEM[input.channel];
@@ -218,7 +226,7 @@ function validateInput(input: ThreeAudienceEstimateInput): void {
     }
     total += segment.share;
   }
-  if (total > 1 + inputTotalTolerance(input.channel)) throw new ThreeAudienceInputError("share_total_exceeds_one", `Input share total exceeds 1: ${total}`);
+  if (total > 1 + threeAudienceInputTotalTolerance(input.channel)) throw new ThreeAudienceInputError("share_total_exceeds_one", `Input share total exceeds 1: ${total}`);
   if (input.expertPrior) validatePrior(input.expertPrior);
 }
 
@@ -233,17 +241,13 @@ function validatePrior(prior: ThreeAudiencePrior): void {
 
 function normalizeNativeSegments(channel: ThreeAudienceChannel, segments: NativeAudienceSegmentShare[]): NativeAudienceSegmentShare[] {
   const total = segments.reduce((sum, segment) => sum + segment.share, 0);
-  const scale = total > 1 && total <= 1 + inputTotalTolerance(channel) ? total : 1;
+  const scale = total > 1 && total <= 1 + threeAudienceInputTotalTolerance(channel) ? total : 1;
   const merged = new Map<string, number>();
   for (const segment of segments) {
     const label = normalizeLabel(channel, segment.label);
     merged.set(label, (merged.get(label) ?? 0) + segment.share / scale);
   }
   return [...merged.entries()].map(([label, share]) => ({ label, share }));
-}
-
-function inputTotalTolerance(channel: ThreeAudienceChannel): number {
-  return channel === "jd" ? JD_SOURCE_ROUNDING_TOLERANCE : INPUT_TOTAL_TOLERANCE;
 }
 
 function clamp01(value: number): number {

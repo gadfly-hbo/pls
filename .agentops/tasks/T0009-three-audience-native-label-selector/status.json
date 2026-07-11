@@ -1,0 +1,16 @@
+{
+  "id": "T0009",
+  "slug": "three-audience-native-label-selector",
+  "status": "approved",
+  "assignee": "opencode",
+  "domain": "algorithm",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-10T08:15:21.649Z",
+  "updated_at": "2026-07-10T08:21:34.227Z",
+  "base_ref": "68bc75f50b8141d519be186f8333a479f9bd45de",
+  "dirty_at_creation": true,
+  "batch": "three-audience-native-filter",
+  "sequence": 1,
+  "domain_memory": "agentops/memory/opencode-algorithm.md"
+}

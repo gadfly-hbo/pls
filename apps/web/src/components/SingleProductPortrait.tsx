@@ -8,6 +8,7 @@ import type {
   SingleProductPortraitInput,
   SingleProductPortraitMetadata,
   SingleProductPortraitPrediction,
+  SimulatedMarketPrefill,
 } from '../types';
 
 const LOW_STABILITY_DIMENSIONS = new Set(['城市等级', '八大消费群体']);
@@ -70,6 +71,40 @@ function predictionRows(results: SingleProductPortraitBatchResultRow[]): string 
     ),
   );
   return [header.join(','), ...lines].join('\n');
+}
+
+function buildSinglePortraitPrefill(prediction: SingleProductPortraitPrediction): SimulatedMarketPrefill {
+  const topLabels = prediction.dimensionSummaries
+    .map((dimension) => {
+      const top = dimension.topLabels[0];
+      if (!top) return `${dimension.labelType}: -`;
+      const shareText = top.share !== null && top.share !== undefined ? `${(top.share * 100).toFixed(1)}%` : '-';
+      return `${dimension.labelType}: ${top.label} (${shareText})`;
+    })
+    .join('；');
+
+  const evidence = prediction.explanationSources
+    .slice(0, 3)
+    .map((item) => `${item.sourceField}=${item.sourceValue}; ${item.rationale}`)
+    .join('\n');
+
+  const strategyText = [
+    `SKU: ${prediction.skuId}`,
+    `模型版本: ${prediction.modelVersion}`,
+    `风险标记: ${prediction.riskFlags.join('、') || '无'}`,
+    '',
+    '画像摘要：',
+    topLabels,
+    '',
+    '关键 evidence：',
+    evidence || '暂无明确驱动证据',
+  ].join('\n');
+
+  return {
+    sourceType: 'single_product_portrait',
+    sourceRef: { id: prediction.skuId, type: 'single_product_portrait' },
+    strategyText,
+  };
 }
 
 function topLabel(prediction: SingleProductPortraitPrediction, dimension: string): string {
@@ -234,7 +269,12 @@ function IssueList({ title, issues }: { title: string; issues: PortraitInputIssu
   );
 }
 
-export function SinglePortraitResult({ prediction, title = '单款画像结果', onClear }: { prediction: SingleProductPortraitPrediction; title?: string; onClear?: () => void }) {
+export function SinglePortraitResult({ prediction, title = '单款画像结果', onClear, onSendToSimulatedMarket }: { prediction: SingleProductPortraitPrediction; title?: string; onClear?: () => void; onSendToSimulatedMarket?: (prefill: SimulatedMarketPrefill) => void; }) {
+  const handleSendToSimulatedMarket = () => {
+    if (!onSendToSimulatedMarket) return;
+    onSendToSimulatedMarket(buildSinglePortraitPrefill(prediction));
+  };
+
   return (
     <section className="panel single-portrait-result">
       <div className="single-portrait-card__header">
@@ -244,6 +284,11 @@ export function SinglePortraitResult({ prediction, title = '单款画像结果',
         </div>
         <div className="single-portrait-result-actions">
           <span className="status-badge status-badge--neutral">{prediction.modelVersion}</span>
+          {onSendToSimulatedMarket && (
+            <button type="button" className="btn" onClick={handleSendToSimulatedMarket}>
+              送入模拟市场
+            </button>
+          )}
           {onClear && <button type="button" className="btn" onClick={onClear}>清空结果</button>}
         </div>
       </div>
@@ -335,19 +380,70 @@ export function SinglePortraitBatchResults({ batch, onClear }: { batch: SinglePr
   );
 }
 
-export function SinglePortraitModelInfo({ metadata }: { metadata: SingleProductPortraitMetadata | null }) {
-  if (!metadata) return <section className="panel"><h3 className="panel__title">模型说明</h3><p className="single-portrait-muted">正在加载 metadata...</p></section>;
+export function SinglePortraitModelInfo({
+  metadata,
+  collapsed,
+  onToggleCollapse,
+}: {
+  metadata: SingleProductPortraitMetadata | null;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+}) {
+  if (!metadata) {
+    return (
+      <section className="panel single-portrait-model-info">
+        <div className="single-portrait-model-info__header">
+          <h3 className="panel__title">模型说明</h3>
+          <button type="button" className="btn" onClick={onToggleCollapse}>{collapsed ? '展开' : '收起'}</button>
+        </div>
+        <p className="single-portrait-muted">正在加载 metadata...</p>
+      </section>
+    );
+  }
   if (!metadata.modelAvailable) {
-    return <section className="panel"><h3 className="panel__title">模型说明</h3><div className="alert-banner alert-banner--warning">{metadata.error.message}</div></section>;
+    return (
+      <section className="panel single-portrait-model-info">
+        <div className="single-portrait-model-info__header">
+          <h3 className="panel__title">模型说明</h3>
+          <button type="button" className="btn" onClick={onToggleCollapse}>{collapsed ? '展开' : '收起'}</button>
+        </div>
+        <div className="alert-banner alert-banner--warning">{metadata.error.message}</div>
+      </section>
+    );
+  }
+  if (collapsed) {
+    return (
+      <section className="panel single-portrait-model-info single-portrait-model-info--collapsed">
+        <h3 className="panel__title single-portrait-model-info__collapsed-title">模型说明</h3>
+        <button type="button" className="btn single-portrait-model-info__expand" onClick={onToggleCollapse} title="展开模型说明">
+          展开模型说明
+        </button>
+      </section>
+    );
   }
   return (
     <section className="panel single-portrait-model-info">
-      <h3 className="panel__title">模型说明</h3>
+      <div className="single-portrait-model-info__header">
+        <h3 className="panel__title">模型说明</h3>
+        <button type="button" className="btn" onClick={onToggleCollapse}>收起模型说明</button>
+      </div>
       <div className="single-portrait-model-grid">
-        <div><strong>modelVersion</strong><span>{metadata.modelVersion}</span></div>
-        <div><strong>sampleCount</strong><span>{metadata.sampleCount}</span></div>
-        <div><strong>trainedAt/generatedAt</strong><span>{formatDate(metadata.trainedAt)}</span></div>
-        <div><strong>支持版型</strong><span>{metadata.fitTypes.join('、') || '-'}</span></div>
+        <div className="single-portrait-model-grid__item">
+          <strong className="single-portrait-model-grid__label">modelVersion</strong>
+          <span className="single-portrait-model-grid__value">{metadata.modelVersion}</span>
+        </div>
+        <div className="single-portrait-model-grid__item">
+          <strong className="single-portrait-model-grid__label">sampleCount</strong>
+          <span className="single-portrait-model-grid__value">{metadata.sampleCount}</span>
+        </div>
+        <div className="single-portrait-model-grid__item">
+          <strong className="single-portrait-model-grid__label">trainedAt/generatedAt</strong>
+          <span className="single-portrait-model-grid__value">{formatDate(metadata.trainedAt)}</span>
+        </div>
+        <div className="single-portrait-model-grid__item">
+          <strong className="single-portrait-model-grid__label">支持版型</strong>
+          <span className="single-portrait-model-grid__value">{metadata.fitTypes.join('、') || '-'}</span>
+        </div>
       </div>
       <div className="single-portrait-muted">risk flags：{metadata.riskFlags.join('、')}</div>
       <div className="data-table-wrapper">

@@ -15,7 +15,20 @@ test.describe('Single Product Portrait Workbench Mock Test', () => {
     await page.locator('button.app-nav__item', { hasText: '新品预测' }).click();
     await expect(page.getByRole('heading', { name: '单品画像预测' })).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('single-product-portrait-supervised-ridge-0.1')).toBeVisible();
+    await expect(page.getByText('sampleCount')).toBeVisible();
+    await expect(page.getByText('73')).toBeVisible();
     await expect(page.getByText('支持版型')).toBeVisible();
+    await expect(page.getByText('LOO Top1')).toBeVisible();
+    await expect(page.getByText('LOO Top3')).toBeVisible();
+
+    const modelInfo = page.locator('.single-portrait-model-info');
+    await expect(modelInfo.getByRole('button', { name: '收起模型说明' })).toBeVisible();
+    await modelInfo.getByRole('button', { name: '收起模型说明' }).click();
+    await expect(modelInfo.getByRole('button', { name: '展开模型说明' })).toBeVisible();
+    await expect(modelInfo.getByText('LOO Top1')).not.toBeVisible();
+    await modelInfo.getByRole('button', { name: '展开模型说明' }).click();
+    await expect(modelInfo.getByText('LOO Top1')).toBeVisible();
+    await expect(modelInfo.getByRole('button', { name: '收起模型说明' })).toBeVisible();
 
     await page.getByRole('button', { name: '填入示例' }).click();
     await page.getByRole('button', { name: '预测单款画像' }).click();

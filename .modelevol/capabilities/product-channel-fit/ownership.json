@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "capability_id": "product-channel-fit",
+  "upstream_owner": "ModelEvol",
+  "upstream_root": "/Users/huangbo/Dev/ModelEvol",
+  "upstream_source_root": "/Users/huangbo/Dev/ModelEvol/src/capabilities/product-channel-fit",
+  "product_id": "pls",
+  "product_root": "/Users/huangbo/Dev/Projects/pls",
+  "distribution_mode": "source-sync",
+  "runtime_behavior_changed": false,
+  "pls_imports_switched": false,
+  "source_sync_status": "dry_run_identical",
+  "managed_files": [
+    {
+      "product_path": "apps/model/src/single-product-portrait-supervised.ts",
+      "upstream_path": "src/capabilities/product-channel-fit/single-product-portrait-supervised.ts",
+      "sha256": "21ce9fb375f6068aab38581a051e776f1ada69912da05a81101d336448b39d55"
+    },
+    {
+      "product_path": "apps/model/src/single-product-portrait.ts",
+      "upstream_path": "src/capabilities/product-channel-fit/single-product-portrait.ts",
+      "sha256": "7c26e1a583918576c26d9e9562a7bf354139ffc41d5e69b830829f258ffe611a"
+    },
+    {
+      "product_path": "apps/model/src/single-product-portrait-calibration.ts",
+      "upstream_path": "src/capabilities/product-channel-fit/single-product-portrait-calibration.ts",
+      "sha256": "e4e95aa81b08f9b63b01c8ea5104e074c95a4efe4e6034da4a3c0862a49811bc"
+    },
+    {
+      "product_path": "apps/model/src/single-product-portrait-weights.ts",
+      "upstream_path": "src/capabilities/product-channel-fit/single-product-portrait-weights.ts",
+      "sha256": "1e689085578a16f889b8df45bbcb74659af448a77e1728acbec85af90f2e62fa"
+    },
+    {
+      "product_path": "apps/model/src/baseline.ts",
+      "upstream_path": "src/capabilities/product-channel-fit/baseline.ts",
+      "sha256": "472ab4ea86e6a8f865fa85df4cc94371356230dd5087f7bc80f68c01982c2b46"
+    }
+  ],
+  "product_owned_surfaces": [
+    "apps/server/src/lib/single-product-portrait/prediction.ts",
+    "apps/server/src/routes/single-product-portrait.ts",
+    "apps/web/src/components/SingleProductPortrait.tsx",
+    "apps/web/src/services/api.ts"
+  ],
+  "validation": {
+    "modelevol_contract": {
+      "command": "npm run product-channel-fit:contract",
+      "status": "passed"
+    },
+    "modelevol_typecheck": {
+      "command": "npm run typecheck",
+      "status": "passed"
+    },
+    "source_sync_dry_run": {
+      "command": "npm run product-channel-fit:sync:dry-run",
+      "status": "passed",
+      "summary": {
+        "identical": 5
+      }
+    }
+  }
+}

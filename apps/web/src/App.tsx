@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   Activity,
   BarChart3,
+  Beaker,
   Database,
   GitBranch,
   Library,
@@ -16,7 +17,7 @@ import {
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
-import type { SingleProductPortraitPrediction } from './types';
+import type { SingleProductPortraitPrediction, SimulatedMarketPrefill } from './types';
 import Dashboard from './pages/Dashboard';
 import MatchCoreWorkbench from './pages/MatchCoreWorkbench';
 import ChannelObjectLibrary from './pages/ChannelObjectLibrary';
@@ -24,8 +25,9 @@ import FlywheelWorkbench from './pages/FlywheelWorkbench';
 import DataManagementWorkbench from './pages/DataManagementWorkbench';
 import Overview from './pages/Overview';
 import ToolsWorkbench from './pages/ToolsWorkbench';
+import SimulatedMarketWorkbench from './pages/SimulatedMarketWorkbench';
 
-type ViewId = 'overview' | 'channel-objects' | 'match-core' | 'dashboard' | 'flywheel' | 'tools' | 'data-management';
+type ViewId = 'overview' | 'channel-objects' | 'match-core' | 'dashboard' | 'flywheel' | 'tools' | 'data-management' | 'simulated-market';
 type SubViewId = 'workbench' | 'readme';
 
 const NAV_ITEMS: { id: ViewId; label: string; shortLabel: string; icon: LucideIcon }[] = [
@@ -33,6 +35,7 @@ const NAV_ITEMS: { id: ViewId; label: string; shortLabel: string; icon: LucideIc
   { id: 'channel-objects', label: '渠道画像', shortLabel: '画像', icon: Library },
   { id: 'match-core', label: '货渠匹配', shortLabel: '匹配', icon: PackageSearch },
   { id: 'dashboard', label: '新品预测', shortLabel: '预测', icon: Sparkles },
+  { id: 'simulated-market', label: '模拟市场', shortLabel: '模拟', icon: Beaker },
   { id: 'flywheel', label: '经营飞轮', shortLabel: '飞轮', icon: GitBranch },
   { id: 'tools', label: '工具管理', shortLabel: '工具', icon: Wrench },
   { id: 'data-management', label: '数据管理', shortLabel: '数据', icon: Database },
@@ -46,6 +49,7 @@ function App() {
   const [currentSku, setCurrentSku] = useState<string | null>(null);
   const [prediction, setPrediction] = useState<SingleProductPortraitPrediction | null>(null);
   const [flywheelDecisionId, setFlywheelDecisionId] = useState<string | undefined>();
+  const [simulatedMarketPrefill, setSimulatedMarketPrefill] = useState<SimulatedMarketPrefill | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -75,10 +79,13 @@ function App() {
     localStorage.setItem('pls-theme', newTheme);
   };
 
-  const navigateTo = (view: ViewId) => {
+  const navigateTo = (view: ViewId, options?: { simulatedMarketPrefill?: SimulatedMarketPrefill }) => {
     setCurrentView(view);
     setActiveSubView('workbench');
     setMobileSidebarOpen(false);
+    if (options?.simulatedMarketPrefill !== undefined) {
+      setSimulatedMarketPrefill(options.simulatedMarketPrefill);
+    }
   };
 
   const activeItem = NAV_ITEMS.find(item => item.id === currentView) ?? NAV_ITEMS[0];
@@ -235,6 +242,7 @@ function App() {
                     setFlywheelDecisionId(decisionId);
                     setCurrentView('flywheel');
                   }}
+                  goToSimulatedMarket={(prefill) => navigateTo('simulated-market', { simulatedMarketPrefill: prefill })}
                 />
               )}
               {currentView === 'dashboard' && (
@@ -244,10 +252,20 @@ function App() {
                   prediction={prediction}
                   setPrediction={setPrediction}
                   goToHeatmap={() => setCurrentView('match-core')}
+                  goToSimulatedMarket={(prefill) => navigateTo('simulated-market', { simulatedMarketPrefill: prefill })}
                 />
               )}
               {currentView === 'flywheel' && (
                 <FlywheelWorkbench initialDecisionId={flywheelDecisionId} />
+              )}
+              {currentView === 'simulated-market' && (
+                <SimulatedMarketWorkbench
+                  initialPrefill={simulatedMarketPrefill}
+                  goToFlywheel={(decisionId) => {
+                    setFlywheelDecisionId(decisionId);
+                    setCurrentView('flywheel');
+                  }}
+                />
               )}
               {currentView === 'tools' && (
                 <ToolsWorkbench />

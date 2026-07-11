@@ -32,6 +32,7 @@
     "single-product-portrait-supervised-smoke": "../server/node_modules/.bin/tsx src/single-product-portrait-supervised-smoke.ts",
     "jd-three-audience-calibration-contract-test": "../server/node_modules/.bin/tsx src/jd-three-audience-calibration-contract-test.ts",
     "three-audience-share-contract-test": "../server/node_modules/.bin/tsx src/three-audience-share-contract-test.ts",
+    "simulated-market-contract-test": "../server/node_modules/.bin/tsx src/simulated-market-contract-test.ts",
     "typecheck": "../server/node_modules/.bin/tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

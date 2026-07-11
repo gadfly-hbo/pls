@@ -1,5 +1,7 @@
 import {
   estimateSemirThreeAudienceShares,
+  isSemirThreeAudienceNativeLabel,
+  threeAudienceInputTotalTolerance,
   ThreeAudienceInputError,
   THREE_AUDIENCE_ALGORITHM_VERSION,
   type NativeAudienceSegmentShare,
@@ -25,6 +27,7 @@ checkMergeRules();
 checkPriorBlending();
 checkUnavailableAndUnmapped();
 checkToleratedOverflowAndJdFixtures();
+checkNativeLabelSelector();
 checkInvalidInputs();
 
 process.stdout.write(`${JSON.stringify({ ok: failures.length === 0, failures }, null, 2)}\n`);
@@ -123,7 +126,7 @@ function checkUnavailableAndUnmapped(): void {
 
 function checkToleratedOverflowAndJdFixtures(): void {
   const overflow = estimateSemirThreeAudienceShares({
-    ...input("tmall", "tmall_industry_six", [segment("潮流人群", 0.50000025), segment("低价实惠", 0.50000025)]),
+    ...input("tmall", "tmall_industry_six", [segment("潮流人群", 0.50005), segment("低价实惠", 0.50005)]),
     expertPrior: { a: 0.2, b: 0.3, c: 0.5 },
   });
   assertAvailable(overflow, "tolerated_overflow_with_prior");
@@ -131,6 +134,57 @@ function checkToleratedOverflowAndJdFixtures(): void {
   assertNear(overflow.uncovered, 0, 1e-12, "tolerated_overflow_with_prior", "uncovered");
   assertEveryShareInRange(overflow, "tolerated_overflow_with_prior");
   assertShares(overflow, [0.5, 0, 0.5], 1e-12, "tolerated_overflow_with_prior");
+
+  const cases: Array<{ channel: ThreeAudienceChannel; system: NativeSegmentSystem; labels: [string, string] }> = [
+    { channel: "douyin", system: "douyin_eight", labels: ["新锐白领", "genz"] },
+    { channel: "tmall", system: "tmall_industry_six", labels: ["潮流人群", "低价实惠"] },
+    { channel: "jd", system: "jd_ten", labels: ["都市Z世代", "学生一族"] },
+    { channel: "offline", system: "offline_industry_six", labels: ["潮流人群", "低价实惠"] },
+    { channel: "vip", system: "vip_eleven", labels: ["青年女士", "中年男士"] },
+    { channel: "wechat_channels", system: "wechat_channels_seven", labels: ["新锐白领", "Z世代"] },
+    { channel: "pinduoduo", system: "pinduoduo_ten", labels: ["新锐白领", "genz"] },
+  ];
+  for (const testCase of cases) {
+    const tolerance = threeAudienceInputTotalTolerance(testCase.channel);
+    assertNear(tolerance, 0.001 + 1e-12, 0, `tolerance_value_${testCase.channel}`, "tolerance");
+
+    const withinTolerance = estimateSemirThreeAudienceShares(input(testCase.channel, testCase.system, [segment(testCase.labels[0], 0.5), segment(testCase.labels[1], 0.5 + tolerance)]));
+    assertAvailable(withinTolerance, `tolerance_accept_${testCase.channel}`);
+    assertNear(withinTolerance.coverage, 1, 1e-12, `tolerance_accept_${testCase.channel}`, "coverage");
+    assertNear(withinTolerance.uncovered, 0, 1e-12, `tolerance_accept_${testCase.channel}`, "uncovered");
+    assertEveryShareInRange(withinTolerance, `tolerance_accept_${testCase.channel}`);
+
+    expectError(
+      () => estimateSemirThreeAudienceShares(input(testCase.channel, testCase.system, [segment(testCase.labels[0], 0.5), segment(testCase.labels[1], 0.5 + tolerance + 1e-10)])),
+      "share_total_exceeds_one",
+      `tolerance_reject_${testCase.channel}`,
+    );
+  }
+}
+
+function checkNativeLabelSelector(): void {
+  const validCases: Array<{ name: string; channel: ThreeAudienceChannel; label: string }> = [
+    { name: "native_label_douyin", channel: "douyin", label: "新锐白领" },
+    { name: "native_label_tmall", channel: "tmall", label: "潮流人群" },
+    { name: "native_label_jd", channel: "jd", label: "都市Z世代" },
+    { name: "native_label_offline", channel: "offline", label: "大众实用" },
+    { name: "native_label_vip", channel: "vip", label: "青年女士" },
+    { name: "native_label_wechat", channel: "wechat_channels", label: "Z世代" },
+    { name: "native_label_pdd", channel: "pinduoduo", label: "小镇青年" },
+    { name: "native_label_douyin_alias", channel: "douyin", label: "Z世代" },
+    { name: "native_label_wechat_alias", channel: "wechat_channels", label: "精致中产" },
+    { name: "native_label_pdd_alias", channel: "pinduoduo", label: "都市白领" },
+  ];
+  for (const testCase of validCases) {
+    assert(isSemirThreeAudienceNativeLabel(testCase.channel, testCase.label), "expected native label", testCase.name);
+  }
+
+  const unrelatedLabels = ["运动兴趣", "华东", "iPhone", "高消费人群"];
+  for (const channel of ["douyin", "tmall", "jd", "offline", "vip", "wechat_channels", "pinduoduo"] satisfies ThreeAudienceChannel[]) {
+    for (const label of unrelatedLabels) {
+      assert(!isSemirThreeAudienceNativeLabel(channel, label), `expected unrelated label to be rejected: ${label}`, `native_label_reject_${channel}_${label}`);
+    }
+  }
 }
 
 function checkInvalidInputs(): void {

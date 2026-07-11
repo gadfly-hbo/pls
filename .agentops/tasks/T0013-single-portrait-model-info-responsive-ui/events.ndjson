@@ -1,0 +1,4 @@
+{"timestamp":"2026-07-11T05:39:05.175Z","type":"task_created","task_id":"T0013","actor":"codex","resulting_status":"queued","note":"worktree was dirty at task creation"}
+{"timestamp":"2026-07-11T05:41:07.299Z","type":"task_claimed","task_id":"T0013","actor":"kilo","resulting_status":"running"}
+{"timestamp":"2026-07-11T05:48:35.523Z","type":"handoff_submitted","task_id":"T0013","actor":"kilo","resulting_status":"handoff_ready"}
+{"timestamp":"2026-07-11T06:16:02.935Z","type":"review_decision","task_id":"T0013","actor":"codex","resulting_status":"approved","note":"approved: reviewed T0013 allowed frontend paths only; unrelated pre-existing dirty worktree paths are out of this review scope. UI collapse/expand implemented; lint/build/full smoke and real portrait UI validation passed; memory candidates not accepted due missing lifecycle metadata"}

@@ -253,6 +253,7 @@ Feature engineering:
 
 - `版型` is one-hot encoded after category normalization (`修身/紧身/收腰/X型` -> slim, `宽松/阔腿/直筒` -> loose, etc.).
 - `面料` and `FAB` are keyword-matched against fabric, style, function, and scene dictionaries.
+- Cross-field combination features are generated for frequent pairs (`fit_xxx × style_xxx`, `fit_xxx × func_xxx`, `fabric_xxx × style_xxx`, etc.), filtered by minimum frequency to control dimensionality.
 
 Model:
 
@@ -266,16 +267,16 @@ Evaluation uses leave-one-out on the 73 samples and reports:
 - `closedDimensionMassErrorMean`
 - Per-dimension `top1Overlap`, `top3Overlap`, `massError`
 
-Current LOO results (after keyword expansion + temperature calibration):
+Current LOO results (after keyword expansion + temperature calibration + combination features):
 
 | Dimension | top1 overlap | top3 overlap |
 |---|---|---|
 | 预测性别 | 95.9% | 100.0% |
-| 预测人生阶段 | 83.6% | 100.0% |
-| 预测年龄段 | 72.6% | 77.6% |
-| 预测消费能力 | 63.0% | 100.0% |
-| 城市等级 | 34.2% | 74.9% |
-| 八大消费群体 | 34.2% | 80.8% |
+| 预测人生阶段 | 87.7% | 100.0% |
+| 预测年龄段 | 72.6% | 79.0% |
+| 预测消费能力 | 71.2% | 100.0% |
+| 城市等级 | 41.1% | 74.0% |
+| 八大消费群体 | 31.5% | 81.7% |
 
 Risk flags:
 

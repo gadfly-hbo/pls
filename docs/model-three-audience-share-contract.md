@@ -14,6 +14,14 @@
 estimateSemirThreeAudienceShares(input: ThreeAudienceEstimateInput): ThreeAudienceEstimateResult
 ```
 
+本地文件接入可使用只读标签识别入口：
+
+```ts
+isSemirThreeAudienceNativeLabel(channel: ThreeAudienceChannel, label: string): boolean
+```
+
+该入口必须复用同一渠道矩阵与已冻结别名规则，仅回答某标签是否属于该渠道可计算的原生人群体系；不得解析 share、归一化或产生估算结果。
+
 固定版本：
 
 ```text
@@ -70,10 +78,11 @@ interface ThreeAudienceEstimateInput {
 1. `channel` 与 `system` 必须使用本契约指定的一一组合。
 2. `share` 必须是有限数且位于 `0-1`。
 3. 同一原生标签不得重复；不得由算法猜测合并重复行。
-4. 非京东渠道的输入总 share 不得超过 `1 + 1e-6`；京东 `jd_ten` 可接受不超过 `1 + 1e-4 + 1e-12` 的已知来源表四舍五入误差。
-5. 当输入总 share 大于 1 但仍在对应容差内时，算法必须先将全部输入 share 按总和归一化到 1，再进行标签映射；超过容差必须显式失败。
+4. 所有渠道的输入总 share 可接受不超过 `1 + 1e-3 + 1e-12` 的来源表四舍五入误差，即约 `100.1%`；超过容差必须显式失败。
+5. 当输入总 share 大于 1 但仍在该容差内时，算法必须先将全部输入 share 按总和归一化到 1，再进行标签映射。
 6. `expertPrior` 三项必须位于 `0-1` 且合计满足 `abs(sum - 1) <= 1e-6`。
 7. 基础属性、兴趣、消费力、折扣敏感度和其他行为信号不是本契约输入。
+8. 本地文件上传可先按 `isSemirThreeAudienceNativeLabel` 筛除不属于所选渠道原生体系的行；被筛除行不参与重复、share 或总和校验，也不得进入估算输入。
 
 渠道与体系：
 
@@ -124,7 +133,7 @@ interface ThreeAudienceEstimateResult {
 对每个输入标签 `i`，矩阵权重为 `(wAi, wBi, wCi)`：
 
 ```text
-当 input_total > 1 且处于渠道容差内：
+当 input_total > 1 且处于 `1e-3 + 1e-12` 容差内：
 x_people_i = input_share_i / input_total
 否则：
 x_people_i = input_share_i
@@ -200,7 +209,7 @@ mode = expert_prior_blended
 | 银发一族 | 0.00 | 0.30 | 0.70 |
 | 小镇中年 | 0.00 | 0.10 | 0.90 |
 
-本表是 v2.1.0 京东校准后的唯一实现口径。京东十行矩阵每行 `A+B+C=1`；当十大靶群输入合计为 1 时，`coverage=1`，不再保留京东 uncovered 池。为吸收已确认 source table 的四舍五入误差，`jd_ten` 输入合计在 `1 + 1e-4 + 1e-12` 以内时先归一化，再计算 coverage。矩阵由 `deriveJdTargetCalibratedMatrix()` 按固定先验、2025/2026 年均十大靶群 fixture、业务目标归一化和最小 L2 偏移 tie-break 确定性推导。业务展示目标为 2024 年 `22.5/32.6/44.8`（无原始十大靶群文件，仅记录目标）、2025 年 `22.1/32.9/45.0`、2026 年 `21.1/34.7/44.1`；2026 目标合计为 `99.9%`，拟合前归一化为 `21.12/34.73/44.14`。校准依据、候选矩阵与 fixture before/after 见 `docs/model-jd-three-audience-calibration.md`。
+本表是 v2.1.0 京东校准后的唯一实现口径。京东十行矩阵每行 `A+B+C=1`；当十大靶群输入合计为 1 时，`coverage=1`，不再保留京东 uncovered 池。所有渠道统一吸收已确认来源表的四舍五入误差：输入合计在 `1 + 1e-3 + 1e-12` 以内时先归一化，再计算 coverage。矩阵由 `deriveJdTargetCalibratedMatrix()` 按固定先验、2025/2026 年均十大靶群 fixture、业务目标归一化和最小 L2 偏移 tie-break 确定性推导。业务展示目标为 2024 年 `22.5/32.6/44.8`（无原始十大靶群文件，仅记录目标）、2025 年 `22.1/32.9/45.0`、2026 年 `21.1/34.7/44.1`；2026 目标合计为 `99.9%`，拟合前归一化为 `21.12/34.73/44.14`。校准依据、候选矩阵与 fixture before/after 见 `docs/model-jd-three-audience-calibration.md`。
 
 ### 唯品会十一大
 

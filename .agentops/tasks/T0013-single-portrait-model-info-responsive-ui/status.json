@@ -1,0 +1,16 @@
+{
+  "id": "T0013",
+  "slug": "single-portrait-model-info-responsive-ui",
+  "status": "approved",
+  "assignee": "kilo",
+  "domain": "frontend",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-11T05:39:05.174Z",
+  "updated_at": "2026-07-11T06:16:02.935Z",
+  "base_ref": "68bc75f50b8141d519be186f8333a479f9bd45de",
+  "dirty_at_creation": true,
+  "batch": "single-product-portrait-ui-polish",
+  "sequence": 1,
+  "domain_memory": "agentops/memory/kilo-frontend.md"
+}

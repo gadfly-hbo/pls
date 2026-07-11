@@ -13,6 +13,7 @@ import type {
   SingleProductPortraitInput,
   SingleProductPortraitMetadata,
   SingleProductPortraitPrediction,
+  SimulatedMarketPrefill,
 } from '../types';
 
 const EMPTY_SINGLE_PORTRAIT_INPUT: SingleProductPortraitInput = {
@@ -28,6 +29,7 @@ interface Props {
   prediction: SingleProductPortraitPrediction | null;
   setPrediction: (p: SingleProductPortraitPrediction | null) => void;
   goToHeatmap: () => void;
+  goToSimulatedMarket: (prefill: SimulatedMarketPrefill) => void;
 }
 
 export default function Dashboard(_props: Props) {
@@ -64,6 +66,8 @@ export default function Dashboard(_props: Props) {
       cancelled = true;
     };
   }, []);
+
+  const [modelInfoCollapsed, setModelInfoCollapsed] = useState(false);
 
   const modelDisabled = !metadata || !metadata.modelAvailable;
   const unavailableMessage = metadata && !metadata.modelAvailable ? metadata.error.message : null;
@@ -135,7 +139,7 @@ export default function Dashboard(_props: Props) {
       {metadataError && <div className="alert-banner alert-banner--error">metadata 加载失败：{metadataError}</div>}
       {unavailableMessage && <div className="alert-banner alert-banner--warning">{unavailableMessage}</div>}
 
-      <div className="single-portrait-layout">
+      <div className={`single-portrait-layout ${modelInfoCollapsed ? 'single-portrait-layout--model-collapsed' : ''}`}>
         <div className="single-portrait-main">
           {mode === 'single' ? (
             <>
@@ -148,7 +152,7 @@ export default function Dashboard(_props: Props) {
                 onChange={setSingleInput}
                 onSubmit={submitSingle}
               />
-              {singlePrediction ? <SinglePortraitResult prediction={singlePrediction} onClear={() => setSinglePrediction(null)} /> : (
+              {singlePrediction ? <SinglePortraitResult prediction={singlePrediction} onClear={() => setSinglePrediction(null)} onSendToSimulatedMarket={_props.goToSimulatedMarket} /> : (
                 <section className="panel empty-state" style={{ minHeight: 240 }}>
                   <div className="empty-state__title">暂无单款画像结果</div>
                   <div>填写单款信息后点击“预测单款画像”。</div>
@@ -177,8 +181,12 @@ export default function Dashboard(_props: Props) {
             </>
           )}
         </div>
-        <aside className="single-portrait-side">
-          <SinglePortraitModelInfo metadata={metadata} />
+        <aside className={`single-portrait-side ${modelInfoCollapsed ? 'single-portrait-side--collapsed' : ''}`}>
+          <SinglePortraitModelInfo
+            metadata={metadata}
+            collapsed={modelInfoCollapsed}
+            onToggleCollapse={() => setModelInfoCollapsed((current) => !current)}
+          />
         </aside>
       </div>
     </div>

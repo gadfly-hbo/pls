@@ -1,0 +1,19 @@
+{
+  "id": "T0015",
+  "slug": "simulated-market-api",
+  "status": "approved",
+  "assignee": "mimo",
+  "domain": "backend",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-11T06:53:19.933Z",
+  "updated_at": "2026-07-11T07:16:12.912Z",
+  "base_ref": "68bc75f50b8141d519be186f8333a479f9bd45de",
+  "dirty_at_creation": true,
+  "batch": "simulated-market-v1",
+  "sequence": 2,
+  "depends_on": [
+    "T0014"
+  ],
+  "domain_memory": "agentops/memory/mimo-backend.md"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "T0018",
+  "slug": "simulated-market-upstream-entrypoints",
+  "status": "approved",
+  "assignee": "kilo",
+  "domain": "frontend",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-11T07:47:37.276Z",
+  "updated_at": "2026-07-11T08:21:17.466Z",
+  "base_ref": "68bc75f50b8141d519be186f8333a479f9bd45de",
+  "dirty_at_creation": true,
+  "batch": "simulated-market-bridge-v1",
+  "sequence": 2,
+  "depends_on": [
+    "T0017"
+  ],
+  "domain_memory": "agentops/memory/kilo-frontend.md"
+}
