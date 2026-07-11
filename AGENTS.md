@@ -48,6 +48,7 @@
 4. **危险操作写型端点的 confirmText 校验必须先于"目标不存在"短路**。`POST /api/v0/admin/database/import-jobs`、`DELETE /api/v0/admin/database/versions/:dataVersion` 等端点的 handler 应在打开 DB / 查询影响前校验 `body.confirmText`，否则对不存在目标 / 空库的错误 confirmText 会误返回 404 或 200 success。
 5. **每个 smoke 入口必须在 README / 脚本 help 中显式声明前置假设**：目标 workspace 当前状态、是否需要导入数据、是否会产生临时 workspace、清理方式。
 6. **JSON summary runner**（如 `smoke-admin-summary.mjs`）按顺序运行各模式 wrapper 并输出合并 JSON；每条子脚本末尾输出 `RESULT: {...}` JSON 行供 wrapper 解析汇总。
+7. **Fixture DB 清理前必须对比 HEAD 基线**：如果 smoke 污染了被跟踪的 fixture DB（如 `data/workspaces/ws_demo/db.sqlite`），清理前必须先用 `git show HEAD:<db-path>` 或等效方式确认 `HEAD` 基线行数和关键行内容。只删除超出基线的生成数据，保留 `HEAD` 已存在的 fixture/demo 行；禁止仅凭 "smoke-style" 键名或时间戳就删除整表数据。推荐做法：先 `git checkout HEAD -- <db-path>` 恢复基线，再运行 `npm run migrate` 重新应用 schema/migration，最后验证相关表 `COUNT(*)` 与 HEAD 一致。
 
 ---
 
@@ -64,30 +65,40 @@
 
 ---
 
-## 四、ModelEvol 模型协作契约
+## 四、LLM 调用规则
+
+1. PLS 内所有需要调用 LLM 的产品功能，必须通过 `pi-agent` 调用；不得在 PLS 业务代码中直接调用 Minimax、OpenAI 或其他第三方模型 HTTP API。
+2. `pi-xanthil` 是 `pi-agent` 的套壳产品，只能作为交互和默认模型口径参考；PLS 运行时不得依赖 `pi-xanthil` 作为 LLM provider。
+3. 模型选择通过 `pi-agent` 的模型标识表达，例如模拟市场默认使用 `SIMULATED_MARKET_PI_MODEL=minimax-cn/MiniMax-M3`，产品对外结果可继续记录业务口径 `provider=minimax` / `modelVersion=minimax-m3`。
+4. LLM provider 不可用、超时、返回非法结构或显式禁用时，允许使用 deterministic fallback，但必须在 `qualityFlags` 中标记 fallback；fallback 不得冒充真实 LLM agent 输出。
+5. 新增 LLM 能力前必须先查真实 `pi-agent` CLI / SDK 调用方式、输出事件格式、超时与错误语义，再写 adapter、contract test 和 smoke；不得凭 `pi-xanthil` UI 行为反推底层契约。
+
+---
+
+## 五、ModelEvol 模型协作契约
 
 ModelEvol 是 PLS 的模型能力中心。`product-channel-fit` / `single-product-portrait` 的模型治理、模型源码主版本、训练实验、评估、locked artifact、发布记录均以 ModelEvol 为准；PLS 是产品消费方，不再作为正式模型来源。
 
-### 4.1 正式模型来源
+### 5.1 正式模型来源
 
 1. PLS 正式运行环境必须通过 `SINGLE_PRODUCT_PORTRAIT_MODEL_PATH` 显式指向 ModelEvol locked artifact。
 2. 当前 artifact marker 以 `.modelevol/capabilities/product-channel-fit/runtime-artifact.json` 为准，agent 在验证或联调前必须先读取该文件，确认 `locked_artifact_path` 与 `locked_artifact_sha256`。
 3. PLS 本地 `data/local/single-product-portrait-q2-73sample/model-calibrated.json` 只作为 fallback / legacy compatibility，不再作为正式模型来源。
 4. 缺少 `SINGLE_PRODUCT_PORTRAIT_MODEL_PATH` 的运行不得宣称为正式 ModelEvol-backed runtime。
 
-### 4.2 PLS 不手动维护正式模型
+### 5.2 PLS 不手动维护正式模型
 
 1. PLS 开发者 agent 不应手动更新 PLS 本地 `model-calibrated.json` 来代表正式模型版本。
 2. 如需升级模型，必须等待 ModelEvol 产出新的 locked / released artifact，并更新 `.modelevol` runtime marker 或运行环境变量指向该 artifact。
 3. 不得将本地 fallback 模型、临时训练输出或手工替换的 JSON 冒充正式模型。
 
-### 4.3 模型代码 ownership
+### 5.3 模型代码 ownership
 
 1. ModelEvol 是 `product-channel-fit` 模型源码的 canonical source。
 2. `.modelevol/capabilities/product-channel-fit/ownership.json` 记录 PLS 内的 source-sync managed files；`apps/model/src` 中相关模型代码是产品运行副本 / 分发目标，不应被视为模型主源码。
 3. 如果需要修改模型算法、权重逻辑、训练逻辑或评估逻辑，应优先在 ModelEvol 中完成，再由 ModelEvol 分发到 PLS。
 
-### 4.4 PLS 可改与不可改范围
+### 5.4 PLS 可改与不可改范围
 
 PLS 可以修改：
 
@@ -105,26 +116,30 @@ PLS 不应擅自修改：
 - ModelEvol 的模型治理规则。
 - 将本地 fallback 模型冒充正式模型。
 
-### 4.5 后续联动流程
+### 5.5 后续联动流程
 
 如果 PLS 需要新模型版本：
 
 1. PLS 先提出产品需求、输入输出约束、线上问题或评估反馈。
 2. ModelEvol 负责启动 experiment、准备数据、训练、评估、review、lock、release。
 3. ModelEvol 发布新的 locked artifact。
-4. PLS 通过 `SINGLE_PRODUCT_PORTRAIT_MODEL_PATH` 指向新 artifact。
-5. PLS 再做产品侧 API / UI / smoke / integration 验证。
+4. ModelEvol / controller 更新 PLS `.modelevol/capabilities/product-channel-fit/runtime-artifact.json`，使 `locked_artifact_path` 指向新 artifact。
+5. PLS 启动脚本、smoke 与验证命令从 runtime marker 读取 `locked_artifact_path`，再注入 `SINGLE_PRODUCT_PORTRAIT_MODEL_PATH`；不得把某个 v0.x artifact 路径写死为长期运行配置。
+6. PLS server 必须重启后才会使用新的 `SINGLE_PRODUCT_PORTRAIT_MODEL_PATH`；仅更新 marker 或 artifact 文件但不重启，不得宣称运行时已切换到新版本。
+7. PLS 再做产品侧 API / UI / smoke / integration 验证。
 
-### 4.6 验证要求
+### 5.6 验证要求
 
 1. PLS 验证模型接入时，不要只看 `apps/model/src` 的默认路径。
 2. 必须优先读取 `.modelevol/capabilities/product-channel-fit/runtime-artifact.json`，确认当前 ModelEvol artifact 路径和 checksum。
 3. 正式验证时必须显式设置 `SINGLE_PRODUCT_PORTRAIT_MODEL_PATH`。
 4. 验证结论必须说明使用的是 ModelEvol locked artifact 还是 PLS fallback / legacy 模型。
+5. 判断运行时是否已升级到新的 ModelEvol artifact 时，不得只看 `modelVersion` 字段；artifact 内部 `modelVersion` 可能不是 v0.x 语义版本。必须结合 runtime marker 的 `locked_artifact_path` / checksum，以及 API metadata 中的 `sampleCount`、`trainedAt` 等 artifact 特征确认。
+6. 如果页面或 API metadata 仍显示 PLS 本地 fallback artifact 的 `sampleCount` / `trainedAt`，优先检查运行中 server 环境是否缺少 `SINGLE_PRODUCT_PORTRAIT_MODEL_PATH`，以及是否在 marker 更新后完成 server 重启。
 
 ---
 
-## 五、完成标准
+## 六、完成标准
 
 每个任务完成后必须说明：
 
@@ -137,7 +152,7 @@ PLS 不应擅自修改：
 
 ---
 
-## 六、API 联调与契约纪律
+## 七、API 联调与契约纪律
 
 为避免“半盲开发”与基于猜想的错误联调，凡涉及前后端对接、真实 API 接入或 E2E Mock 开发时，必须遵守以下铁律：
 
@@ -153,7 +168,7 @@ PLS 不应擅自修改：
    - **Real API 冒烟测试数据隔离**：在编写定向 `VITE_USE_MOCK=false` 的 Playwright E2E 冒烟测试（如 `smoke-real.spec.ts`）时，严禁将断言或交互写死为前端本地的 Mock 数据（例如 Mock 工具名“生意参谋人群提取”）。必须使用后端真实注册的基础数据（如“Sample Profile Extract”），防止因数据上下文错配导致真实测试全盘失败。
 ---
 
-## 七、当前产品目标
+## 八、当前产品目标
 
 产品定位：
 

@@ -2,9 +2,26 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-10（T0012 完成：三大人群本地估算前端总和校验改为复用模型层容差）
+最近更新：2026-07-11（模拟市场工作台 / subagent UI 收口）
 
 进度：
+
+- **模拟市场前端已完成并经 Task Bus 审核**：T0016 / T0018 / T0019 / T0022 / T0026 均为 `approved`，包含一级导航「模拟市场」、策略压力测试工作台、上游入口、从模拟结果创建经营飞轮决策入口、真实上下文与 subagent 管理 UI。
+- `apps/web/src/pages/SimulatedMarketWorkbench.tsx` 采用现有 AppShell / panel / segmented-control / metric-card / alert-banner / data-table-wrapper 风格；390px 移动端已覆盖无横向溢出。
+- `apps/web/src/services/api.ts` 的模拟市场 adapter 与后端 wrapper 对齐，`VITE_USE_MOCK=false` contract test 明确断言真实请求命中 `/api/v0/simulated-market/*`，避免 USE_MOCK 短路误判。
+- Subagent UI 展示 `saved_subagent` 与 `channel_audience_profile` 来源；从渠道画像派生时仅展示 Derived Result 摘要，不把画像标签表述成真实个人偏好。
+
+验证：
+
+- 本轮收尾已通过：`cd apps/web && npm run lint`。
+- 本轮收尾已通过：`cd apps/web && npm run build`。
+- 任务审核阶段已通过：`cd apps/web && npm run smoke`（模拟市场相关用例覆盖 mock、移动端和 real contract）。
+- 任务审核阶段已通过：`VITE_USE_MOCK=false npx playwright test e2e/simulated-market.spec.ts`，真实请求路径命中 `/api/v0/simulated-market/*`。
+
+风险 / 后续：
+
+- `apps/web/playwright-report/` / `test-results/` 属生成产物，不应进入任务交付；后续提交前需继续检查。
+- 新品预测结果页、人货匹配结果页和经营飞轮的进一步深度联动仍需另开任务，不应默认视为已自动闭环。
 
 - `T0012 / three-audience-tolerance-ui` (frontend) 已完成并经总控审核：
   - 三大人群本地估算的 share 总和校验改为复用模型层 `threeAudienceInputTotalTolerance(channel)`，不在前端 parser 硬编码渠道容差。
@@ -109,7 +126,7 @@
 
 下一步：
 
-- 以 `docs/wiki.html` v0.48 为当前 UI 专项任务状态真源；V-P3-UI-QUALITY-1 至 V-P3-UI-QUALITY-4、X-P3-UI-QUALITY-5 与 P3-OVERVIEW 全组均已完成并通过 X 复核。
+- 以 `.agentops/tasks/` Task Bus 为当前 UI 任务状态真源；除非用户明确点名，不再读取或更新 `docs/wiki.html`。
 - MatchCoreWorkbench 空列表时右侧 InspectorPane 状态语义已关闭：无匹配记录时展示“当前无匹配数据”，仅列表有数据但未选中时提示选择左侧项目。
 - P3-DB-MGMT 前端闭环已通过总控验收；后续增强需另开卡。
 - 若后端新增数据包列表接口，前端应移除固定 `demo` / `douyin-bi` 枚举，改为消费后端受支持数据包列表。
@@ -148,6 +165,7 @@
 - **前端模块状态边界与生成产物清理**：当 PRD / task brief 明确要求某个工作台模块“状态隔离”、不触发旧链路或不写入既有全局状态时，前端不得为了复用旧流程而写入 App 级 `prediction/currentSku`、下游匹配状态或其他跨模块 state；应使用模块内 state 保存结果，并提供清空/重置动作。运行 Playwright / smoke 后，必须检查并恢复 `apps/web/playwright-report/`、`test-results/` 等生成型报告产物，除非任务明确要求更新这些产物。
 - **Hono Wrapper 与原生 JSON 响应的区别（fetchApi 的局限）**：在接入 `single-product-portrait` 时踩坑发现，尽管大多数后端 API 返回 `{ code, data }` 的统一结构，但 `/api/v0/tools/runs/:runId/artifacts/:artifactId` 是直接返回 `prediction.json` 裸文件的。如果滥用前端的 `fetchApi` 自动解包，会导致拿到 `undefined` 从而使整个页面挂掉。这进一步强化了前文“强制 Adapter 隔离层对齐”的铁律：不同性质的路由接口（数据接口 vs 产物文件下载）必须使用匹配的请求与解析方式。
 - **级联数据与多端测试的 Mock 漂移**：在 P5 的 E2E 测试修复中发现，因删除了旧的同步匹配逻辑，`single-product-portrait` 只返回画像。然而全局 Smoke 测试（`smoke.spec.ts`）后续步骤依然期待生成 `matches` 并前往匹配工作台查看实体列表。如果不在 `runSingleProductPortrait` 的 Mock 逻辑中补偿性地初始化 `db.matches` 和 `db.products`，将会导致完全无关的下游测试因空列表而 timeout。这提醒我们在升级核心组件架构或请求流时，必须全局审视现有 `db.*` 内存 Mock 数据的完整性链条，严防“修改上游毁掉下游 Mock 上下文”的级联灾难。
+- **模型说明区侧栏响应式规则**：`single-product-portrait` 这类右侧说明面板必须同时定义展开宽度、收起宽度和移动端行为，不能只依赖 grid 自动压缩。含长英文 key、中文列表和指标表格的区域必须设置 `min-width: 0`、可换行文本和表格 wrapper 内滚动，避免 v0.4 metadata 这类真实长内容导致标题重叠或关键列不可见。
 
 ---
 

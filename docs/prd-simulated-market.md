@@ -36,6 +36,14 @@
 - deterministic fallback 保留为兜底与离线测试路径，provider 不可用时输出 `llm_unavailable_fallback_used`。
 - 输出仍是 Derived Result，不是真实销售事实、真实用户反馈或 AB test 结果。
 
+二期扩展支持用户持久化 subagent 与从渠道画像对象派生 subagent：
+
+- 新增 `POST /simulated-market/subagents` 创建用户自定义 subagent，支持 `saved_subagent` 与 `channel_audience_profile` 两种来源。
+- 新增 `GET /simulated-market/subagents` 与 `PATCH / DELETE /subagents/:agentId` 管理接口。
+- 新增 `POST /simulated-market/subagents/from-channel-object`，从当前 workspace 的 `channel_object_latest` + `audience_profile_latest` 派生 subagent，无可用画像时返回 `unprocessable` 且不编造。
+- `GET /simulated-market/agent-templates` 返回 `agents`（ABC 模板）与 `subagents`（已启用持久化 subagent）两个数组，供前端合并为候选 agent 池。
+- Subagent 持久化存储按 `workspace_id` 隔离，写操作带 `Idempotency-Key` 与审计。由画像派生的 `profile` 仅作为标签保守摘要，不得声称是真实个人偏好。
+
 ## 做
 
 - 支持手动输入策略方案，包含商品、渠道、活动、价格、卖点、分货或投放建议等文本。
@@ -91,11 +99,19 @@ interface SimulatedMarketInput {
 interface TargetUserAgent {
   agentId: string;
   name: string;
-  sourceType: "three_audience_segment" | "manual_persona";
+  sourceType:
+    | "three_audience_segment"
+    | "manual_persona"
+    | "saved_subagent"
+    | "channel_audience_profile";
   sourceRef?: {
     segmentCode?: "A" | "B" | "C";
     segmentName?: "质感流行派" | "都市体面家" | "百搭优选客";
     profileVersion?: string;
+    subagentId?: string;
+    canonicalObjectKey?: string;
+    profileId?: string;
+    dataVersion?: string;
   };
   profile: {
     demographics?: string[];
@@ -106,6 +122,12 @@ interface TargetUserAgent {
   weight?: number;
 }
 ```
+
+`sourceType` 说明：
+- `three_audience_segment`：品牌三大人群模板（质感流行派 / 都市体面家 / 百搭优选客）。
+- `manual_persona`：本次模拟临时手写 persona，不进入长期 persona 库。
+- `saved_subagent`：用户在 PLS 中新增并持久化的 subagent，需在 `sourceRef.subagentId` 记录 lineage。
+- `channel_audience_profile`：由 PLS 渠道画像对象 / `AudienceProfile` 派生的 subagent，需在 `sourceRef` 记录 `canonicalObjectKey`、`profileId`、`dataVersion` 等 lineage。
 
 ### SimulationRun
 
@@ -184,12 +206,20 @@ interface SimulatedMarketResult {
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/agent-templates` | 返回可用目标用户 agent 模板，第一期包含三大人群 |
+| GET | `/agent-templates` | 返回可用目标用户 agent 模板（ABC 三大人群）与已启用 subagent 候选 |
+| GET | `/subagents` | 查询当前 workspace 的 subagent 列表；支持 `?enabled=true\|false` |
+| POST | `/subagents` | 创建 subagent |
+| GET | `/subagents/:agentId` | 查询单个 subagent |
+| PATCH | `/subagents/:agentId` | 更新 subagent（只允许 `name`/`enabled`/`persona`/`profile`/`weight`） |
+| DELETE | `/subagents/:agentId` | 删除当前 workspace 的 subagent |
+| POST | `/subagents/from-channel-object` | 从当前 workspace 的 `channel_object` + `audience_profile` 派生 subagent |
 | POST | `/runs` | 创建并执行一次模拟 |
 | GET | `/runs` | 查询模拟记录 |
 | GET | `/runs/:runId` | 查询单次模拟详情 |
 
 响应必须遵守 PLS 统一 wrapper：`{ code, requestId, generatedAt, data }`。如果后续返回 artifact 文件，应在任务 brief 中单独声明 raw body 例外，不能默认复用 wrapper。
+
+由渠道画像派生 subagent 时，`profile` 从 `AudienceProfile.tags` 保守提取，保留 `canonicalObjectKey` / `profileId` / `dataVersion` 到 `sourceRef`，不得声称这些标签是真实个人偏好。若目标对象没有可用 `AudienceProfile`，返回 `unprocessable` 且不编造画像。
 
 ## 前端形态
 

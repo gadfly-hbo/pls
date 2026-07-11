@@ -2731,6 +2731,13 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 13px;
   font-weight: 650;
   margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
+.sim-agent-card__source {
+  margin-bottom: 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
 }
 
 .sim-agent-card__tags {
@@ -2836,6 +2843,111 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.sim-subagent-manager {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.sim-subagent-list,
+.sim-subagent-editor {
+  min-width: 0;
+}
+
+.sim-subagent-list__items {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sim-subagent-item {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  background: var(--card);
+  color: var(--foreground);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sim-subagent-item:hover,
+.sim-subagent-item--active {
+  border-color: var(--input);
+  background: var(--accent);
+}
+
+.sim-subagent-item__name {
+  font-size: 13px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.sim-subagent-item__meta {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.sim-subagent-form-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 120px auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.sim-subagent-form-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.sim-subagent-enabled {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 6px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.sim-subagent-derive {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.sim-subagent-derive__title {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.sim-subagent-derive__row {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+}
+
+.sim-subagent-derive__row .form-control {
+  min-width: 0;
+}
+
+.sim-subagent-derive__hint {
+  color: var(--muted-foreground);
+  font-size: 12px;
 }
 
 .sim-run-btn {
@@ -3374,6 +3486,10 @@ h1, h2, h3, h4, h5, h6 {
   .sim-decision-form__grid {
     grid-template-columns: 1fr;
   }
+
+  .sim-subagent-manager {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -3406,6 +3522,19 @@ h1, h2, h3, h4, h5, h6 {
 
   .sim-manual-persona__form {
     grid-template-columns: 1fr;
+  }
+
+  .sim-subagent-form-grid,
+  .sim-subagent-form-grid--two {
+    grid-template-columns: 1fr;
+  }
+
+  .sim-subagent-derive__row {
+    flex-direction: column;
+  }
+
+  .sim-subagent-derive__row .btn {
+    width: 100%;
   }
 
   .sim-market-context-row {

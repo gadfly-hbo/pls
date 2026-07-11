@@ -704,12 +704,20 @@ export type SimulatedMarketSourceType =
   | 'product_channel_match'
   | 'campaign_product_strategy';
 
-export type TargetAgentSourceType = 'three_audience_segment' | 'manual_persona';
+export type TargetAgentSourceType =
+  | 'three_audience_segment'
+  | 'manual_persona'
+  | 'saved_subagent'
+  | 'channel_audience_profile';
 
 export interface TargetUserAgentSourceRef {
   segmentCode?: 'A' | 'B' | 'C';
   segmentName?: '质感流行派' | '都市体面家' | '百搭优选客';
   profileVersion?: string;
+  subagentId?: string;
+  canonicalObjectKey?: string;
+  profileId?: string;
+  dataVersion?: string;
 }
 
 export interface TargetUserAgentProfile {
@@ -723,9 +731,41 @@ export interface TargetUserAgent {
   agentId: string;
   name: string;
   sourceType: TargetAgentSourceType;
+  sourceRef?: TargetUserAgentSourceRef | null;
+  profile: TargetUserAgentProfile;
+  weight?: number;
+}
+
+export interface SimulatedMarketSubagent extends TargetUserAgent {
+  enabled: boolean;
+  persona?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSimulatedMarketSubagentInput {
+  name: string;
+  enabled?: boolean;
+  persona?: string;
+  sourceType?: 'saved_subagent' | 'channel_audience_profile';
   sourceRef?: TargetUserAgentSourceRef;
   profile: TargetUserAgentProfile;
   weight?: number;
+}
+
+export interface UpdateSimulatedMarketSubagentInput {
+  name?: string;
+  enabled?: boolean;
+  persona?: string;
+  profile?: TargetUserAgentProfile;
+  weight?: number;
+}
+
+export interface CreateSubagentFromChannelObjectInput {
+  canonicalObjectKey: string;
+  profileId?: string;
+  name?: string;
+  enabled?: boolean;
 }
 
 export interface SimulatedMarketMarketContext {

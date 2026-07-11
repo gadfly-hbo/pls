@@ -1,3 +1,5 @@
+import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
 import {
   buildFakeSimulatedMarketLlmResponse,
   buildSimulatedMarketPrompt,
@@ -5,11 +7,10 @@ import {
 } from "../../../model/src/simulated-market.js";
 
 export interface SimulatedMarketProviderConfig {
-  apiKey: string | undefined;
-  apiHost: string;
   model: string;
   timeoutMs: number;
   useFake: boolean;
+  disablePiLlm: boolean;
 }
 
 export interface LlmSuccess {
@@ -42,49 +43,11 @@ function parseTimeoutMs(raw: string | undefined): number {
 
 export function getSimulatedMarketProviderConfig(): SimulatedMarketProviderConfig {
   return {
-    apiKey: process.env.MINIMAX_API_KEY,
-    apiHost: process.env.MINIMAX_API_HOST ?? "https://api.minimaxi.com",
     model: process.env.SIMULATED_MARKET_MODEL ?? "minimax-m3",
     timeoutMs: parseTimeoutMs(process.env.SIMULATED_MARKET_LLM_TIMEOUT_MS),
     useFake: process.env.SIMULATED_MARKET_FAKE_LLM === "true",
+    disablePiLlm: process.env.SIMULATED_MARKET_DISABLE_PI_LLM === "true",
   };
-}
-
-function hasKey<T extends object, K extends string>(
-  obj: T,
-  key: K
-): obj is T & Record<K, unknown> {
-  return Object.prototype.hasOwnProperty.call(obj, key);
-}
-
-function extractMinimaxContent(data: unknown): string {
-  if (typeof data !== "object" || data === null) {
-    throw new Error("Minimax response is not a JSON object");
-  }
-
-  if (!hasKey(data, "choices") || !Array.isArray(data.choices) || data.choices.length === 0) {
-    throw new Error("Minimax response missing choices");
-  }
-
-  const firstChoice = data.choices[0];
-  if (typeof firstChoice !== "object" || firstChoice === null) {
-    throw new Error("Minimax response choice is not an object");
-  }
-
-  if (!hasKey(firstChoice, "message")) {
-    throw new Error("Minimax response missing message");
-  }
-
-  const message = firstChoice.message;
-  if (typeof message !== "object" || message === null) {
-    throw new Error("Minimax response message is not an object");
-  }
-
-  if (!hasKey(message, "content") || typeof message.content !== "string") {
-    throw new Error("Minimax response missing content string");
-  }
-
-  return message.content;
 }
 
 export async function callSimulatedMarketLlm(
@@ -96,46 +59,116 @@ export async function callSimulatedMarketLlm(
     return { success: true, raw: buildFakeSimulatedMarketLlmResponse(input), model: config.model };
   }
 
-  if (!config.apiKey) {
-    return { success: false, reason: "MINIMAX_API_KEY not configured" };
+  if (config.disablePiLlm) {
+    return { success: false, reason: "pi LLM disabled" };
   }
 
-  const prompt = buildSimulatedMarketPrompt(input);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  return callPiSimulatedMarketLlm(input, config);
+}
 
-  try {
-    const response = await fetch(`${config.apiHost}/v1/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.model,
-        messages: [
-          { role: "system", content: prompt.systemPrompt },
-          { role: "user", content: prompt.userPrompt },
-        ],
-      }),
-      signal: controller.signal,
+function extractPiMessageText(content: unknown): string {
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) => {
+      if (typeof part === "string") return part;
+      if (typeof part !== "object" || part === null) return "";
+      const record = part as Record<string, unknown>;
+      if (typeof record.text === "string") return record.text;
+      if (typeof record.content === "string") return record.content;
+      return "";
+    })
+    .filter((text) => text.length > 0)
+    .join("\n");
+}
+
+function runPiPrompt(args: string[], timeoutMs: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.env.PLS_PI_BIN ?? "pi", args, {
+      cwd: process.cwd(),
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"],
     });
 
-    if (!response.ok) {
-      return {
-        success: false,
-        reason: `Minimax API returned status ${response.status}`,
-      };
-    }
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error(`pi prompt timed out after ${timeoutMs} ms`));
+    }, timeoutMs);
 
-    const data = (await response.json()) as unknown;
-    const raw = extractMinimaxContent(data);
+    let stderr = "";
+    let output = "";
+    let exitCode: number | null = null;
+    const events: string[] = [];
+    const rl = createInterface({ input: child.stdout });
 
+    rl.on("line", (line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      events.push(trimmed);
+      try {
+        const event = JSON.parse(trimmed) as Record<string, unknown>;
+        if (event.type === "message_end" || event.type === "turn_end") {
+          const message = event.message as Record<string, unknown> | undefined;
+          if (message?.role === "assistant") {
+            output = extractPiMessageText(message.content) || output;
+          }
+        }
+      } catch {
+        // Ignore non-JSON process noise.
+      }
+    });
+
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      exitCode = code;
+    });
+    rl.on("close", () => {
+      clearTimeout(timer);
+      if (exitCode !== 0 && exitCode !== null) {
+        reject(new Error(`pi exited with code ${String(exitCode)}${stderr.trim() ? `: ${stderr.trim()}` : ""}`));
+        return;
+      }
+      const result = output.trim();
+      if (!result) {
+        reject(new Error(`pi returned empty output${events.length > 0 ? `: ${events.slice(-3).join("\n")}` : ""}`));
+        return;
+      }
+      resolve(result);
+    });
+  });
+}
+
+async function callPiSimulatedMarketLlm(
+  input: SimulatedMarketInput,
+  config: SimulatedMarketProviderConfig
+): Promise<LlmResult> {
+  const prompt = buildSimulatedMarketPrompt(input);
+  const piModel = process.env.SIMULATED_MARKET_PI_MODEL ?? "minimax-cn/MiniMax-M3";
+  const args = [
+    "-p",
+    "--mode",
+    "json",
+    "--no-skills",
+    "--no-tools",
+    "--no-context-files",
+    "--model",
+    piModel,
+    "--system-prompt",
+    prompt.systemPrompt,
+    prompt.userPrompt,
+  ];
+
+  try {
+    const raw = await runPiPrompt(args, config.timeoutMs);
     return { success: true, raw, model: config.model };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     return { success: false, reason };
-  } finally {
-    clearTimeout(timeout);
   }
 }

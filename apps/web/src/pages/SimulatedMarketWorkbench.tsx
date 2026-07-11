@@ -27,6 +27,8 @@ import type {
   SimulatedMarketInput,
   SimulatedMarketAgentFeedback,
   SimulatedMarketPrefill,
+  SimulatedMarketSubagent,
+  TargetUserAgentProfile,
 } from '../types';
 
 const REAL_CHANNEL_OBJECT_EXAMPLES: Record<'channelEntityId' | 'marketingEventId' | 'businessScenarioId', string> = {
@@ -42,7 +44,31 @@ const MARKET_CONTEXT_LABELS: Record<keyof SimulatedMarketInput['marketContext'],
   contextText: '场景补充说明',
 };
 
-type ViewTab = 'config' | 'history';
+type ViewTab = 'workbench' | 'subagents' | 'history';
+
+interface SubagentFormState {
+  agentId: string | null;
+  name: string;
+  persona: string;
+  demographics: string;
+  preferences: string;
+  concerns: string;
+  decisionFactors: string;
+  weight: string;
+  enabled: boolean;
+}
+
+const EMPTY_SUBAGENT_FORM: SubagentFormState = {
+  agentId: null,
+  name: '',
+  persona: '',
+  demographics: '',
+  preferences: '',
+  concerns: '',
+  decisionFactors: '',
+  weight: '1',
+  enabled: true,
+};
 
 const SOURCE_TYPE_OPTIONS: { value: SimulatedMarketInput['sourceType']; label: string }[] = [
   { value: 'manual_strategy', label: '手动输入策略' },
@@ -78,6 +104,52 @@ function getStatusBadgeClass(status: SimulationRun['status']): string {
 function getAgentInitial(name: string): string {
   const match = name.match(/[A-C]/);
   return match ? match[0] : name.charAt(0);
+}
+
+function splitList(value: string): string[] {
+  return value.split(/[,，\n]/).map((item) => item.trim()).filter(Boolean);
+}
+
+function joinList(value: string[] | undefined): string {
+  return (value ?? []).join('，');
+}
+
+function profileFromForm(form: SubagentFormState): TargetUserAgentProfile {
+  return {
+    demographics: splitList(form.demographics),
+    preferences: splitList(form.preferences),
+    concerns: splitList(form.concerns),
+    decisionFactors: splitList(form.decisionFactors),
+  };
+}
+
+function formFromSubagent(subagent: SimulatedMarketSubagent): SubagentFormState {
+  return {
+    agentId: subagent.agentId,
+    name: subagent.name,
+    persona: subagent.persona ?? '',
+    demographics: joinList(subagent.profile.demographics),
+    preferences: joinList(subagent.profile.preferences),
+    concerns: joinList(subagent.profile.concerns),
+    decisionFactors: joinList(subagent.profile.decisionFactors),
+    weight: String(subagent.weight ?? 1),
+    enabled: subagent.enabled,
+  };
+}
+
+function getAgentSourceLabel(agent: TargetUserAgent): string {
+  switch (agent.sourceType) {
+    case 'three_audience_segment':
+      return '三大人群';
+    case 'saved_subagent':
+      return '已保存 subagent';
+    case 'channel_audience_profile':
+      return '渠道画像派生';
+    case 'manual_persona':
+      return '临时 persona';
+    default:
+      return agent.sourceType;
+  }
 }
 
 function isLlmAgentRun(run: SimulationRun): boolean {
@@ -221,10 +293,11 @@ function ListSection({
 }
 
 export default function SimulatedMarketWorkbench({ initialPrefill, goToFlywheel }: { initialPrefill?: SimulatedMarketPrefill | null; goToFlywheel?: (decisionId: string) => void }) {
-  const [activeTab, setActiveTab] = useState<ViewTab>('config');
+  const [activeTab, setActiveTab] = useState<ViewTab>('workbench');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TargetUserAgent[]>([]);
+  const [subagents, setSubagents] = useState<SimulatedMarketSubagent[]>([]);
   const [runs, setRuns] = useState<SimulationRun[]>([]);
   const [selectedRun, setSelectedRun] = useState<SimulationRun | null>(null);
   const [running, setRunning] = useState(false);
@@ -254,6 +327,10 @@ export default function SimulatedMarketWorkbench({ initialPrefill, goToFlywheel 
 
   const [channelObjects, setChannelObjects] = useState<ChannelObject[]>([]);
   const [channelObjectsLoading, setChannelObjectsLoading] = useState(false);
+  const [subagentForm, setSubagentForm] = useState<SubagentFormState>(EMPTY_SUBAGENT_FORM);
+  const [subagentSaving, setSubagentSaving] = useState(false);
+  const [subagentError, setSubagentError] = useState<string | null>(null);
+  const [deriveChannelObjectKey, setDeriveChannelObjectKey] = useState('');
 
   const channelEntityOptions = useMemo(
     () => (channelObjects ?? []).filter((o) => o.targetObject === 'ChannelEntity'),
@@ -273,21 +350,43 @@ export default function SimulatedMarketWorkbench({ initialPrefill, goToFlywheel 
     return [...fromTemplates, ...manualPersonas];
   }, [templates, selectedAgentIds, manualPersonas]);
 
+  const refreshAgentCandidates = async () => {
+    const [templatesRes, subagentsRes] = await Promise.all([
+      api.getSimulatedMarketAgentTemplates(),
+      api.getSimulatedMarketSubagents(),
+    ]);
+    const candidates = [...templatesRes.data.agents, ...(templatesRes.data.subagents ?? [])];
+    setTemplates(candidates);
+    setSubagents(subagentsRes.data.items ?? []);
+    setSelectedAgentIds((prev) => {
+      const next = new Set<string>();
+      candidates.forEach((agent) => {
+        if (agent.sourceType === 'three_audience_segment' || prev.has(agent.agentId)) {
+          next.add(agent.agentId);
+        }
+      });
+      return next;
+    });
+  };
+
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
-        const [templatesRes, runsRes] = await Promise.all([
+        const [templatesRes, subagentsRes, runsRes] = await Promise.all([
           api.getSimulatedMarketAgentTemplates(),
+          api.getSimulatedMarketSubagents(),
           api.getSimulatedMarketRuns(),
         ]);
         if (!cancelled) {
-          setTemplates(templatesRes.data.agents);
+          const candidates = [...templatesRes.data.agents, ...(templatesRes.data.subagents ?? [])];
+          setTemplates(candidates);
+          setSubagents(subagentsRes.data.items ?? []);
           setRuns(runsRes.data.items);
-          if (templatesRes.data.agents.length > 0) {
-            setSelectedAgentIds(new Set(templatesRes.data.agents.map((a) => a.agentId)));
+          if (candidates.length > 0) {
+            setSelectedAgentIds(new Set(candidates.map((a) => a.agentId)));
           }
         }
       } catch (err) {
@@ -333,7 +432,7 @@ export default function SimulatedMarketWorkbench({ initialPrefill, goToFlywheel 
     if (initialPrefill.marketContext?.marketingEventId) setMarketingEventId(initialPrefill.marketContext.marketingEventId);
     if (initialPrefill.marketContext?.businessScenarioId) setBusinessScenarioId(initialPrefill.marketContext.businessScenarioId);
     if (initialPrefill.marketContext?.contextText) setContextText(initialPrefill.marketContext.contextText);
-    setActiveTab('config');
+    setActiveTab('workbench');
   }, [initialPrefill]);
 
   const toggleAgent = (agentId: string) => {
@@ -397,7 +496,7 @@ export default function SimulatedMarketWorkbench({ initialPrefill, goToFlywheel 
       const res = await api.createSimulatedMarketRun(input);
       setSelectedRun(res.data);
       setRuns((prev) => [res.data, ...prev]);
-      setActiveTab('config');
+      setActiveTab('workbench');
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : '运行模拟失败');
@@ -410,7 +509,7 @@ export default function SimulatedMarketWorkbench({ initialPrefill, goToFlywheel 
     try {
       const res = await api.getSimulatedMarketRun(runId);
       setSelectedRun(res.data);
-      setActiveTab('config');
+      setActiveTab('workbench');
     } catch (err) {
       console.error(err);
       setError('加载模拟记录失败');
@@ -431,6 +530,97 @@ export default function SimulatedMarketWorkbench({ initialPrefill, goToFlywheel 
     setSelectedAgentIds(new Set(templates.map((a) => a.agentId)));
     setShowDecisionForm(false);
     setDecisionError(null);
+  };
+
+  const resetSubagentForm = () => {
+    setSubagentForm(EMPTY_SUBAGENT_FORM);
+    setSubagentError(null);
+  };
+
+  const saveSubagent = async () => {
+    const name = subagentForm.name.trim();
+    if (!name) {
+      setSubagentError('请填写 subagent 名称');
+      return;
+    }
+    const weight = Number(subagentForm.weight || 1);
+    if (!Number.isFinite(weight)) {
+      setSubagentError('权重必须是数字');
+      return;
+    }
+    setSubagentSaving(true);
+    setSubagentError(null);
+    try {
+      if (subagentForm.agentId) {
+        await api.updateSimulatedMarketSubagent(subagentForm.agentId, {
+          name,
+          enabled: subagentForm.enabled,
+          persona: subagentForm.persona,
+          profile: profileFromForm(subagentForm),
+          weight,
+        });
+      } else {
+        await api.createSimulatedMarketSubagent({
+          name,
+          enabled: subagentForm.enabled,
+          persona: subagentForm.persona,
+          sourceType: 'saved_subagent',
+          profile: profileFromForm(subagentForm),
+          weight,
+        });
+      }
+      resetSubagentForm();
+      await refreshAgentCandidates();
+    } catch (err) {
+      setSubagentError(err instanceof Error ? err.message : '保存 subagent 失败');
+    } finally {
+      setSubagentSaving(false);
+    }
+  };
+
+  const toggleSubagentEnabled = async (subagent: SimulatedMarketSubagent) => {
+    setSubagentError(null);
+    try {
+      await api.updateSimulatedMarketSubagent(subagent.agentId, { enabled: !subagent.enabled });
+      await refreshAgentCandidates();
+    } catch (err) {
+      setSubagentError(err instanceof Error ? err.message : '更新启用状态失败');
+    }
+  };
+
+  const deleteSubagent = async (subagent: SimulatedMarketSubagent) => {
+    if (!window.confirm(`确认删除 subagent「${subagent.name}」？`)) return;
+    setSubagentError(null);
+    try {
+      await api.deleteSimulatedMarketSubagent(subagent.agentId);
+      if (subagentForm.agentId === subagent.agentId) resetSubagentForm();
+      await refreshAgentCandidates();
+    } catch (err) {
+      setSubagentError(err instanceof Error ? err.message : '删除 subagent 失败');
+    }
+  };
+
+  const createSubagentFromChannelObject = async () => {
+    if (!deriveChannelObjectKey) {
+      setSubagentError('请选择有 AudienceProfile 的渠道画像对象');
+      return;
+    }
+    setSubagentSaving(true);
+    setSubagentError(null);
+    try {
+      const selected = channelObjects.find((item) => item.canonicalObjectKey === deriveChannelObjectKey);
+      await api.createSubagentFromChannelObject({
+        canonicalObjectKey: deriveChannelObjectKey,
+        name: selected ? `${selected.displayName} subagent` : undefined,
+        enabled: true,
+      });
+      setDeriveChannelObjectKey('');
+      await refreshAgentCandidates();
+    } catch (err) {
+      setSubagentError(err instanceof Error ? err.message : '从渠道画像生成失败');
+    } finally {
+      setSubagentSaving(false);
+    }
   };
 
   const deriveDecisionDefaults = (run: SimulationRun) => {
@@ -530,11 +720,19 @@ export default function SimulatedMarketWorkbench({ initialPrefill, goToFlywheel 
         </div>
         <div className="sim-workbench__tabs">
           <button
-            className={`sim-workbench__tab${activeTab === 'config' ? ' sim-workbench__tab--active' : ''}`}
-            onClick={() => setActiveTab('config')}
+            className={`sim-workbench__tab${activeTab === 'workbench' ? ' sim-workbench__tab--active' : ''}`}
+            onClick={() => setActiveTab('workbench')}
           >
             <Sparkles size={14} />
-            运行配置
+            工作台
+          </button>
+          <button
+            className={`sim-workbench__tab${activeTab === 'subagents' ? ' sim-workbench__tab--active' : ''}`}
+            onClick={() => setActiveTab('subagents')}
+          >
+            <Users size={14} />
+            subagent 管理
+            <span className="sim-workbench__tab-count">{subagents.length}</span>
           </button>
           <button
             className={`sim-workbench__tab${activeTab === 'history' ? ' sim-workbench__tab--active' : ''}`}
@@ -558,7 +756,7 @@ export default function SimulatedMarketWorkbench({ initialPrefill, goToFlywheel 
         <div className="sim-history">
           <div className="sim-history__header">
             <h3 className="sim-history__title">历史模拟记录</h3>
-            <button className="btn" onClick={() => setActiveTab('config')}>
+            <button className="btn" onClick={() => setActiveTab('workbench')}>
               返回配置
             </button>
           </div>
@@ -590,6 +788,180 @@ export default function SimulatedMarketWorkbench({ initialPrefill, goToFlywheel 
               ))}
             </div>
           )}
+        </div>
+      ) : activeTab === 'subagents' ? (
+        <div className="sim-subagent-manager">
+          <section className="sim-panel sim-subagent-list">
+            <div className="sim-panel__header">
+              <Users size={16} />
+              <h3>subagent 列表</h3>
+              <span className="sim-panel__sub">{subagents.length} 个</span>
+            </div>
+            <div className="sim-panel__body">
+              <button className="btn btn-primary" onClick={resetSubagentForm}>
+                <Plus size={14} />
+                新增 subagent
+              </button>
+              {subagents.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-state__title">暂无已保存 subagent</div>
+                </div>
+              ) : (
+                <div className="sim-subagent-list__items">
+                  {subagents.map((subagent) => (
+                    <button
+                      key={subagent.agentId}
+                      className={`sim-subagent-item${subagentForm.agentId === subagent.agentId ? ' sim-subagent-item--active' : ''}`}
+                      onClick={() => setSubagentForm(formFromSubagent(subagent))}
+                    >
+                      <span className="sim-subagent-item__name">{subagent.name}</span>
+                      <span className="sim-subagent-item__meta">
+                        {getAgentSourceLabel(subagent)} · {subagent.enabled ? '已启用' : '已停用'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="sim-panel sim-subagent-editor">
+            <div className="sim-panel__header">
+              <FileText size={16} />
+              <h3>{subagentForm.agentId ? '编辑 subagent' : '新增 subagent'}</h3>
+              <span className="sim-panel__sub">仅编辑允许字段</span>
+            </div>
+            <div className="sim-panel__body">
+              {subagentError && (
+                <div className="alert-banner alert-banner--warning">
+                  <AlertTriangle size={16} />
+                  {subagentError}
+                </div>
+              )}
+              <div className="sim-subagent-form-grid">
+                <div className="sim-form-row">
+                  <label className="sim-form-label">名称</label>
+                  <input
+                    className="form-control"
+                    data-testid="subagent-name-input"
+                    value={subagentForm.name}
+                    onChange={(e) => setSubagentForm((prev) => ({ ...prev, name: e.target.value }))}
+                  />
+                </div>
+                <div className="sim-form-row">
+                  <label className="sim-form-label">权重</label>
+                  <input
+                    className="form-control"
+                    value={subagentForm.weight}
+                    onChange={(e) => setSubagentForm((prev) => ({ ...prev, weight: e.target.value }))}
+                  />
+                </div>
+                <label className="sim-subagent-enabled">
+                  <input
+                    type="checkbox"
+                    checked={subagentForm.enabled}
+                    onChange={(e) => setSubagentForm((prev) => ({ ...prev, enabled: e.target.checked }))}
+                  />
+                  启用
+                </label>
+              </div>
+              <div className="sim-form-row">
+                <label className="sim-form-label">persona 描述</label>
+                <textarea
+                  className="form-control sim-textarea"
+                  rows={3}
+                  data-testid="subagent-persona-input"
+                  value={subagentForm.persona}
+                  onChange={(e) => setSubagentForm((prev) => ({ ...prev, persona: e.target.value }))}
+                />
+              </div>
+              <div className="sim-subagent-form-grid sim-subagent-form-grid--two">
+                <div className="sim-form-row">
+                  <label className="sim-form-label">偏好</label>
+                  <input
+                    className="form-control"
+                    data-testid="subagent-preferences-input"
+                    value={subagentForm.preferences}
+                    onChange={(e) => setSubagentForm((prev) => ({ ...prev, preferences: e.target.value }))}
+                    placeholder="用逗号分隔"
+                  />
+                </div>
+                <div className="sim-form-row">
+                  <label className="sim-form-label">顾虑</label>
+                  <input
+                    className="form-control"
+                    data-testid="subagent-concerns-input"
+                    value={subagentForm.concerns}
+                    onChange={(e) => setSubagentForm((prev) => ({ ...prev, concerns: e.target.value }))}
+                    placeholder="用逗号分隔"
+                  />
+                </div>
+                <div className="sim-form-row">
+                  <label className="sim-form-label">决策因素</label>
+                  <input
+                    className="form-control"
+                    value={subagentForm.decisionFactors}
+                    onChange={(e) => setSubagentForm((prev) => ({ ...prev, decisionFactors: e.target.value }))}
+                    placeholder="用逗号分隔"
+                  />
+                </div>
+                <div className="sim-form-row">
+                  <label className="sim-form-label">人群描述</label>
+                  <input
+                    className="form-control"
+                    value={subagentForm.demographics}
+                    onChange={(e) => setSubagentForm((prev) => ({ ...prev, demographics: e.target.value }))}
+                    placeholder="用逗号分隔"
+                  />
+                </div>
+              </div>
+              <div className="sim-actions">
+                <button className="btn btn-primary" onClick={saveSubagent} disabled={subagentSaving} data-testid="subagent-save-button">
+                  {subagentSaving ? <Loader2 size={14} className="sim-spin" /> : null}
+                  保存
+                </button>
+                <button className="btn" onClick={resetSubagentForm} disabled={subagentSaving}>清空</button>
+                {subagentForm.agentId && (() => {
+                  const current = subagents.find((item) => item.agentId === subagentForm.agentId);
+                  if (!current) return null;
+                  return (
+                    <>
+                      <button className="btn" onClick={() => toggleSubagentEnabled(current)} disabled={subagentSaving}>
+                        {current.enabled ? '停用' : '启用'}
+                      </button>
+                      <button className="btn btn--danger" onClick={() => deleteSubagent(current)} disabled={subagentSaving}>
+                        <Trash2 size={14} />
+                        删除
+                      </button>
+                    </>
+                  );
+                })()}
+              </div>
+
+              <div className="sim-subagent-derive">
+                <div className="sim-subagent-derive__title">从渠道画像生成</div>
+                <div className="sim-subagent-derive__row">
+                  <select
+                    className="form-control"
+                    data-testid="subagent-channel-select"
+                    value={deriveChannelObjectKey}
+                    onChange={(e) => setDeriveChannelObjectKey(e.target.value)}
+                  >
+                    <option value="">选择 ChannelEntity / AudienceProfile</option>
+                    {channelEntityOptions.map((item) => (
+                      <option key={item.canonicalObjectKey} value={item.canonicalObjectKey}>
+                        {item.displayName} ({item.canonicalObjectKey})
+                      </option>
+                    ))}
+                  </select>
+                  <button className="btn" onClick={createSubagentFromChannelObject} disabled={subagentSaving || !deriveChannelObjectKey} data-testid="subagent-from-channel-button">
+                    生成
+                  </button>
+                </div>
+                {channelEntityOptions.length === 0 && <div className="sim-subagent-derive__hint">暂无可用渠道画像对象。</div>}
+              </div>
+            </div>
+          </section>
         </div>
       ) : (
         <div className="sim-workbench__body">
@@ -665,6 +1037,7 @@ export default function SimulatedMarketWorkbench({ initialPrefill, goToFlywheel 
                       <div className="sim-agent-card__avatar">{getAgentInitial(agent.name)}</div>
                       <div className="sim-agent-card__body">
                         <div className="sim-agent-card__name">{agent.name}</div>
+                        <div className="sim-agent-card__source">{getAgentSourceLabel(agent)}</div>
                         <div className="sim-agent-card__tags">
                           {(agent.profile.preferences ?? []).slice(0, 3).map((p, i) => (
                             <span key={i} className="sim-tag">{p}</span>

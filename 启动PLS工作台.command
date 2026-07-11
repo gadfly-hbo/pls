@@ -10,6 +10,7 @@ API_HOST="127.0.0.1"
 API_PORT="3100"
 WEB_URL="http://${WEB_HOST}:${WEB_PORT}"
 API_HEALTH_URL="http://${API_HOST}:${API_PORT}/health"
+MODEL_MARKER=".modelevol/capabilities/product-channel-fit/runtime-artifact.json"
 
 is_ready() {
   curl -fsS -o /dev/null "$WEB_URL" 2>/dev/null &&
@@ -55,6 +56,25 @@ kill_port_listeners "$WEB_PORT"
 kill_port_listeners "$API_PORT"
 
 export VITE_USE_MOCK=false
+if [ -f "$MODEL_MARKER" ]; then
+  MODEL_PATH="$(node -e "const fs=require('fs'); const marker=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); process.stdout.write(marker.locked_artifact_path || '')" "$MODEL_MARKER" 2>/dev/null)"
+  if [ -n "$MODEL_PATH" ] && [ -f "$MODEL_PATH" ]; then
+    export SINGLE_PRODUCT_PORTRAIT_MODEL_PATH="$MODEL_PATH"
+    echo "✅ 单款画像模型: $SINGLE_PRODUCT_PORTRAIT_MODEL_PATH"
+  else
+    echo "⚠️ 未找到有效 ModelEvol locked artifact，单款画像将使用本地 fallback 模型。"
+  fi
+else
+  echo "⚠️ 未找到 $MODEL_MARKER，单款画像将使用本地 fallback 模型。"
+fi
+export SIMULATED_MARKET_MODEL="${SIMULATED_MARKET_MODEL:-minimax-m3}"
+export SIMULATED_MARKET_FAKE_LLM="${SIMULATED_MARKET_FAKE_LLM:-false}"
+export SIMULATED_MARKET_PI_MODEL="${SIMULATED_MARKET_PI_MODEL:-minimax-cn/MiniMax-M3}"
+if command -v "${PLS_PI_BIN:-pi}" >/dev/null 2>&1; then
+  echo "✅ 模拟市场 LLM: pi-agent 已配置（pi model=$SIMULATED_MARKET_PI_MODEL, result model=$SIMULATED_MARKET_MODEL）"
+else
+  echo "ℹ️ 模拟市场 LLM: 未检测到 ${PLS_PI_BIN:-pi}，真实 LLM 不可用时将 fallback。"
+fi
 
 echo "🚀 启动后端服务 (Port 3100)..."
 (cd apps/server && npm run dev) &

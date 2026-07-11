@@ -2,130 +2,42 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-08（T0002 单品画像预测专用 API 实现并通过 smoke）
+最近更新：2026-07-11（模拟市场 LLM 统一走 pi-agent）
 
 进度：
 
-- A-P0-3 / A-P0-B2 / A-P0-C1 已完稿。
-- A-P1-B1/B2/B3/B4 / A-P1-E3 / A-P1-F2 已完稿并通过总控复核。
-- A-P2-1 已通过总控复核（data_source 注册表 + adapter 模式 + /data-management/*）。
-- A-P2-3 已通过总控复核（channel_entity 投影表 + /channels/entities）。
-- A-P2-9 已完稿并通过总控复核（新品预测 API + 匹配衔接）。
-- A-P2-10 已完稿并通过总控复核（经营飞轮最小闭环 API）。
-- **A-P3-DB-2 / 3 / 4 已通过总控复核并 mark done**（admin token 前置于 idempotency replay）。
-- **A-P3-DB-6 已 mark done**：受控危险操作 API 与 workspace rebuild 流程经三轮返工后通过。
-- **X-P3-DB-8 已 mark done**：用户确认空库重放，ws_demo 通过 Admin API 完成受控 rebuild，未手工 rm 主库。
-- **A-P3-DB-MGMT-1 已完成**：Admin Database API 可操作化加固，统一 dry run / 正式执行响应、补齐 after snapshot、导入重放、危险操作 confirmText 和 audit 闭环。
-- **A-P3-DB-MGMT-3 已完成并经总控 mark done**：拆分空库 smoke（`smoke:admin-empty`）与导入后 smoke（`smoke:admin-imported`）；dangerous 操作正式执行仅使用临时 workspace；新增 `smoke:admin-summary` 输出 JSON summary；README 明确每条 smoke 对数据库状态的前置假设。
-- **X-P3-DB-MGMT-4 已完成**：总控验收确认 Admin Database API、empty/imported/summary smoke、版本管理、危险操作 dry run / confirmText / admin token / Idempotency-Key / audit 闭环通过。
-- **A-P4-TOOLS-1 已完成并经总控 mark done**：新增工具注册表、本地 runner、运行记录与 artifact 查询 API；注册一个 L1 样例工具 `sample-profile-extract`；工具输出统一写入 `data/local/tool-runs/<runId>/`；总控修复 run / artifact 查询的 workspace 隔离缺口后，`smoke:tools` 27/27 通过。
-- **A-P4-TOOLS-4 已完成并经总控 mark done**：将 `profile-extract` / `business-aggregate` 工具输出包接入 Admin Import / Data Management 闭环；新增 `apps/server/src/lib/import-tool-packages.ts`、扩展 `/tools/runs/:runId/import-dry-run` 与 `/tools/runs/:runId/import`、注册 `profile_extract` / `business_aggregate` 数据源 adapter；dry-run 返回统一 `OperationImpact`，导入复用 admin token / Idempotency-Key / confirmText / audit 全套约束。总控补强 import-dry-run / import 的 workspace 隔离后，`smoke:tools-import` 33/33 通过，`smoke:tools` 回归 27/27 通过。
-- **X-P4-TOOLS-6 已完成并经总控 mark done**：工具模块第一期总体验收通过，确认 Tool Registry、Local Runner、artifact 管理、profile-extract / business-aggregate 标准包、Admin Import、Data Management 和 ToolsWorkbench 已形成闭环；临时 workspace `ws_tools_import_1783176743243` 覆盖 import dry-run、confirm import、auditId、batch、dataVersion、qualityReport 和 Data Management 读回。
-- **A-P5-PORTRAIT-5 已完成并经总控 mark done**：注册 `single-product-portrait` L1 工具，前端通过 `POST /api/v0/tools/runs` 传 `toolId=single-product-portrait` 与 `skuId/packageId` 触发预测，结果只写 `data/local/tool-runs/<runId>/artifacts/prediction.json` 和 `report.md`。artifact 保留 `sourceFiles`、平台画像、风险、证据和 PLS bridge；run/artifact 查询沿用 tools workspace 隔离。
-- **A-P5-PORTRAIT-5 总控修正项已关闭**：`platform_portrait.csv` 按 `skuId + sourceProductKey` 过滤，防止多 SKU 样本包串画像；`prediction.json` 顶层已写入 `sourceFiles`，供 V/A 机器读取来源 lineage。
-- **A-P6-CHANNEL-3 已完成并经总控 mark done**：已修复 `missing_parent_reference` 为 blocking、正式 import 前拦截 dry-run blocking errors、对象库列表分页对齐 api-contract.md 通用契约、新增负向 smoke fixture 与 `smoke:channel-object-library` 脚本；`docs/api-contract.md` §10.5 与 `docs/notes-app.md` 已同步。
-- **A-P7-INGEST-2 已按 review 返工完成（2026-07-06）**：X 总控 review 指出的 stagedFileId 路径穿越风险、upsert/replace 语义未拍板、strict mode 与 execute 语义不一致、typeErrors 统计口径错误、before/after snapshot 行数不真实等问题已修复：
-- **T0002 已完成（2026-07-08）**：实现单品画像预测专用 API `GET /api/v0/single-product-portrait/metadata`、`POST /api/v0/single-product-portrait/predict`、`POST /api/v0/single-product-portrait/predict/batch/preview`、`POST /api/v0/single-product-portrait/predict/batch`；支持 `.xlsx` / `.csv` 批量解析、行级校验与 preview/execute 同构；模型不可用时 metadata 返回 200 + `modelAvailable: false`，predict 返回 `model_not_available`，批量 preview/execute 在 `fileErrors` 中返回 `model_not_available`；`smoke:single-product-portrait` 70/70 通过，`smoke:single-product-portrait-tool` 39/39 回归通过。相关实现见 `apps/server/src/routes/single-product-portrait.ts`、`apps/server/src/lib/single-product-portrait/`、`apps/server/scripts/smoke-single-product-portrait-api.mjs`。`apps/server/package.json` 新增 `xlsx: ^0.18.5` 并保持与 `apps/model` 版本一致；`apps/model/src/single-product-portrait-supervised.ts` 加 `!` 修复 server 端 `noUncheckedIndexedAccess` 跨包类型错误。
-  - `apps/server/src/lib/csv-ingestion.ts` 增加 `stagedFileId` 格式校验（`^csv_[0-9]+_[a-z0-9]{6}$`）、路径解析后确认仍在当前 workspace staging 目录内、`staging.json` 读取后校验 `meta.workspaceId`/`meta.stagedFileId`/`meta.targetTable`。
-  - 改为 append-only：dry-run 检测目标表主键冲突（`primary_key_conflict`），execute 使用普通 `INSERT` 不再 `INSERT OR REPLACE`。
-  - 从 public API 移除 `mode=strict/relaxed` 参数，第一期仅保留 relaxed。
-  - `typeErrors` 仅统计 `rule === "type_conversion_failed"`。
-  - `beforeSnapshot` / `afterSnapshot` 改为目标表真实行数（`COUNT(*) WHERE workspace_id = ?`），并写入 `db_admin_audit`。
-  - `apps/server/scripts/smoke-csv-ingestion.mjs` 新增路径穿越、URL 编码路径穿越、staging 文件篡改、`staging.json` workspaceId/targetTable 篡改、append-only 重复导入阻塞用例。
-  - `docs/p3-db-mgmt-api-contract.md` 与 `docs/p7-csv-ingestion-data-contract.md` 已同步 append-only、strict 移除、snapshot 真实行数等语义。
-  - 全部验证通过：typecheck、schema:check、`smoke:csv-ingestion` 46/46、`smoke:admin-summary`、`smoke:tools`、`smoke:channel-object-library` 均无回归。`docs/wiki.html` A-P7-INGEST-2 任务卡已 mark done。
-- 应用侧数据准入按项目级放行口径；taxonomy gate 未变。
-
-关键决策（A-P3-DB-6 三轮返工）：
-
-- **Round 1 — 4 个核心修复**：
-  1. delete-version 按 `data_version` 遍历 8 张 `douyin_*` 表 + batch 表 LIKE 模式匹配，不再按 batch_id。
-  2. drop 操作先 `isTable/isView` 判断再发 `DROP TABLE`/`DROP VIEW`（避免 SQLite 报错）。
-  3. rebuild dry-run 把 PROTECTED_TABLES 行数也纳入影响范围，warnings 显式提示"will also destroy N rows in protected system tables"。
-  4. executeTruncate 的 `sqlite_sequence` DELETE 加 try-catch（autoincrement 表才有此表）。
-- **Round 2 — view 类型检测**：executeDrop 先 `isTable()` 再 `isView()` 再 fallback IF EXISTS。
-- **Round 3 — 路由层语义修正**：DELETE /versions/:dataVersion 改用 `affectedRows === 0` 判 not-found，不再用 `warnings.length > 0`。warnings 仅描述数据特征（user_authorized / protected），不影响存在性判断。
-- **fresh workspace 容错**：dangerous-ops 的 batch 表查询/删除加 `isTable(db, "batch")` 守卫 + try-catch。
-- **A-P3-DB-MGMT-3 补充**：delete-version 正式执行时先校验 `confirmText` 再检查 `affectedRows === 0`，避免错误 confirmText 因版本不存在而误返回 404。
-
-下一步：
-
-- A-P6-CHANNEL-3 已通过总控复核；后续 V-P6 接真实 API 时按 `docs/api-contract.md` §10.5 和实际 route/schema 对齐。
-- P5-PORTRAIT 后续由 V-P5-PORTRAIT-6 接入 `single-product-portrait` tool artifact；A 侧真实样本包导入需等 D / X 另开任务。
-
-阻塞：
-
-- 无
-
-开放问题：
-
-- 新品预测 match 链路当前查 `channel_profile`（P0 mock 4 行）；V-P2-4 接入后需改为查 `channel_entity`（17 行）。
-- 经营飞轮 action/feedback 只存不触发；webhook / 事件驱动待后续 P2 任务。
-- `channel_entity` 投影表更新需手动重跑 `sync:channel-entities`；自动触发待 X 拍板。
-- `/channels`（P0 mock）和 `/channels/entities`（P2 投影）并存；迁移策略需 X 冻结。
-- smoke 测试产生的临时 workspace（`ws_drop_test_*` / `ws_review_delete_version_*` / `ws_smoke_*`）目录未被清理，待手工或后续脚本清理。
-- P4 工具 smoke 也会产生临时 workspace 与 `data/local/tool-runs/` staging 目录，清理策略尚未自动化。
+- **模拟市场真实 LLM 已接通**：`apps/server/src/services/simulated-market-provider.ts` 不再直连 Minimax HTTP API，真实 LLM 调用统一通过本机 `pi-agent` CLI（默认 `pi`）执行；结果仍按业务口径记录 `provider=minimax` / `modelVersion=minimax-m3`。
+- **PLS 项目级 LLM 规则已沉淀**：`AGENTS.md` 新增「LLM 调用规则」，明确 PLS 所有产品 LLM 能力必须走 `pi-agent`，`pi-xanthil` 只作为 `pi-agent` 套壳产品和默认模型口径参考，不作为 PLS runtime provider。
+- **模拟市场 LLM 输出解析已增强**：`apps/model/src/simulated-market.ts` 支持从带 `<think>` / 前置文本的 pi-agent 输出中抽取首尾 JSON object，避免 MiniMax-M3 reasoning 前缀导致结构化解析失败；contract test 已覆盖该场景。
+- **启动脚本与 API 契约已对齐**：`启动PLS工作台.command` 改为检查 `pi-agent`，`docs/api-contract.md` 的模拟市场 provider/env/smoke 说明已从 `MINIMAX_API_KEY` 直连口径改为 `pi-agent` 口径。
+- **T0024 / T0025 / T0026 / T0027 仍保持 approved 状态**：subagent contract/API/UI 与 LLM review fixes 的既有结论不变；本轮是在其上修正 provider ownership 与项目级 LLM 调用规则。
 
 验证：
 
-- 重建前（2026-07-03）：199 项 API 冒烟全部通过，无回归。
-- A-P3-DB-MGMT-1 验证（2026-07-04，返工后）：
-  - `apps/server npm run typecheck` 通过。
-  - `apps/server npm run schema:check` 通过（Valid true，0 missing / 0 extra，1 applied / 0 pending / 0 failed）。
-  - `apps/server npm run smoke:admin-database` 通过 37/37（空库状态）。
-  - `apps/server npm run smoke:admin-import` 通过 52/52（空库 → demo 导入 → douyin-bi 导入；覆盖缺失/错误 confirmText）。
-  - `apps/server npm run smoke:admin-dangerous` 通过 55/55（含临时 workspace 真实 drop view / drop table / truncate non-existent / drop non-existent / delete version / rebuild 闭环）。
-- A-P3-DB-MGMT-3 验证（2026-07-04）：
-  - `apps/server npm run typecheck` 通过。
-  - `apps/server npm run schema:check` 通过（Valid true，0 missing / 0 extra，1 applied / 0 pending / 0 failed）。
-  - `apps/server npm run smoke:admin-empty` 通过 131/131（database 43 + import 32 + dangerous 56）。
-  - `apps/server npm run smoke:admin-imported` 通过 157/157（import 52 + database 49 + dangerous 56）。
-  - `apps/server npm run smoke:admin-summary` 通过，输出 JSON summary（allOk: true）。
-  - `apps/server/scripts/README-admin-smoke.md` 已新增，说明每条 smoke 的前置假设与 workspace 行为。
-- X-P3-DB-MGMT-4 总体验收（2026-07-04）：
-  - `apps/server npm run typecheck` 通过。
-  - `apps/server npm run schema:check` 通过（`ws_demo` valid，1 applied / 0 pending / 0 failed）。
-  - `apps/server npm run smoke:admin-summary` 通过，`allOk: true`。
-  - empty suite：database 43/43，import dry-run 32/32，dangerous 56/56。
-  - imported suite：import 52/52，database imported 49/49，dangerous 56/56。
-- A-P4-TOOLS-1 验证（2026-07-04）：
-  - `apps/server npm run typecheck` 通过。
-  - `apps/server npm run smoke:tools` 通过 27/27（工具列表、定义、dry-run、执行、运行查询、artifact 列表、JSON/Markdown artifact 读取、非法 toolId 404、路径遍历 400、运行列表、跨 workspace 不能读取 run / artifact）。
-  - `apps/server npm run smoke -- --json` 通过 24/24，无回归。
-- A-P4-TOOLS-4 验证（2026-07-04，总控复核后）：
-  - `apps/server npm run typecheck` 通过。
-  - `apps/server npm run smoke:tools-import` 通过 33/33。
-  - `apps/server npm run smoke:tools` 通过 27/27。
-- X-P4-TOOLS-6 总体验收（2026-07-04）：
-  - `apps/server npm run typecheck` 通过。
-  - `apps/server npm run smoke:tools` 通过 27/27。
-  - `apps/server npm run smoke:tools-import` 通过 33/33；临时 workspace `ws_tools_import_1783176743243` 覆盖临时 workspace 初始化、data_source seed、样例包 staging、profile-extract / business-aggregate dry-run、跨 workspace 拦截、错误 confirmText、无 admin token、正式导入、Data Management 版本 / 质量报告 / batch 查询。
-  - `apps/web npm run lint`、`npm run build`、`npm run smoke` 通过。
-  - `VITE_USE_MOCK=false npx playwright test e2e/smoke-real.spec.ts -g "Tools Workbench"` 通过。
-- A-P5-PORTRAIT-5 总控复核（2026-07-05）：
-  - `apps/server npm run typecheck` 通过。
-  - `apps/model npm run typecheck` 通过。
-  - `apps/model npm run single-product-portrait-contract-test` 通过。
-  - `apps/server npm run smoke:single-product-portrait` 通过 39/39，覆盖成功、未知 SKU、异常 CSV、workspace 隔离、缺参、非法 packageId、`sourceFiles` 和多 SKU 过滤。
-  - `apps/server npm run smoke:tools` 通过 27/27。
-  - 本地 localhost smoke 在沙箱内触发 `fetch EPERM`，升级权限后通过。
-- A-P6-CHANNEL-3 返工验证（2026-07-06）：
-  - `apps/server npm run typecheck` 通过。
-  - `apps/server npm run schema:check` 通过（`ws_demo` valid，2 applied / 0 pending / 0 failed）。
-  - `apps/server npm run smoke:channel-object-library` dry-run mode 通过 19/19，覆盖 blocking package dry-run 与正式 import 400 拒绝。
-  - `PLS_ADMIN_SMOKE_MODE=imported npm run smoke:channel-object-library` 通过 46/46，使用独立临时 workspace，未清理或重建 `ws_demo`。
-  - `apps/server npm run smoke:admin-empty` 全通过 131/131。
-  - `apps/server npm run smoke:admin-imported` 全通过 157/157。
-- A-P7-INGEST-2 验证（2026-07-06，按 review 返工后）：
-  - `apps/server npm run typecheck` 通过。
-  - `apps/server npm run schema:check` 通过（`ws_demo` valid，2 applied / 0 pending / 0 failed）。
-  - `apps/server npm run smoke:csv-ingestion` 通过 46/46，使用独立临时 workspace，覆盖 dry-run 成功、缺 header、类型错误、不支持表、admin token/Idempotency-Key/confirmText 校验、正式导入、audit/job 读回、workspace 隔离、幂等重放与冲突、stagedFileId 路径穿越（含 URL 编码）、staged 文件篡改、`staging.json` workspaceId/targetTable 篡改、append-only 重复导入主键冲突阻塞。
-  - `apps/server npm run smoke:admin-summary` 通过，空库 131/131 + 导入后 157/157，无回归。
-  - `apps/server npm run smoke:tools` 通过 27/27，无回归。
-  - `apps/server npm run smoke:channel-object-library` 通过 19/19（dry-run），无回归。
-- ws_demo 当前状态：A-P6-CHANNEL-3 开发与 smoke 过程中被直接写入了 object-library 测试数据（15 行）。`smoke:admin-empty` / `smoke:admin-imported` 使用独立临时 workspace，不污染 `ws_demo`；是否 rebuild `ws_demo` 需用户确认。
+- 本轮已通过：`cd apps/server && npm run typecheck`。
+- 本轮已通过：`cd apps/model && npm run simulated-market-contract-test`，输出 `ok: true` / `failures: []`。
+- 本轮已通过：`cd apps/server && npm run smoke:simulated-market`，77/77；默认 fake LLM 成功路径、禁用 `pi-agent` fallback 路径、自定义 `SIMULATED_MARKET_MODEL`、非法 timeout、可选 live pi-agent phase skip、subagent CRUD 与渠道对象派生均通过。本次 session-end 复跑生成临时 workspace `ws_sm_simulated_market_1783780681422`。
+- 本轮已通过：`git diff --check`（在进入 session-end 前已执行）；本次 session-end 按技能规则未再执行 git 操作。
+- 真实接口曾手动验证：`POST /api/v0/simulated-market/runs` 返回 `provider=minimax`、`modelVersion=minimax-m3`、`qualityFlags=[]`，证明新报告可由 LLM 生成；旧的 `deterministic_fallback` 报告不会自动迁移。
 
----
+关键决策：
+
+- PLS 业务代码不得直接调用第三方模型 HTTP API；新增 LLM 功能必须先查真实 `pi-agent` CLI / SDK 调用方式、输出事件格式、超时与错误语义，再写 adapter、contract test 和 smoke。
+- 模拟市场默认真实模型标识为 `SIMULATED_MARKET_PI_MODEL=minimax-cn/MiniMax-M3`；`SIMULATED_MARKET_MODEL=minimax-m3` 只作为写入 `SimulationRun.modelVersion` 的业务口径。
+- fallback 仍允许存在，但必须显式标记 `deterministic_fallback_used` / `llm_unavailable_fallback_used`，不得冒充 LLM agent 输出；旧报告上的 fallback 标记代表历史运行，不代表当前 provider 状态。
+- `schema:check` 默认验证 `ws_demo`，因此新增表类任务可在 controller 明确批准时提交 **schema-only** 的 `data/workspaces/ws_demo/db.sqlite` migration 状态；这不等于允许提交 smoke 产生的 `simulation_run` / `idempotency_key` / `audit_event` / 业务数据行。
+- 清理被跟踪 fixture DB（如 `ws_demo`）时必须先对比 `HEAD` 基线，保留基线 demo 行；推荐流程是恢复 `HEAD` 后重新运行 migration，再验证关键表计数，而不是凭 smoke-style ID 手删整表行。
+- 前端 Playwright 运行产物 `apps/web/playwright-report/` / `test-results/` 不属于任务交付物；T0026 曾因 `playwright-report/index.html` dirty 被打回，移除生成产物 diff 后才 approved。
+- 模拟市场 subagent 从渠道画像派生时，`profile.preferences` / `decisionFactors` 只是 `AudienceProfile.tags` 的保守标签摘要，必须展示为 Derived Result，不得声称真实个人偏好或真实用户反馈。
+
+开放问题 / 风险：
+
+- 可选 live LLM smoke 默认跳过；需要设置 `RUN_SIMULATED_MARKET_LIVE_LLM=1` 且本机 `pi-agent` 可用时才会发起真实模型调用。
+- `pi-agent` 输出事件格式若升级，`extractPiMessageText()` / `runPiPrompt()` 需要按真实事件结构同步调整。
+- `from-channel-object` 当前派生策略是保守摘要（top preferences + all tag ids as decision factors），后续如需更强 persona 文案应另开模型/产品任务。
+- 管理页的渠道对象下拉会列出 ChannelEntity；对象无 AudienceProfile 时依赖后端/mock 错误提示，不自动编造画像。
+- 本轮 smoke 新增多个 `data/workspaces/ws_sm_simulated_market_*` 临时目录，符合任务“不清理临时 workspace”要求，但仓库整理/清理策略仍待后续处理。
+- worktree 仍有多项未提交变更、Task Bus 文件与临时 workspace 目录；代码/任务均已通过 review，但尚未 commit/push。
 
 ## 应用域原则
 

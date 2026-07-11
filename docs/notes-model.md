@@ -2,32 +2,23 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-10（三大人群统一输入总和容差）
+最近更新：2026-07-11（模拟市场 LLM / subagent contract 收口）
 
 进度：
 
-- 新增 `apps/model/src/three-audience-share.ts`：实现对象无关的 `estimateSemirThreeAudienceShares()`，支持抖音、天猫、京东、线下、唯品会、视频号、拼多多七类渠道。
-- 统一算法严格校验 `channel/system` 一一匹配、重复标签、share 越界、输入总和、非法 prior；未知标签保留在 `unmappedSegments`，不做跨渠道 fallback。
-- 已实现契约明确的标准化/合并规则：抖音 `Z世代 -> genz`；视频号 `小镇中青年 -> 小镇中老年`、`精致妈妈/精致中产 -> 资深中产`；拼多多 `都市白领/都市Z世代/都市中产/小镇银发/学生/小资中年` 合并到抖音八大体系。
-- 京东统一算法直接消费依赖任务冻结的 `JD_RECOMMENDED_CALIBRATED_MATRIX` 和 `semir_three_audience_v2.1.0-jd-calibrated`，不再使用 v2.0.2 partial-coverage 矩阵。
-- 统一入口对总和在契约容差内的轻微溢出执行归一化，避免 `expertPrior` 软回填时出现负 `uncovered` 或负 share；七渠道统一接受来源四舍五入 `0.001 + 1e-12` 容差并归一化，四份 JD portable fixture 均可直接通过统一入口。
-- 新增 `apps/model/src/three-audience-share-contract-test.ts` 和 npm script `three-audience-share-contract-test`，覆盖七渠道矩阵单元、天猫确认样例、京东校准矩阵、拼多多/视频号合并、默认归一化、显式 prior 软回填、unmapped/quality flags 和非法输入。
-- 新增只读入口 `isSemirThreeAudienceNativeLabel(channel, label)`：复用现有渠道矩阵和 `normalizeLabel` 别名规则，用于本地文件接入在 share/重复/总和校验前筛除非原生人群标签；不解析 share、不产生估算结果、不改变算法版本或估算语义。
-- 新增只读入口 `threeAudienceInputTotalTolerance(channel)`：前端可复用同一容差入口，避免复制算法阈值；算法校验和归一化也使用该入口。
-- `ThreeAudienceInputError` 使用显式 `readonly code` 属性赋值，不能改回 TypeScript parameter property；`apps/web` 以 `erasableSyntaxOnly: true` 直接复用该模型源码，parameter property 会使其构建失败。
+- **模拟市场模型契约已完成并经 Task Bus 审核**：T0014 / T0020 / T0024 均为 `approved`，模型层覆盖基础模拟、LLM agent 输出结构、subagent / channel audience profile 来源类型与 deterministic fallback。
+- `apps/model/src/simulated-market.ts` 负责 agent template、prompt/response 结构、评分范围、quality flags、fallback 装配和 pi-agent 输出 JSON 抽取；带 `<think>` / 前置文本的 MiniMax-M3 输出必须先抽取结构化 JSON，不能直接按纯 JSON 解析。
+- 模拟结果仍是 Derived Result；`provider=minimax` / `modelVersion=minimax-m3` 只在上游真实 LLM 成功时记录，fallback 必须显式标记 `deterministic_fallback_used` / `llm_unavailable_fallback_used`。
+- Subagent 画像来源新增 `saved_subagent` 与 `channel_audience_profile`，渠道画像派生只保守摘要 `AudienceProfile.tags`，不得声称真实个人偏好或真实用户反馈。
 
 本次验证：
 
-- `apps/model npm run typecheck` 通过。
-- `apps/model npm run jd-three-audience-calibration-contract-test` 通过，`ok: true` / `failures: []`。
-- `apps/model npm run three-audience-share-contract-test` 通过，`ok: true` / `failures: []`；包含合法 `1 + 1e-3 + 1e-12` 溢出 + prior、略超容差显式失败、容差入口与估算入口一致性、四份 JD portable fixture、`partial_coverage` 阈值回归、七渠道原生标签识别、无关标签拒绝，以及抖音/视频号/拼多多已冻结别名识别。
+- `cd apps/model && npm run simulated-market-contract-test` 通过，输出 `ok: true` / `failures: []`。
 
 阻塞/开放：
 
-- 当前只实现对象无关算法，不定义渠道、店铺、账号画像结构，也不接入 Server / Frontend。
-- 未实现趋势、行为强度、动态误差区间或置信度模型；行为层信号仍不得回写 A/B/C 份额。
-- 专家先验只在调用方显式传入合法 prior 时软回填，不提供默认 prior。
-- 七渠道统一输入总和容差仅用于吸收来源表四舍五入误差，不代表允许任意超额分布；超过 `1 + 1e-3 + 1e-12` 仍显式失败。
+- 当前 contract test 覆盖结构、fallback 和解析健壮性；真实 LLM live 行为由后端 `pi-agent` adapter 与 smoke 控制。
+- 若 `pi-agent` 输出事件格式升级，模型层 JSON 抽取和后端 adapter 都需要同步回归。
 
 ### 上一轮状态（京东十大靶群三大人群矩阵校准）
 

@@ -152,6 +152,63 @@ function main() {
   assert(manualRun.result!.agentFeedback.length === 1, "Expected one manual agent feedback", failures, "manual_agent_feedback_count");
   assert(manualRun.qualityFlags.includes(DEFAULT_QUALITY_FLAGS.deterministicFallbackUsed), "Missing fallback flag for manual agent", failures, "manual_agent_fallback_flag");
 
+  // Case: saved subagent passes validation and joins deterministic fallback run
+  const savedSubagent: TargetUserAgent = {
+    agentId: "agent-sub-001",
+    name: "夏季通勤高潜人群",
+    sourceType: "saved_subagent",
+    sourceRef: { subagentId: "sub_001", profileVersion: "v1" },
+    profile: {
+      demographics: ["25-34 岁一线城市白领"],
+      preferences: ["通勤", "透气", "简约"],
+      concerns: ["闷热", "打理麻烦"],
+      decisionFactors: ["面料舒适度", "版型合体"],
+    },
+  };
+  const savedSubagentInput: SimulatedMarketInput = {
+    ...validInput,
+    targetAgentSet: [savedSubagent],
+  };
+  const savedSubagentRun = runDeterministicSimulatedMarket(savedSubagentInput, { runId: "run-saved-subagent" });
+  assert(savedSubagentRun.status === "succeeded", `Expected saved_subagent run to succeed, got ${savedSubagentRun.status}`, failures, "saved_subagent_run_status");
+  assert(savedSubagentRun.result!.agentFeedback.length === 1, "Expected one saved subagent feedback", failures, "saved_subagent_feedback_count");
+  assert(savedSubagentRun.result!.agentFeedback[0].agentId === "agent-sub-001", "Saved subagent feedback must map to correct agentId", failures, "saved_subagent_agent_id");
+
+  // Case: channel audience profile agent passes validation and joins deterministic fallback run
+  const channelProfileAgent: TargetUserAgent = {
+    agentId: "agent-channel-001",
+    name: "抖音账号高活粉丝画像",
+    sourceType: "channel_audience_profile",
+    sourceRef: {
+      canonicalObjectKey: "douyin:account:mock_account_douyin_style",
+      profileId: "profile_001",
+      dataVersion: "v1_20260701",
+      profileVersion: "v1",
+    },
+    profile: {
+      demographics: ["18-30 岁兴趣电商活跃用户"],
+      preferences: ["直播互动", "新品首发", "内容种草"],
+      concerns: ["发货慢", "与主播描述不符"],
+      decisionFactors: ["主播信任", "价格优势", "场景共鸣"],
+    },
+  };
+  const channelProfileInput: SimulatedMarketInput = {
+    ...validInput,
+    targetAgentSet: [channelProfileAgent],
+  };
+  const channelProfileRun = runDeterministicSimulatedMarket(channelProfileInput, { runId: "run-channel-profile" });
+  assert(channelProfileRun.status === "succeeded", `Expected channel_audience_profile run to succeed, got ${channelProfileRun.status}`, failures, "channel_profile_run_status");
+  assert(channelProfileRun.result!.agentFeedback.length === 1, "Expected one channel profile agent feedback", failures, "channel_profile_feedback_count");
+  assert(channelProfileRun.qualityFlags.includes(DEFAULT_QUALITY_FLAGS.deterministicFallbackUsed), "Missing fallback flag for channel profile agent", failures, "channel_profile_fallback_flag");
+
+  // Case: invalid agent sourceType still rejected
+  assertThrows(
+    () => validateSimulatedMarketInput({ ...validInput, targetAgentSet: [{ agentId: "agent-bad", name: "Bad Source", sourceType: "unknown_source" as never, profile: {} }] }),
+    "Expected error for unknown agent sourceType",
+    failures,
+    "validate_unknown_agent_source_type",
+  );
+
   // Case: LLM prompt includes all target agents and strategy text
   const prompt = buildSimulatedMarketPrompt(validInput);
   assert(prompt.systemPrompt.length > 0, "Expected non-empty system prompt", failures, "llm_prompt_system_non_empty");
@@ -192,6 +249,12 @@ function main() {
   const fencedRun = runLlmSimulatedMarket(validInput, fencedResponse, { runId: "run-llm-fenced" });
   assert(fencedRun.status === "succeeded", "Expected fenced response to parse successfully", failures, "llm_fenced_response_success");
   assert(fencedRun.result!.agentFeedback.length === validInput.targetAgentSet.length, "Fenced response must cover all agents", failures, "llm_fenced_agent_count");
+
+  // Case: LLM response with thinking preamble before JSON parses
+  const preambleResponse = `<think>reasoning omitted</think>\n\n${fakeResponse}`;
+  const preambleRun = runLlmSimulatedMarket(validInput, preambleResponse, { runId: "run-llm-preamble" });
+  assert(preambleRun.status === "succeeded", "Expected preamble response to parse successfully", failures, "llm_preamble_response_success");
+  assert(preambleRun.result!.agentFeedback.length === validInput.targetAgentSet.length, "Preamble response must cover all agents", failures, "llm_preamble_agent_count");
 
   // Case: invalid JSON fails with explicit error
   assertThrows(

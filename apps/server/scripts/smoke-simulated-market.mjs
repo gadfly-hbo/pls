@@ -8,25 +8,118 @@
 // - All simulation_run rows are written to the temporary workspace(s) only.
 // - The server must expose /admin/database/rebuild with the standard admin token.
 //
+// - Phase 6: Subagent CRUD, workspace isolation, derive from channel object,
+//   run with saved subagent. Requires temporary workspace with seeded channel object.
+//
 // Phases:
 // - Phase 1: SIMULATED_MARKET_FAKE_LLM=true -> expects provider=minimax success with modelVersion=minimax-m3.
-// - Phase 2: SIMULATED_MARKET_FAKE_LLM=false with no MINIMAX_API_KEY -> expects
+// - Phase 2: SIMULATED_MARKET_FAKE_LLM=false with SIMULATED_MARKET_DISABLE_PI_LLM=true -> expects
 //   deterministic fallback with both deterministic_fallback_used and
 //   llm_unavailable_fallback_used quality flags.
 // - Phase 3: SIMULATED_MARKET_FAKE_LLM=true with SIMULATED_MARKET_MODEL overridden -> expects
 //   run.modelVersion to reflect the configured model name.
 // - Phase 4: SIMULATED_MARKET_LLM_TIMEOUT_MS=abc123 -> expects server to handle invalid
 //   timeout gracefully (fallback to default) and still serve requests.
-// - Phase 5 (optional): RUN_SIMULATED_MARKET_LIVE_LLM=1 + MINIMAX_API_KEY -> calls real Minimax
+// - Phase 5 (optional): RUN_SIMULATED_MARKET_LIVE_LLM=1 -> calls real LLM through pi-agent
 //   and expects provider=minimax. Skipped unless explicitly enabled.
 
 import { spawn } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import http from "node:http";
+import { DatabaseSync } from "node:sqlite";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVER_DIR = resolve(__dirname, "..");
+const DATA_DIR = resolve(__dirname, "../../../data");
+
+function openDb(ws) {
+  return new DatabaseSync(resolve(DATA_DIR, "workspaces", ws, "db.sqlite"));
+}
+
+function seedChannelObjectAndAudienceProfile(ws) {
+  const canonicalObjectKey = "douyin:account:smoke_test_account";
+  const profileId = "profile_smoke_001";
+  const dataVersion = "v1_smoke";
+  const sourceBatchId = "batch_smoke_001";
+  const generatedAt = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+  const db = openDb(ws);
+  try {
+    db.exec("PRAGMA foreign_keys = ON");
+    db.prepare(
+      "INSERT OR IGNORE INTO workspace (workspace_id, name) VALUES (?, ?)"
+    ).run(ws, `Smoke ${ws}`);
+    const targetObject = JSON.stringify({
+      type: "ChannelEntity",
+      entityType: "account",
+      displayName: "Smoke Test Account",
+      platformType: "content_ecommerce",
+      platformName: "抖音",
+      accountKind: "douyin_account",
+    });
+    const entityAttributes = JSON.stringify({
+      accountKind: "douyin_account",
+      contentFormats: ["live_stream", "short_video"],
+      country: "中国",
+      province: "浙江",
+      city: "杭州",
+    });
+    db.prepare(
+      `INSERT INTO channel_object (workspace_id, object_type, source_stable_key, key_source, canonical_object_key,
+        object_version_id, data_version, source_batch_id, generated_at, time_window, display_name, platform_name,
+        platform_type, target_object, entity_attributes, source, source_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      ws,
+      "account",
+      "smoke_test_account",
+      "smoke",
+      canonicalObjectKey,
+      "ov_smoke_001",
+      dataVersion,
+      sourceBatchId,
+      generatedAt,
+      "2026-05-01/2026-06-30",
+      "Smoke Test Account",
+      "抖音",
+      "content_ecommerce",
+      targetObject,
+      entityAttributes,
+      "smoke_test",
+      "mock"
+    );
+    db.prepare(
+      `INSERT INTO audience_profile (workspace_id, profile_id, canonical_object_key, profile_stage, source,
+        source_batch_id, data_version, generated_at, time_window, sample_size, confidence, tags, unmapped_fields,
+        quality_flags, raw)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      ws,
+      profileId,
+      canonicalObjectKey,
+      "channel_audience",
+      "smoke_test",
+      sourceBatchId,
+      dataVersion,
+      generatedAt,
+      "2026-05-01/2026-06-30",
+      1000,
+      0.72,
+      JSON.stringify([
+        { tagId: "demographic.age_25_34", score: 0.6 },
+        { tagId: "interest.fashion", score: 0.55 },
+        { tagId: "interest.commute", score: 0.45 },
+      ]),
+      "[]",
+      "[]",
+      "{}"
+    );
+    return { canonicalObjectKey, profileId };
+  } finally {
+    db.close();
+  }
+}
+
 
 const TOKEN = process.env.PLS_API_TOKEN ?? "pls-p0-demo-token";
 const ADMIN_TOKEN = process.env.PLS_ADMIN_TOKEN ?? "pls-admin-token";
@@ -190,14 +283,19 @@ async function runLlmSuccessPhase() {
     const templates = await request("GET", "/simulated-market/agent-templates");
     assert("agent-templates returns 200", templates.status === 200, templates.body);
     assert(
-      "agent-templates returns 3 default agents",
+      "agent-templates returns 3 default templates",
       Array.isArray(templates.body?.data?.agents) && templates.body.data.agents.length === 3,
+      templates.body
+    );
+    assert(
+      "agent-templates returns subagents array",
+      Array.isArray(templates.body?.data?.subagents),
       templates.body
     );
 
     const firstAgent = templates.body?.data?.agents?.[0];
     assert(
-      "agent has required fields",
+      "template has required fields",
       typeof firstAgent?.agentId === "string" &&
         typeof firstAgent?.name === "string" &&
         firstAgent?.sourceType === "three_audience_segment",
@@ -310,10 +408,10 @@ async function runLlmSuccessPhase() {
 
 async function runFallbackPhase() {
   console.log("\n>>> Phase 2: provider missing / failure fallback path");
-  // Ensure no real key is configured and fake LLM is disabled so the server falls back.
+  // Disable pi-agent and fake LLM so the server falls back deterministically.
   const server = await startServer({
     SIMULATED_MARKET_FAKE_LLM: "false",
-    MINIMAX_API_KEY: "",
+    SIMULATED_MARKET_DISABLE_PI_LLM: "true",
   });
 
   try {
@@ -428,28 +526,22 @@ async function runInvalidTimeoutPhase() {
   }
 }
 
-async function runLiveMinimaxPhase() {
+async function runLivePiAgentPhase() {
   const liveEnabled = process.env.RUN_SIMULATED_MARKET_LIVE_LLM === "1";
-  const hasKey = Boolean(process.env.MINIMAX_API_KEY);
 
   if (!liveEnabled) {
-    console.log("\n>>> Phase 5: live Minimax smoke skipped (set RUN_SIMULATED_MARKET_LIVE_LLM=1 + MINIMAX_API_KEY to enable)");
+    console.log("\n>>> Phase 5: live pi-agent smoke skipped (set RUN_SIMULATED_MARKET_LIVE_LLM=1 to enable)");
     return;
   }
 
-  if (!hasKey) {
-    console.log("\n>>> Phase 5: live Minimax smoke skipped (MINIMAX_API_KEY not configured)");
-    return;
-  }
-
-  console.log("\n>>> Phase 5: live Minimax smoke (real network call)");
+  console.log("\n>>> Phase 5: live pi-agent smoke (real LLM call)");
   const server = await startServer({
     SIMULATED_MARKET_FAKE_LLM: "false",
   });
 
   try {
     const templates = await request("GET", "/simulated-market/agent-templates");
-    assert("live minimax agent-templates returns 200", templates.status === 200, templates.body);
+    assert("live pi-agent agent-templates returns 200", templates.status === 200, templates.body);
 
     const agents = templates.body?.data?.agents?.slice(0, 1);
     const validBody = buildValidBody(agents);
@@ -457,15 +549,210 @@ async function runLiveMinimaxPhase() {
     const liveRun = await request("POST", "/simulated-market/runs", {
       body: validBody,
     });
-    assert("live minimax create run returns 200", liveRun.status === 200, liveRun.body);
+    assert("live pi-agent create run returns 200", liveRun.status === 200, liveRun.body);
     const run = liveRun.body?.data;
-    assert("live minimax run status is succeeded", run?.status === "succeeded", run);
-    assert("live minimax run provider is minimax", run?.provider === "minimax", run);
+    assert("live pi-agent run status is succeeded", run?.status === "succeeded", run);
+    assert("live pi-agent run provider is minimax", run?.provider === "minimax", run);
     assert(
-      "live minimax run qualityFlags do not include fallback flag",
+      "live pi-agent run qualityFlags do not include fallback flag",
       Array.isArray(run?.qualityFlags) && !run.qualityFlags.includes("deterministic_fallback_used"),
       run
     );
+  } finally {
+    await stopServer(server.child);
+  }
+}
+
+async function runSubagentPhase() {
+  console.log("\n>>> Phase 6: subagent CRUD, derive from channel object, run with subagent");
+  const server = await startServer({ SIMULATED_MARKET_FAKE_LLM: "true" });
+
+  try {
+    await setupWorkspaces();
+
+    const subagentBody = {
+      name: "夏季高潜通勤人群",
+      enabled: true,
+      persona: "保守摘要：偏好通勤、简约、透气面料",
+      profile: {
+        demographics: ["25-34 岁一线城市白领"],
+        preferences: ["通勤", "透气", "简约"],
+        concerns: ["闷热", "打理麻烦"],
+        decisionFactors: ["面料舒适度", "版型合体"],
+      },
+      sourceType: "saved_subagent",
+      weight: 1.2,
+    };
+
+    const idemKey = `smoke-subagent-${Date.now()}`;
+    const createRes = await request("POST", "/simulated-market/subagents", {
+      body: subagentBody,
+      idempotencyKey: idemKey,
+    });
+    assert("create subagent returns 200", createRes.status === 200, createRes.body);
+    const created = createRes.body?.data;
+    assert("created subagent has agentId", typeof created?.agentId === "string", created);
+    assert("created subagent name matches", created?.name === subagentBody.name, created);
+    assert("created subagent enabled", created?.enabled === true, created);
+    assert("created subagent sourceType", created?.sourceType === "saved_subagent", created);
+
+    // idempotency replay
+    const replayRes = await request("POST", "/simulated-market/subagents", {
+      body: subagentBody,
+      idempotencyKey: idemKey,
+    });
+    assert("subagent idempotency replay returns 200", replayRes.status === 200, replayRes.body);
+    assert(
+      "subagent idempotency replay returns same agentId",
+      replayRes.body?.data?.agentId === created.agentId,
+      replayRes.body
+    );
+    assert(
+      "subagent idempotency replay header present",
+      replayRes.headers.get("Idempotency-Replay") === "true",
+      replayRes.headers
+    );
+
+    // list subagents
+    const listRes = await request("GET", "/simulated-market/subagents");
+    assert("list subagents returns 200", listRes.status === 200, listRes.body);
+    assert(
+      "list subagents contains created subagent",
+      Array.isArray(listRes.body?.data?.items) &&
+        listRes.body.data.items.some((item) => item.agentId === created.agentId),
+      listRes.body
+    );
+
+    // enabled filter
+    const enabledRes = await request("GET", "/simulated-market/subagents?enabled=true");
+    assert(
+      "enabled filter returns created subagent",
+      Array.isArray(enabledRes.body?.data?.items) &&
+        enabledRes.body.data.items.some((item) => item.agentId === created.agentId),
+      enabledRes.body
+    );
+    const disabledRes = await request("GET", "/simulated-market/subagents?enabled=false");
+    assert(
+      "disabled filter excludes created subagent",
+      Array.isArray(disabledRes.body?.data?.items) &&
+        !disabledRes.body.data.items.some((item) => item.agentId === created.agentId),
+      disabledRes.body
+    );
+
+    // update subagent
+    const updateIdemKey = `smoke-subagent-update-${Date.now()}`;
+    const updateRes = await request("PATCH", `/simulated-market/subagents/${created.agentId}`, {
+      body: { name: "夏季高潜通勤人群（已更新）", enabled: false },
+      idempotencyKey: updateIdemKey,
+    });
+    assert("update subagent returns 200", updateRes.status === 200, updateRes.body);
+    assert("update subagent name changed", updateRes.body?.data?.name === "夏季高潜通勤人群（已更新）", updateRes.body);
+    assert("update subagent disabled", updateRes.body?.data?.enabled === false, updateRes.body);
+
+    // update idempotency replay
+    const updateReplayRes = await request("PATCH", `/simulated-market/subagents/${created.agentId}`, {
+      body: { name: "夏季高潜通勤人群（已更新）", enabled: false },
+      idempotencyKey: updateIdemKey,
+    });
+    assert("update idempotency replay returns 200", updateReplayRes.status === 200, updateReplayRes.body);
+    assert(
+      "update idempotency replay header present",
+      updateReplayRes.headers.get("Idempotency-Replay") === "true",
+      updateReplayRes.headers
+    );
+
+    // agent-templates now excludes disabled subagent
+    const templatesAfterDisable = await request("GET", "/simulated-market/agent-templates");
+    assert(
+      "agent-templates excludes disabled subagent",
+      Array.isArray(templatesAfterDisable.body?.data?.subagents) &&
+        !templatesAfterDisable.body.data.subagents.some((item) => item.agentId === created.agentId),
+      templatesAfterDisable.body
+    );
+
+    // re-enable and run with subagent
+    await request("PATCH", `/simulated-market/subagents/${created.agentId}`, {
+      body: { enabled: true },
+    });
+    const runWithSubagent = await request("POST", "/simulated-market/runs", {
+      body: {
+        sourceType: "manual_strategy",
+        strategyText:
+          "本季主打凉感面料通勤衬衫，面向都市人群，定价中端，通过京东渠道配合新品折扣活动主推。",
+        marketContext: { channelEntityId: "jd", contextText: "新品折扣活动" },
+        targetAgentSet: [
+          {
+            agentId: created.agentId,
+            name: created.name,
+            sourceType: "saved_subagent",
+            sourceRef: { subagentId: created.agentId },
+            profile: subagentBody.profile,
+            weight: 1.2,
+          },
+        ],
+      },
+    });
+    assert("run with saved subagent returns 200", runWithSubagent.status === 200, runWithSubagent.body);
+    assert(
+      "run with saved subagent has agent feedback",
+      Array.isArray(runWithSubagent.body?.data?.result?.agentFeedback) &&
+        runWithSubagent.body.data.result.agentFeedback.length === 1,
+      runWithSubagent.body
+    );
+
+    // derive from channel object
+    const { canonicalObjectKey } = seedChannelObjectAndAudienceProfile(WS_MAIN);
+    const derivedRes = await request("POST", "/simulated-market/subagents/from-channel-object", {
+      body: { canonicalObjectKey, name: "派生受众画像" },
+      idempotencyKey: `smoke-derived-${Date.now()}`,
+    });
+    assert("derive from channel object returns 200", derivedRes.status === 200, derivedRes.body);
+    const derived = derivedRes.body?.data;
+    assert("derived subagent has channel_audience_profile sourceType", derived?.sourceType === "channel_audience_profile", derived);
+    assert("derived subagent has canonicalObjectKey", derived?.sourceRef?.canonicalObjectKey === canonicalObjectKey, derived);
+    assert("derived subagent has profileId", typeof derived?.sourceRef?.profileId === "string", derived);
+    assert(
+      "derived profile contains conservative tag summaries",
+      Array.isArray(derived?.profile?.decisionFactors) && derived.profile.decisionFactors.length > 0,
+      derived
+    );
+
+    // missing audience profile
+    const missingRes = await request("POST", "/simulated-market/subagents/from-channel-object", {
+      body: { canonicalObjectKey: "douyin:account:nonexistent" },
+    });
+    assert("missing channel object returns 422", missingRes.status === 422, missingRes.body);
+
+    // workspace isolation
+    const otherList = await request("GET", "/simulated-market/subagents", { workspace: WS_OTHER });
+    assert(
+      "subagent workspace isolation",
+      Array.isArray(otherList.body?.data?.items) &&
+        !otherList.body.data.items.some((item) => item.agentId === created.agentId),
+      otherList.body
+    );
+
+    // delete subagent
+    const deleteIdemKey = `smoke-subagent-delete-${Date.now()}`;
+    const deleteRes = await request("DELETE", `/simulated-market/subagents/${created.agentId}`, {
+      idempotencyKey: deleteIdemKey,
+    });
+    assert("delete subagent returns 200", deleteRes.status === 200, deleteRes.body);
+    assert("delete subagent returns deleted true", deleteRes.body?.data?.deleted === true, deleteRes.body);
+
+    // delete idempotency replay
+    const deleteReplayRes = await request("DELETE", `/simulated-market/subagents/${created.agentId}`, {
+      idempotencyKey: deleteIdemKey,
+    });
+    assert("delete idempotency replay returns 200", deleteReplayRes.status === 200, deleteReplayRes.body);
+    assert(
+      "delete idempotency replay header present",
+      deleteReplayRes.headers.get("Idempotency-Replay") === "true",
+      deleteReplayRes.headers
+    );
+
+    const afterDelete = await request("GET", `/simulated-market/subagents/${created.agentId}`);
+    assert("subagent not found after delete", afterDelete.status === 404, afterDelete.body);
   } finally {
     await stopServer(server.child);
   }
@@ -477,14 +764,15 @@ async function main() {
     `Precondition: this script creates isolated temporary workspaces via /admin/database/rebuild and does not touch ws_demo.`
   );
   console.log(
-    `Phase 1 uses SIMULATED_MARKET_FAKE_LLM=true; Phase 2 uses no fake LLM and no MINIMAX_API_KEY; Phase 3 overrides SIMULATED_MARKET_MODEL; Phase 4 uses invalid SIMULATED_MARKET_LLM_TIMEOUT_MS; Phase 5 (optional) calls live Minimax when RUN_SIMULATED_MARKET_LIVE_LLM=1.`
+    `Phase 1 uses SIMULATED_MARKET_FAKE_LLM=true; Phase 2 disables pi-agent to verify fallback; Phase 3 overrides SIMULATED_MARKET_MODEL; Phase 4 uses invalid SIMULATED_MARKET_LLM_TIMEOUT_MS; Phase 5 (optional) calls live pi-agent when RUN_SIMULATED_MARKET_LIVE_LLM=1; Phase 6 tests subagent CRUD and channel-object derivation.`
   );
 
   await runLlmSuccessPhase();
   await runFallbackPhase();
   await runCustomModelPhase();
   await runInvalidTimeoutPhase();
-  await runLiveMinimaxPhase();
+  await runLivePiAgentPhase();
+  await runSubagentPhase();
 
   const ok = failed === 0;
   console.log(

@@ -4,6 +4,24 @@ const PLACEHOLDER_CHANNEL_ENTITY = 'account:mock_account_douyin_style';
 const PLACEHOLDER_MARKETING_EVENT = 'marketing_event:mock_event_618';
 const PLACEHOLDER_BUSINESS_SCENARIO = 'business_scenario:new_product_launch:mock_style';
 
+interface TestSubagent {
+  agentId: string;
+  name: string;
+  enabled: boolean;
+  persona: string | null;
+  sourceType: 'saved_subagent' | 'channel_audience_profile';
+  sourceRef: Record<string, string> | null;
+  profile: {
+    demographics?: string[];
+    preferences?: string[];
+    concerns?: string[];
+    decisionFactors?: string[];
+  };
+  weight: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 function setupApiRouteFallbacks(page: Page) {
   return page.route('/api/v0/**', async (route: Route) => {
     const url = new URL(route.request().url());
@@ -34,6 +52,7 @@ function setupApiRouteFallbacks(page: Page) {
                 weight: 1,
               },
             ],
+            subagents: [],
           },
         }),
       });
@@ -96,6 +115,19 @@ function setupApiRouteFallbacks(page: Page) {
             items: [],
             page: { cursor: null, nextCursor: null, pageSize: 20, hasMore: false },
           },
+        }),
+      });
+    }
+
+    if (path === '/api/v0/simulated-market/subagents' && method === 'GET') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 'ok',
+          requestId: 'r-test-subagents',
+          generatedAt: new Date().toISOString(),
+          data: { items: [] },
         }),
       });
     }
@@ -213,6 +245,53 @@ test.describe('Simulated Market Workbench', () => {
     expect(errors).toHaveLength(0);
   });
 
+  test('manages subagents and uses enabled subagent in a simulation in mock mode', async ({ page }) => {
+    test.skip(process.env.VITE_USE_MOCK === 'false', 'This test is intended for mock mode only');
+
+    const errors = collectErrors(page);
+
+    await page.goto('/');
+    await page.locator('button[title="模拟市场"]').first().click();
+    await expect(page.getByText('模拟市场工作台')).toBeVisible();
+
+    await page.getByRole('button', { name: /subagent 管理/ }).click();
+    await expect(page.getByText('subagent 列表')).toBeVisible();
+
+    await page.getByTestId('subagent-name-input').fill('测试年轻通勤 subagent');
+    await page.getByTestId('subagent-persona-input').fill('关注通勤穿搭与直播种草效率');
+    await page.getByTestId('subagent-preferences-input').fill('通勤,直播互动');
+    await page.getByTestId('subagent-concerns-input').fill('难打理');
+    await page.getByTestId('subagent-save-button').click();
+    await expect(page.getByText('测试年轻通勤 subagent')).toBeVisible();
+
+    await page.getByText('测试年轻通勤 subagent').click();
+    await page.getByTestId('subagent-persona-input').fill('关注通勤穿搭、直播互动与质感表达');
+    await page.getByTestId('subagent-save-button').click();
+    await page.getByText('测试年轻通勤 subagent').click();
+    await page.getByRole('button', { name: '停用' }).click();
+
+    await page.locator('.sim-workbench__tabs').getByRole('button', { name: '工作台' }).click();
+    await expect(page.locator('label:has-text("测试年轻通勤 subagent")')).toHaveCount(0);
+
+    await page.getByRole('button', { name: /subagent 管理/ }).click();
+    await page.getByTestId('subagent-channel-select').selectOption('account:douyin_semira_official_live');
+    await page.getByTestId('subagent-from-channel-button').click();
+    await expect(page.getByText('森马官方直播间 subagent')).toBeVisible();
+
+    await page.locator('.sim-workbench__tabs').getByRole('button', { name: '工作台' }).click();
+    await expect(page.locator('label:has-text("森马官方直播间 subagent") input[type="checkbox"]')).toBeVisible();
+    await page.locator('label:has-text("森马官方直播间 subagent") input[type="checkbox"]').check();
+    await page.getByPlaceholder('粘贴商品、渠道、活动、价格、卖点、分货或投放建议等策略文本').fill(
+      '本季主打通勤连衣裙，强调质感面料与直播间上新权益。'
+    );
+    await page.getByRole('button', { name: '运行模拟' }).click();
+
+    await expect(page.getByText('策略压力测试报告')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('subagent_', { exact: false })).toBeVisible();
+
+    expect(errors).toHaveLength(0);
+  });
+
   test('no horizontal overflow on 390px mobile', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await setupApiRouteFallbacks(page);
@@ -231,6 +310,8 @@ test.describe('Simulated Market Workbench', () => {
     test.skip(process.env.VITE_USE_MOCK !== 'false', 'This test requires VITE_USE_MOCK=false');
 
     const requests: { url: string; method: string }[] = [];
+    const now = new Date().toISOString();
+    let subagents: TestSubagent[] = [];
 
     await page.route('/api/v0/**', async (route) => {
       const url = new URL(route.request().url());
@@ -262,8 +343,111 @@ test.describe('Simulated Market Workbench', () => {
                   weight: 1,
                 },
               ],
+              subagents: subagents.filter((item) => item.enabled).map((item) => ({
+                agentId: item.agentId,
+                name: item.name,
+                sourceType: item.sourceType,
+                sourceRef: item.sourceRef,
+                profile: item.profile,
+                weight: item.weight,
+              })),
             },
           }),
+        });
+      }
+
+      if (path === '/api/v0/simulated-market/subagents' && method === 'GET') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 'ok',
+            requestId: 'r-test-subagents-list',
+            generatedAt: now,
+            data: { items: subagents },
+          }),
+        });
+      }
+
+      if (path === '/api/v0/simulated-market/subagents' && method === 'POST') {
+        const body = route.request().postDataJSON() as {
+          name: string;
+          enabled?: boolean;
+          persona?: string;
+          sourceType?: 'saved_subagent' | 'channel_audience_profile';
+          sourceRef?: Record<string, string>;
+          profile: TestSubagent['profile'];
+          weight?: number;
+        };
+        const subagent: TestSubagent = {
+          agentId: `subagent-contract-${subagents.length + 1}`,
+          name: body.name,
+          enabled: body.enabled ?? true,
+          persona: body.persona ?? null,
+          sourceType: body.sourceType ?? 'saved_subagent',
+          sourceRef: body.sourceRef ?? null,
+          profile: body.profile,
+          weight: body.weight ?? 1,
+          createdAt: now,
+          updatedAt: now,
+        };
+        subagents = [...subagents, subagent];
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 'ok', requestId: 'r-test-subagent-create', generatedAt: now, data: subagent }),
+        });
+      }
+
+      if (path.match(/^\/api\/v0\/simulated-market\/subagents\/[^/]+$/) && method === 'PATCH') {
+        const agentId = path.split('/').at(-1) ?? '';
+        const body = route.request().postDataJSON() as Partial<TestSubagent>;
+        const existing = subagents.find((item) => item.agentId === agentId);
+        if (!existing) {
+          return route.fulfill({
+            status: 404,
+            contentType: 'application/json',
+            body: JSON.stringify({ code: 'not_found', error: { message: 'not found' } }),
+          });
+        }
+        const updated: TestSubagent = { ...existing, ...body, updatedAt: now };
+        subagents = subagents.map((item) => item.agentId === agentId ? updated : item);
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 'ok', requestId: 'r-test-subagent-update', generatedAt: now, data: updated }),
+        });
+      }
+
+      if (path.match(/^\/api\/v0\/simulated-market\/subagents\/[^/]+$/) && method === 'DELETE') {
+        const agentId = path.split('/').at(-1) ?? '';
+        subagents = subagents.filter((item) => item.agentId !== agentId);
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 'ok', requestId: 'r-test-subagent-delete', generatedAt: now, data: { agentId, deleted: true } }),
+        });
+      }
+
+      if (path === '/api/v0/simulated-market/subagents/from-channel-object' && method === 'POST') {
+        const body = route.request().postDataJSON() as { canonicalObjectKey: string; name?: string; enabled?: boolean };
+        const subagent: TestSubagent = {
+          agentId: 'subagent-contract-channel',
+          name: body.name ?? 'Contract Channel subagent',
+          enabled: body.enabled ?? true,
+          persona: '渠道画像派生 subagent',
+          sourceType: 'channel_audience_profile',
+          sourceRef: { canonicalObjectKey: body.canonicalObjectKey, profileId: 'aud-contract-1', dataVersion: 'v1' },
+          profile: { preferences: ['demo.age_25_34', 'price.mid'], concerns: [], decisionFactors: ['直播互动'] },
+          weight: 1,
+          createdAt: now,
+          updatedAt: now,
+        };
+        subagents = [...subagents, subagent];
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 'ok', requestId: 'r-test-subagent-channel', generatedAt: now, data: subagent }),
         });
       }
 
@@ -336,7 +520,32 @@ test.describe('Simulated Market Workbench', () => {
             requestId: 'r-test-channel-objects',
             generatedAt: new Date().toISOString(),
             data: {
-              items: [],
+              items: [
+                {
+                  workspaceId: 'ws_demo',
+                  objectType: 'account',
+                  sourceStableKey: 'contract_account',
+                  keySource: 'provided',
+                  canonicalObjectKey: 'account:contract_channel',
+                  objectVersionId: 'ws_demo:account:contract_channel:v1',
+                  dataVersion: 'v1',
+                  sourceBatchId: 'batch_contract',
+                  generatedAt: now,
+                  timeWindow: '2026-05-01/2026-06-30',
+                  displayName: 'Contract Channel',
+                  platformName: '抖音',
+                  platformType: 'content_ecommerce',
+                  entityStatus: 'active',
+                  targetObject: 'ChannelEntity',
+                  entityAttributes: {},
+                  possibleDuplicate: false,
+                  duplicateCandidateKeys: [],
+                  manualReviewStatus: 'confirmed_distinct',
+                  qualityFlags: [],
+                  source: 'e2e',
+                  sourceType: 'mock',
+                },
+              ],
               page: { cursor: null, nextCursor: null, pageSize: 20, hasMore: false },
             },
           }),
@@ -362,6 +571,26 @@ test.describe('Simulated Market Workbench', () => {
     await expect(page.getByText('A / 质感流行派')).toBeVisible({ timeout: 15000 });
     await expect(page.getByText('策略压力测试报告')).toBeVisible();
 
+    page.on('dialog', async (dialog) => dialog.accept());
+    await page.getByRole('button', { name: /subagent 管理/ }).click();
+    await page.getByTestId('subagent-name-input').fill('Contract Saved subagent');
+    await page.getByTestId('subagent-persona-input').fill('contract persona');
+    await page.getByTestId('subagent-preferences-input').fill('contract preference');
+    await page.getByTestId('subagent-save-button').click();
+    await expect(page.getByText('Contract Saved subagent')).toBeVisible();
+    await page.getByText('Contract Saved subagent').click();
+    await page.getByTestId('subagent-concerns-input').fill('contract concern');
+    await page.getByTestId('subagent-save-button').click();
+    await page.getByText('Contract Saved subagent').click();
+    await page.getByRole('button', { name: '删除' }).click();
+    await expect(page.getByText('Contract Saved subagent')).toHaveCount(0);
+    await page.getByTestId('subagent-channel-select').selectOption('account:contract_channel');
+    await page.getByTestId('subagent-from-channel-button').click();
+    await expect(page.getByText('Contract Channel subagent')).toBeVisible();
+
+    await page.locator('.sim-workbench__tabs').getByRole('button', { name: '工作台' }).click();
+    await expect(page.locator('label:has-text("Contract Channel subagent") input[type="checkbox"]')).toBeVisible();
+
     await page.getByPlaceholder('粘贴商品、渠道、活动、价格、卖点、分货或投放建议等策略文本').fill(
       '本季主打修身显瘦通勤连衣裙，采用高支棉面料，主打简约通勤与多场景穿搭。'
     );
@@ -372,6 +601,11 @@ test.describe('Simulated Market Workbench', () => {
 
     // Assert real requests were issued (not short-circuited by USE_MOCK)
     expect(requests.some((r) => r.url.includes('/api/v0/simulated-market/agent-templates') && r.method === 'GET')).toBe(true);
+    expect(requests.some((r) => r.url.includes('/api/v0/simulated-market/subagents') && r.method === 'GET')).toBe(true);
+    expect(requests.some((r) => r.url.endsWith('/api/v0/simulated-market/subagents') && r.method === 'POST')).toBe(true);
+    expect(requests.some((r) => r.url.includes('/api/v0/simulated-market/subagents/subagent-contract-1') && r.method === 'PATCH')).toBe(true);
+    expect(requests.some((r) => r.url.includes('/api/v0/simulated-market/subagents/subagent-contract-1') && r.method === 'DELETE')).toBe(true);
+    expect(requests.some((r) => r.url.includes('/api/v0/simulated-market/subagents/from-channel-object') && r.method === 'POST')).toBe(true);
     expect(requests.some((r) => r.url.includes('/api/v0/simulated-market/runs') && r.method === 'POST')).toBe(true);
   });
 });

@@ -6,7 +6,11 @@ export type SimulatedMarketSourceType =
   | "product_channel_match"
   | "campaign_product_strategy";
 
-export type TargetAgentSourceType = "three_audience_segment" | "manual_persona";
+export type TargetAgentSourceType =
+  | "three_audience_segment"
+  | "manual_persona"
+  | "saved_subagent"
+  | "channel_audience_profile";
 
 export type SegmentCode = "A" | "B" | "C";
 
@@ -36,6 +40,10 @@ export interface TargetUserAgent {
     segmentCode?: SegmentCode;
     segmentName?: SegmentName;
     profileVersion?: string;
+    subagentId?: string;
+    canonicalObjectKey?: string;
+    profileId?: string;
+    dataVersion?: string;
   };
   profile: {
     demographics?: string[];
@@ -189,7 +197,13 @@ export function validateSimulatedMarketInput(input: SimulatedMarketInput): void 
     if (!agent.name) {
       throw new Error("Each target agent must have a name");
     }
-    if (agent.sourceType !== "three_audience_segment" && agent.sourceType !== "manual_persona") {
+    const validAgentSourceTypes: TargetAgentSourceType[] = [
+      "three_audience_segment",
+      "manual_persona",
+      "saved_subagent",
+      "channel_audience_profile",
+    ];
+    if (!validAgentSourceTypes.includes(agent.sourceType)) {
       throw new Error(`Invalid agent sourceType: ${agent.sourceType}`);
     }
   }
@@ -292,6 +306,11 @@ export function buildSimulatedMarketPrompt(input: SimulatedMarketInput): Simulat
       const lines: string[] = [`agentId: ${agent.agentId}`, `name: ${agent.name}`, `sourceType: ${agent.sourceType}`];
       if (agent.sourceRef?.segmentCode) lines.push(`segmentCode: ${agent.sourceRef.segmentCode}`);
       if (agent.sourceRef?.segmentName) lines.push(`segmentName: ${agent.sourceRef.segmentName}`);
+      if (agent.sourceRef?.subagentId) lines.push(`subagentId: ${agent.sourceRef.subagentId}`);
+      if (agent.sourceRef?.canonicalObjectKey) lines.push(`canonicalObjectKey: ${agent.sourceRef.canonicalObjectKey}`);
+      if (agent.sourceRef?.profileId) lines.push(`profileId: ${agent.sourceRef.profileId}`);
+      if (agent.sourceRef?.dataVersion) lines.push(`dataVersion: ${agent.sourceRef.dataVersion}`);
+      if (agent.sourceRef?.profileVersion) lines.push(`profileVersion: ${agent.sourceRef.profileVersion}`);
       if (agent.profile?.demographics?.length) lines.push(`demographics: ${agent.profile.demographics.join("、")}`);
       if (agent.profile?.preferences?.length) lines.push(`preferences: ${agent.profile.preferences.join("、")}`);
       if (agent.profile?.concerns?.length) lines.push(`concerns: ${agent.profile.concerns.join("、")}`);
@@ -419,6 +438,15 @@ function parseJsonFromRaw(raw: string): unknown {
         return JSON.parse(codeFenceMatch[1]);
       } catch {
         throw new Error("LLM response contains invalid JSON inside code fence");
+      }
+    }
+    const objectStart = raw.indexOf("{");
+    const objectEnd = raw.lastIndexOf("}");
+    if (objectStart >= 0 && objectEnd > objectStart) {
+      try {
+        return JSON.parse(raw.slice(objectStart, objectEnd + 1));
+      } catch {
+        throw new Error("LLM response contains invalid JSON object");
       }
     }
     throw new Error("LLM response is not valid JSON");

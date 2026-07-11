@@ -1,4 +1,4 @@
-import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord, DbOverview, DbTableInfo, DbSchemaInfo, DbSampleInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbOperationDryRunResult, DbOperationExecuteResult, CsvQualityReport, CsvIngestionExecuteResponse, ToolRun, SingleProductPortraitPrediction, SingleProductPortraitInput, SingleProductPortraitMetadata, SingleProductPortraitBatchPreview, SingleProductPortraitBatchExecute, ChannelObject, AudienceProfile, ProductFitProfile, ChannelObjectBinding, TargetUserAgent, SimulatedMarketInput, SimulatedMarketResult, SimulatedMarketRunListResponse, SimulationRun, SimulatedMarketSourceType, CreateDecisionInput } from '../types';
+import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord, DbOverview, DbTableInfo, DbSchemaInfo, DbSampleInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbOperationDryRunResult, DbOperationExecuteResult, CsvQualityReport, CsvIngestionExecuteResponse, ToolRun, SingleProductPortraitPrediction, SingleProductPortraitInput, SingleProductPortraitMetadata, SingleProductPortraitBatchPreview, SingleProductPortraitBatchExecute, ChannelObject, AudienceProfile, ProductFitProfile, ChannelObjectBinding, TargetUserAgent, SimulatedMarketInput, SimulatedMarketResult, SimulatedMarketRunListResponse, SimulationRun, SimulatedMarketSourceType, CreateDecisionInput, SimulatedMarketSubagent, CreateSimulatedMarketSubagentInput, UpdateSimulatedMarketSubagentInput, CreateSubagentFromChannelObjectInput } from '../types';
 
 // Feature flag for local mock vs real backend
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
@@ -32,6 +32,7 @@ const db = {
   productFitProfiles: [] as ProductFitProfile[],
   channelObjectBindings: [] as ChannelObjectBinding[],
   simulatedMarketRuns: [] as SimulationRun[],
+  simulatedMarketSubagents: [] as SimulatedMarketSubagent[],
 };
 
 const mockSimulatedMarketAgentTemplates: TargetUserAgent[] = [
@@ -75,6 +76,34 @@ const mockSimulatedMarketAgentTemplates: TargetUserAgent[] = [
     weight: 1,
   },
 ];
+
+function toAgentCandidateFromSubagent(subagent: SimulatedMarketSubagent): TargetUserAgent {
+  return {
+    agentId: subagent.agentId,
+    name: subagent.name,
+    sourceType: subagent.sourceType,
+    sourceRef: subagent.sourceRef,
+    profile: subagent.profile,
+    weight: subagent.weight,
+  };
+}
+
+function buildMockSubagent(input: CreateSimulatedMarketSubagentInput): SimulatedMarketSubagent {
+  const now = new Date().toISOString();
+  const agentId = `subagent_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  return {
+    agentId,
+    name: input.name,
+    enabled: input.enabled ?? true,
+    persona: input.persona ?? null,
+    profile: input.profile,
+    sourceType: input.sourceType ?? 'saved_subagent',
+    sourceRef: input.sourceRef ?? { subagentId: agentId },
+    weight: input.weight ?? 1,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
 
 function buildMockSimulatedMarketResult(input: SimulatedMarketInput, useLlm = false): SimulatedMarketResult {
   const agentFeedback = input.targetAgentSet.map((agent) => {
@@ -2530,9 +2559,110 @@ export const api = {
   // ----------------------------------------------------
   // Simulated Market API
   // ----------------------------------------------------
-  getSimulatedMarketAgentTemplates: async (): Promise<{ code: string; data: { agents: TargetUserAgent[] } }> => {
-    if (!USE_MOCK) return fetchApi<{ agents: TargetUserAgent[] }>('/simulated-market/agent-templates');
-    return { code: 'ok', data: { agents: mockSimulatedMarketAgentTemplates } };
+  getSimulatedMarketAgentTemplates: async (): Promise<{ code: string; data: { agents: TargetUserAgent[]; subagents: TargetUserAgent[] } }> => {
+    if (!USE_MOCK) return fetchApi<{ agents: TargetUserAgent[]; subagents: TargetUserAgent[] }>('/simulated-market/agent-templates');
+    return {
+      code: 'ok',
+      data: {
+        agents: mockSimulatedMarketAgentTemplates,
+        subagents: db.simulatedMarketSubagents.filter((agent) => agent.enabled).map(toAgentCandidateFromSubagent),
+      },
+    };
+  },
+
+  getSimulatedMarketSubagents: async (enabled?: boolean): Promise<{ code: string; data: { items: SimulatedMarketSubagent[] } }> => {
+    if (!USE_MOCK) {
+      const qs = enabled === undefined ? '' : `?enabled=${String(enabled)}`;
+      return fetchApi<{ items: SimulatedMarketSubagent[] }>(`/simulated-market/subagents${qs}`);
+    }
+    let items = [...db.simulatedMarketSubagents];
+    if (enabled !== undefined) items = items.filter((agent) => agent.enabled === enabled);
+    return { code: 'ok', data: { items } };
+  },
+
+  createSimulatedMarketSubagent: async (input: CreateSimulatedMarketSubagentInput): Promise<{ code: string; data: SimulatedMarketSubagent }> => {
+    if (!USE_MOCK) {
+      return fetchApi<SimulatedMarketSubagent>('/simulated-market/subagents', {
+        method: 'POST',
+        body: JSON.stringify(input),
+        headers: { 'Idempotency-Key': `subagent_${Date.now()}` },
+      });
+    }
+    const subagent = buildMockSubagent(input);
+    db.simulatedMarketSubagents.push(subagent);
+    return { code: 'ok', data: subagent };
+  },
+
+  updateSimulatedMarketSubagent: async (agentId: string, input: UpdateSimulatedMarketSubagentInput): Promise<{ code: string; data: SimulatedMarketSubagent }> => {
+    if (!USE_MOCK) {
+      return fetchApi<SimulatedMarketSubagent>(`/simulated-market/subagents/${agentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+        headers: { 'Idempotency-Key': `subagent_update_${Date.now()}` },
+      });
+    }
+    const idx = db.simulatedMarketSubagents.findIndex((agent) => agent.agentId === agentId);
+    if (idx === -1) throw new Error(`Subagent ${agentId} not found`);
+    const existing = db.simulatedMarketSubagents[idx];
+    const updated: SimulatedMarketSubagent = {
+      ...existing,
+      ...input,
+      persona: input.persona ?? existing.persona,
+      profile: input.profile ?? existing.profile,
+      updatedAt: new Date().toISOString(),
+    };
+    db.simulatedMarketSubagents[idx] = updated;
+    return { code: 'ok', data: updated };
+  },
+
+  deleteSimulatedMarketSubagent: async (agentId: string): Promise<{ code: string; data: { agentId: string; deleted: boolean } }> => {
+    if (!USE_MOCK) {
+      return fetchApi<{ agentId: string; deleted: boolean }>(`/simulated-market/subagents/${agentId}`, {
+        method: 'DELETE',
+        headers: { 'Idempotency-Key': `subagent_delete_${Date.now()}` },
+      });
+    }
+    const before = db.simulatedMarketSubagents.length;
+    db.simulatedMarketSubagents = db.simulatedMarketSubagents.filter((agent) => agent.agentId !== agentId);
+    return { code: 'ok', data: { agentId, deleted: db.simulatedMarketSubagents.length < before } };
+  },
+
+  createSubagentFromChannelObject: async (input: CreateSubagentFromChannelObjectInput): Promise<{ code: string; data: SimulatedMarketSubagent }> => {
+    if (!USE_MOCK) {
+      return fetchApi<SimulatedMarketSubagent>('/simulated-market/subagents/from-channel-object', {
+        method: 'POST',
+        body: JSON.stringify(input),
+        headers: { 'Idempotency-Key': `subagent_channel_${Date.now()}` },
+      });
+    }
+    seedMockChannelObjects();
+    const channelObject = db.channelObjects.find((item) => item.canonicalObjectKey === input.canonicalObjectKey);
+    const profile = db.audienceProfiles.find((item) => (
+      item.canonicalObjectKey === input.canonicalObjectKey && (!input.profileId || item.profileId === input.profileId)
+    ));
+    if (!channelObject || !profile) {
+      throw new Error(`No audience profile available for channel object ${input.canonicalObjectKey}`);
+    }
+    const subagent = buildMockSubagent({
+      name: input.name?.trim() || `${channelObject.displayName} subagent`,
+      enabled: input.enabled ?? true,
+      persona: `${channelObject.displayName} 渠道画像派生 subagent`,
+      sourceType: 'channel_audience_profile',
+      sourceRef: {
+        canonicalObjectKey: input.canonicalObjectKey,
+        profileId: profile.profileId,
+        dataVersion: profile.dataVersion,
+      },
+      profile: {
+        demographics: profile.benchmarkTags?.map((tag) => `${tag.dimension}:${tag.optionLabel}`) ?? [],
+        preferences: profile.tags.slice(0, 4).map((tag) => tag.tagId),
+        concerns: profile.qualityFlags,
+        decisionFactors: profile.interactionPreference ?? [],
+      },
+      weight: 1,
+    });
+    db.simulatedMarketSubagents.push(subagent);
+    return { code: 'ok', data: subagent };
   },
 
   createSimulatedMarketRun: async (input: SimulatedMarketInput): Promise<{ code: string; data: SimulationRun }> => {

@@ -1,0 +1,16 @@
+{
+  "id": "T0027",
+  "slug": "simulated-market-llm-review-fixes",
+  "status": "approved",
+  "assignee": "mimo",
+  "domain": "backend",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-11T13:04:18.721Z",
+  "updated_at": "2026-07-11T14:27:46.075Z",
+  "base_ref": "e037f60e13d5695469944063761dfe3785e839da",
+  "dirty_at_creation": true,
+  "batch": "simulated-market-review-fixes-v1",
+  "sequence": 1,
+  "domain_memory": "agentops/memory/mimo-backend.md"
+}
