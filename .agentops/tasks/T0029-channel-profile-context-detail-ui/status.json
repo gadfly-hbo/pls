@@ -1,0 +1,19 @@
+{
+  "id": "T0029",
+  "slug": "channel-profile-context-detail-ui",
+  "status": "approved",
+  "assignee": "kilo",
+  "domain": "frontend",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-12T07:40:17.486Z",
+  "updated_at": "2026-07-12T08:36:06.650Z",
+  "base_ref": "39f89991ee61324a5e35692e889e161818fcc3d2",
+  "dirty_at_creation": true,
+  "batch": "channel-profile-ux-productization",
+  "sequence": 2,
+  "depends_on": [
+    "T0028"
+  ],
+  "domain_memory": "agentops/memory/kilo-frontend.md"
+}

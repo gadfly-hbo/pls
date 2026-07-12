@@ -2,7 +2,14 @@
 
 本目录包含 Admin Database API 的 smoke 测试脚本。所有脚本均通过 `PLS_API_BASE` / `PLS_API_TOKEN` / `PLS_ADMIN_TOKEN` / `PLS_WORKSPACE` 环境变量控制目标服务。
 
- wrapper 脚本（`smoke:admin-empty`、`smoke:admin-imported`、`smoke:admin-summary`）使用**独立临时 workspace**，不依赖 `ws_demo` 的当前状态；独立脚本（`smoke:admin-database`、`smoke:admin-import`、`smoke:admin-dangerous`）默认仍以 `ws_demo` 为操作目标。但独立脚本中，危险操作的正式 destructive 执行仍只发生在临时 workspace。
+wrapper 脚本（`smoke:admin-empty`、`smoke:admin-imported`、`smoke:admin-summary`）使用**独立临时 workspace**，不依赖 `ws_demo` 的当前状态。独立脚本（`smoke:admin-database`、`smoke:admin-import`、`smoke:admin-dangerous`）默认仍以 `ws_demo` 为操作目标，但**会写 DB 的脚本在 `ws_demo` 上会被 guard 拒绝**，除非显式设置 controller-only override `PLS_ALLOW_WS_DEMO_WRITE=1`。独立脚本中，危险操作的正式 destructive 执行仍只发生在临时 workspace。
+
+## 安全红线（ws_demo 写保护）
+
+- `ws_demo` 是 fixture/demo workspace，受版本控制，禁止被 smoke / import / admin 脚本误写。
+- 会写 DB 的脚本（`import-douyin-bi.mjs`、`seed-data-sources.mjs`、`sync-channel-entities.mjs`、`smoke-admin-import.mjs` imported 模式、`smoke-admin-dangerous.mjs`、`smoke-p2-api.mjs` 等）在目标 workspace 为 `ws_demo` 时默认失败。
+- 如需显式覆盖，必须设置环境变量 `PLS_ALLOW_WS_DEMO_WRITE=1`（仅供 controller 使用），并在日志中输出警告。
+- 推荐做法：让 wrapper 脚本创建临时 workspace，或手动设置 `PLS_WORKSPACE=ws_<purpose>_<timestamp>`。
 
 ## 前置条件
 
@@ -102,6 +109,7 @@ npm run smoke:admin-summary
 | `PLS_ADMIN_TOKEN` | `pls-admin-token` | Admin token |
 | `PLS_WORKSPACE` | `ws_demo` | 目标 workspace |
 | `PLS_ADMIN_SMOKE_MODE` | `empty` / `dry-run` | 仅用于独立脚本，wrapper 已自动设置 |
+| `PLS_ALLOW_WS_DEMO_WRITE` | 未设置 | Controller-only override；设置 `1` 后才允许写 `ws_demo` |
 
 ## 红线
 

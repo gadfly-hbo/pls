@@ -2,6 +2,10 @@
 // A-P2-1: Seed the data_source registry with the known PLS data sources.
 // Idempotent: re-runs only insert missing rows (INSERT OR IGNORE).
 //
+// Safety: this script writes to the configured workspace. By default it refuses to
+// write to ws_demo. Set PLS_WORKSPACE to a temporary workspace or set
+// PLS_ALLOW_WS_DEMO_WRITE=1 (controller-only override) to bypass.
+//
 // Sources:
 //   - douyin_bi        (active, adapter=douyin_bi, schema_prefix=douyin_)
 //   - product_master   (stub, pending D-P2-2 schema)
@@ -11,10 +15,13 @@
 import { DatabaseSync } from "node:sqlite";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { guardWriteWorkspace } from "./lib/workspace-guard.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 const workspaceId = process.env.PLS_WORKSPACE ?? "ws_demo";
+
+guardWriteWorkspace(workspaceId, { purpose: "seed data_source registry" });
 const dbPath = join(repoRoot, "data/workspaces", workspaceId, "db.sqlite");
 
 const db = new DatabaseSync(dbPath);

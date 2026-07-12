@@ -17,7 +17,7 @@ import {
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
-import type { SingleProductPortraitPrediction, SimulatedMarketPrefill } from './types';
+import type { MatchCorePrefill, SingleProductPortraitPrediction, SimulatedMarketPrefill } from './types';
 import Dashboard from './pages/Dashboard';
 import MatchCoreWorkbench from './pages/MatchCoreWorkbench';
 import ChannelObjectLibrary from './pages/ChannelObjectLibrary';
@@ -50,6 +50,7 @@ function App() {
   const [prediction, setPrediction] = useState<SingleProductPortraitPrediction | null>(null);
   const [flywheelDecisionId, setFlywheelDecisionId] = useState<string | undefined>();
   const [simulatedMarketPrefill, setSimulatedMarketPrefill] = useState<SimulatedMarketPrefill | null>(null);
+  const [matchCorePrefill, setMatchCorePrefill] = useState<MatchCorePrefill | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -79,12 +80,15 @@ function App() {
     localStorage.setItem('pls-theme', newTheme);
   };
 
-  const navigateTo = (view: ViewId, options?: { simulatedMarketPrefill?: SimulatedMarketPrefill }) => {
+  const navigateTo = (view: ViewId, options?: { simulatedMarketPrefill?: SimulatedMarketPrefill; matchCorePrefill?: MatchCorePrefill }) => {
     setCurrentView(view);
     setActiveSubView('workbench');
     setMobileSidebarOpen(false);
     if (options?.simulatedMarketPrefill !== undefined) {
       setSimulatedMarketPrefill(options.simulatedMarketPrefill);
+    }
+    if (options?.matchCorePrefill !== undefined) {
+      setMatchCorePrefill(options.matchCorePrefill);
     }
   };
 
@@ -234,10 +238,11 @@ function App() {
                 <Overview goToView={navigateTo} />
               )}
               {currentView === 'channel-objects' && (
-                <ChannelObjectLibrary />
+                <ChannelObjectLibrary goToMatchCore={(prefill) => navigateTo('match-core', { matchCorePrefill: prefill })} />
               )}
               {currentView === 'match-core' && (
                 <MatchCoreWorkbench
+                  initialPrefill={matchCorePrefill}
                   goToFlywheel={(decisionId) => {
                     setFlywheelDecisionId(decisionId);
                     setCurrentView('flywheel');

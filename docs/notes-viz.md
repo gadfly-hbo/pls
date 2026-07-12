@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-11（模拟市场工作台 / subagent UI 收口）
+最近更新：2026-07-12（渠道画像 Playwright 产物隔离验收）
 
 进度：
 
@@ -10,6 +10,11 @@
 - `apps/web/src/pages/SimulatedMarketWorkbench.tsx` 采用现有 AppShell / panel / segmented-control / metric-card / alert-banner / data-table-wrapper 风格；390px 移动端已覆盖无横向溢出。
 - `apps/web/src/services/api.ts` 的模拟市场 adapter 与后端 wrapper 对齐，`VITE_USE_MOCK=false` contract test 明确断言真实请求命中 `/api/v0/simulated-market/*`，避免 USE_MOCK 短路误判。
 - Subagent UI 展示 `saved_subagent` 与 `channel_audience_profile` 来源；从渠道画像派生时仅展示 Derived Result 摘要，不把画像标签表述成真实个人偏好。
+- **渠道画像本轮产品化验收已完成**：T0031 已补齐 real contract 与响应式验收，覆盖三段对象视图、活动/场景详情、导入向导、批量货渠匹配分析、桌面与 390px 移动端无页面级横向溢出。
+- `apps/web/e2e/channel-object-library.spec.ts` 在 `VITE_USE_MOCK=false` 下使用同构 `page.route` 响应覆盖 `/api/v0/channel-objects` list/detail/audience/product-fit/bindings 与 `/api/v0/channels/entities/:id`，并断言 route 命中；验证结果为 `1 passed, 10 skipped`，避免 `USE_MOCK` 短路误判。
+- `apps/web/playwright.config.ts` 已将 Playwright HTML report 和 test output 默认导向系统临时目录；`VITE_USE_MOCK=false` 时会注入 `ws_playwright_<timestamp>` workspace，避免前端 contract 测试默认携带 `ws_demo` header。
+- T0035 复验确认：`cd apps/web && npm run smoke -- --project=chromium e2e/channel-object-library.spec.ts` 通过（10 passed / 1 skipped），且未修改 tracked `apps/web/playwright-report/index.html` 或 `apps/web/test-results/`。
+- 渠道画像真实后端编辑与批量分析仍未开放；前端真实模式下不伪装成功，后续需后端补契约后再做全链路真实写入验收。
 
 验证：
 
@@ -17,11 +22,15 @@
 - 本轮收尾已通过：`cd apps/web && npm run build`。
 - 任务审核阶段已通过：`cd apps/web && npm run smoke`（模拟市场相关用例覆盖 mock、移动端和 real contract）。
 - 任务审核阶段已通过：`VITE_USE_MOCK=false npx playwright test e2e/simulated-market.spec.ts`，真实请求路径命中 `/api/v0/simulated-market/*`。
+- 渠道画像 T0031 验证已通过：`cd apps/web && npm run build`；`cd apps/web && npm run smoke -- --project=chromium e2e/channel-object-library.spec.ts`（10 passed, 1 skipped）；`cd apps/web && VITE_USE_MOCK=false npx playwright test e2e/channel-object-library.spec.ts --project=chromium`（1 passed, 10 skipped，同构 route contract）；`git diff --check`。
+- T0035 Playwright 产物隔离复验已通过：`cd apps/web && npm run smoke -- --project=chromium e2e/channel-object-library.spec.ts`（10 passed / 1 skipped）；`git diff --name-only -- data/workspaces/ws_demo/db.sqlite apps/web/playwright-report/index.html` 无输出。
 
 风险 / 后续：
 
 - `apps/web/playwright-report/` / `test-results/` 属生成产物，不应进入任务交付；后续提交前需继续检查。
+- 若需要保留 Playwright HTML 报告，可显式设置 `PLAYWRIGHT_HTML_REPORT`；默认临时目录报告不作为产品仓库产物提交。
 - 新品预测结果页、人货匹配结果页和经营飞轮的进一步深度联动仍需另开任务，不应默认视为已自动闭环。
+- 渠道画像 T0031 未覆盖 live backend 运行态：本地真实后端未启动，real contract 使用同构 Playwright route 替代；后续如需 live backend 验收，需先启动后端并准备对应 workspace 数据。
 
 - `T0012 / three-audience-tolerance-ui` (frontend) 已完成并经总控审核：
   - 三大人群本地估算的 share 总和校验改为复用模型层 `threeAudienceInputTotalTolerance(channel)`，不在前端 parser 硬编码渠道容差。

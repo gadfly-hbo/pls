@@ -1,0 +1,7 @@
+{"timestamp":"2026-07-12T07:40:17.487Z","type":"task_created","task_id":"T0029","actor":"codex","resulting_status":"queued","note":"worktree was dirty at task creation"}
+{"timestamp":"2026-07-12T08:21:50.869Z","type":"task_claimed","task_id":"T0029","actor":"kilo","resulting_status":"running"}
+{"timestamp":"2026-07-12T08:26:16.463Z","type":"handoff_submitted","task_id":"T0029","actor":"kilo","resulting_status":"handoff_ready"}
+{"timestamp":"2026-07-12T08:30:23.430Z","type":"review_decision","task_id":"T0029","actor":"codex","resulting_status":"changes_requested","note":"功能实现和验证基本通过；请清理测试生成的 apps/web/playwright-report/index.html 变更，该文件不在 T0029 allowed_paths 内且不应进入产品 diff。清理后复跑 git diff --check，必要时保留 build/smoke 结果摘要。"}
+{"timestamp":"2026-07-12T08:31:18.254Z","type":"task_resumed","task_id":"T0029","actor":"kilo","resulting_status":"running"}
+{"timestamp":"2026-07-12T08:32:03.437Z","type":"handoff_submitted","task_id":"T0029","actor":"kilo","resulting_status":"handoff_ready"}
+{"timestamp":"2026-07-12T08:36:06.650Z","type":"review_decision","task_id":"T0029","actor":"codex","resulting_status":"approved","note":"通过。活动/场景可独立浏览，详情信息与关联渠道表完成业务化展示；已复跑 web build、定向 Playwright smoke 和 git diff --check。接受工作区中 T0028 已批准后端 diff 作为既有上游变更。"}

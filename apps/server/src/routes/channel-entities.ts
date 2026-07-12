@@ -5,11 +5,8 @@ import { ok, notFound } from "../lib/response.js";
 
 const entities = new Hono();
 
-function audit(db: ReturnType<typeof openDb>, wsId: string, rid: string | undefined, rt: string, ri: string | null, meta: Record<string, unknown>) {
-  db.prepare(`INSERT INTO audit_event (audit_id,workspace_id,actor,request_id,resource_type,resource_id,event,meta,occurred_at) VALUES (?,?,'api',?,?,?, 'query', ?,datetime('now'))`).run(`au_${Date.now()}_${Math.random().toString(36).slice(2,8)}`, wsId, rid ?? null, rt, ri, JSON.stringify(meta));
-}
-
 // GET /channels/entities
+// Read-only; no audit write to keep fixture workspaces stable.
 entities.get("/", (c) => {
   const wsId = c.get("workspaceId") as string;
   const entityType = c.req.query("entityType");
@@ -40,12 +37,12 @@ entities.get("/", (c) => {
     generatedAt: r.generated_at, timeWindow: r.time_window, sourceType: r.source_type,
     qualityFlags: JSON.parse((r.quality_flags as string) ?? "[]"),
   }));
-  audit(db, wsId, c.get("requestId"), "bi_channel_entity", null, { count: items.length, entityType: entityType ?? null, sourceId: sourceId ?? null });
   db.close();
   return ok(c, { items });
 });
 
 // GET /channels/entities/:entityId
+// Read-only; no audit write to keep fixture workspaces stable.
 entities.get("/:entityId", (c) => {
   const wsId = c.get("workspaceId") as string;
   const eid = c.req.param("entityId");
@@ -57,7 +54,6 @@ entities.get("/:entityId", (c) => {
   if (dataVersion) { conds.push("data_version = ?"); params.push(dataVersion); }
   const r = db.prepare(`SELECT * FROM ${table} WHERE ${conds.join(" AND ")} LIMIT 1`).get(...params) as Record<string, unknown> | undefined;
   if (!r) { db.close(); return notFound(c, `Channel entity ${eid} not found`); }
-  audit(db, wsId, c.get("requestId"), "bi_channel_entity", eid, { dataVersion: dataVersion ?? "latest" });
   db.close();
   return ok(c, {
     channelEntityId: r.channel_entity_id, entityType: r.entity_type, sourceEntityKey: r.source_entity_key,

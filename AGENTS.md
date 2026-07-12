@@ -49,6 +49,7 @@
 5. **每个 smoke 入口必须在 README / 脚本 help 中显式声明前置假设**：目标 workspace 当前状态、是否需要导入数据、是否会产生临时 workspace、清理方式。
 6. **JSON summary runner**（如 `smoke-admin-summary.mjs`）按顺序运行各模式 wrapper 并输出合并 JSON；每条子脚本末尾输出 `RESULT: {...}` JSON 行供 wrapper 解析汇总。
 7. **Fixture DB 清理前必须对比 HEAD 基线**：如果 smoke 污染了被跟踪的 fixture DB（如 `data/workspaces/ws_demo/db.sqlite`），清理前必须先用 `git show HEAD:<db-path>` 或等效方式确认 `HEAD` 基线行数和关键行内容。只删除超出基线的生成数据，保留 `HEAD` 已存在的 fixture/demo 行；禁止仅凭 "smoke-style" 键名或时间戳就删除整表数据。推荐做法：先 `git checkout HEAD -- <db-path>` 恢复基线，再运行 `npm run migrate` 重新应用 schema/migration，最后验证相关表 `COUNT(*)` 与 HEAD 一致。
+8. **Fixture DB / 生成产物清理必须用 git diff 复核**：恢复被跟踪的 fixture DB 或 Playwright 报告等生成产物后，不能只依赖 `git diff --check` 或口头判断。必须对目标路径运行 `git status --short -- <path>` 和 `git diff --name-only -- <path>`，binary DB 还应按需运行 `git diff --stat -- <path>`；只有这些命令确认目标路径不再出现在 diff 中，handoff 才能声明已清理。产品迭代 handoff 前必须运行 `npm run guard:worktree`（根目录），自动拦截 `ws_demo/db.sqlite`、`apps/web/playwright-report/index.html`、`apps/web/test-results/` 等生成产物进入 diff。运行会创建临时 workspace 的 smoke 后，还必须检查并清理对应 `data/workspaces/ws_<purpose>_<timestamp>/` 目录；这些临时 DB 属验证产物，不得留作未跟踪文件进入 handoff。除固定受保护路径外，handoff 前应对本次 smoke 日志中出现的临时 workspace 路径运行 `git status --short -- <path>`，确认无输出或在 handoff 中说明为何该路径是任务允许产物。
 
 ---
 

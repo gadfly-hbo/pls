@@ -1,0 +1,7 @@
+{"timestamp":"2026-07-12T07:40:10.603Z","type":"task_created","task_id":"T0028","actor":"codex","resulting_status":"queued","note":"worktree was dirty at task creation"}
+{"timestamp":"2026-07-12T07:42:57.458Z","type":"task_claimed","task_id":"T0028","actor":"mimo","resulting_status":"running"}
+{"timestamp":"2026-07-12T08:03:52.899Z","type":"handoff_submitted","task_id":"T0028","actor":"mimo","resulting_status":"handoff_ready"}
+{"timestamp":"2026-07-12T08:07:16.831Z","type":"review_decision","task_id":"T0028","actor":"codex","resulting_status":"changes_requested","note":"需要返修：清理/移除越界验证产物和 ws_demo fixture DB/.mimocode lock 改动；将新增 channel-objects analysis real endpoint 接入前端 adapter 或撤回共享类型，确保 contract 不漂移；说明 apps/server/src/lib/response.ts 与 apps/web/src/services/api.ts 越界改动是否保留并纳入允许范围。"}
+{"timestamp":"2026-07-12T08:09:47.338Z","type":"task_resumed","task_id":"T0028","actor":"mimo","resulting_status":"running"}
+{"timestamp":"2026-07-12T08:14:14.636Z","type":"handoff_submitted","task_id":"T0028","actor":"mimo","resulting_status":"handoff_ready"}
+{"timestamp":"2026-07-12T08:19:29.207Z","type":"review_decision","task_id":"T0028","actor":"codex","resulting_status":"approved","note":"批准：返修已清理验证产物和 ws_demo fixture DB 污染；server typecheck、channel-object-library dry-run/imported smoke、web build、git diff --check 均通过。接受 apps/web/src/services/api.ts 的最小越界，用于让 mock ChannelObjectBinding 与新增 fromObject/toObject 真实 contract 保持同构。"}

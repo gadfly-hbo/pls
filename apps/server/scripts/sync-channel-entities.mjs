@@ -1,11 +1,20 @@
 #!/usr/bin/env node
+// Sync channel_entity rows from douyin_account_latest + channel_profile.
+//
+// Safety: this script writes to the configured workspace. By default it refuses to
+// write to ws_demo. Pass a different workspace as argv[2] or set PLS_WORKSPACE, or
+// set PLS_ALLOW_WS_DEMO_WRITE=1 (controller-only override) to bypass.
+
 import { DatabaseSync } from "node:sqlite";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { guardWriteWorkspace } from "./lib/workspace-guard.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
-const wsId = process.argv[2] ?? "ws_demo";
+const wsId = process.argv[2] ?? process.env.PLS_WORKSPACE ?? "ws_demo";
+
+guardWriteWorkspace(wsId, { purpose: "sync channel entities" });
 const dbPath = join(repoRoot, "data/workspaces", wsId, "db.sqlite");
 const db = new DatabaseSync(dbPath);
 db.exec("PRAGMA journal_mode = WAL");

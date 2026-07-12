@@ -2,6 +2,12 @@
 // A-P3-DB-MGMT-3: Admin import smoke with two modes:
 // - PLS_ADMIN_SMOKE_MODE=dry-run (default): dry-run only, does not mutate workspace.
 // - PLS_ADMIN_SMOKE_MODE=imported: performs controlled demo + douyin-bi imports on the workspace.
+//
+// Safety: imported mode refuses to write to ws_demo unless PLS_ALLOW_WS_DEMO_WRITE=1.
+// Wrapper scripts (smoke-admin-empty, smoke-admin-imported, smoke-admin-summary) inject
+// a temporary workspace by default.
+
+import { guardWriteWorkspace } from "./lib/workspace-guard.mjs";
 
 const BASE = process.env.PLS_API_BASE ?? "http://localhost:3100/api/v0";
 const TOKEN = process.env.PLS_API_TOKEN ?? "pls-p0-demo-token";
@@ -9,6 +15,10 @@ const ADMIN_TOKEN = process.env.PLS_ADMIN_TOKEN ?? "pls-admin-token";
 const WS = process.env.PLS_WORKSPACE ?? "ws_demo";
 const HDR = { Authorization: `Bearer ${TOKEN}`, "X-PLS-Workspace": WS };
 const MODE = process.env.PLS_ADMIN_SMOKE_MODE ?? "dry-run";
+
+if (MODE === "imported") {
+  guardWriteWorkspace(WS, { purpose: "smoke admin-import imported mode" });
+}
 
 let passed = 0;
 let failures = 0;

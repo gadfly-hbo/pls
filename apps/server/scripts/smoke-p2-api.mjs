@@ -1,10 +1,19 @@
 #!/usr/bin/env node
 // A-P2-9 + A-P2-10 combined smoke.
+//
+// Safety: this script performs writes (predictions, decisions, actions, feedback).
+// By default it refuses to run against ws_demo. Set PLS_WORKSPACE to a temporary
+// workspace, or set PLS_ALLOW_WS_DEMO_WRITE=1 (controller-only override).
+
+import { guardWriteWorkspace } from "./lib/workspace-guard.mjs";
+
 const BASE = process.env.PLS_API_BASE ?? "http://localhost:3100/api/v0";
 const TOKEN = process.env.PLS_API_TOKEN ?? "pls-p0-demo-token";
 const WS = process.env.PLS_WORKSPACE ?? "ws_demo";
 const HDR = { Authorization: `Bearer ${TOKEN}`, "X-PLS-Workspace": WS };
 let f = 0;
+
+guardWriteWorkspace(WS, { purpose: "smoke p2-api writes" });
 async function req(p, o={}) { const r = await fetch(`${BASE}${p}`, {headers:HDR,...o}); return {status:r.status, body:await r.json().catch(()=>({}))}; }
 function ok(l, c, d="") { if(c) console.log(`  OK   ${l}`); else { console.error(`  FAIL ${l} :: ${d}`); f++; } }
 

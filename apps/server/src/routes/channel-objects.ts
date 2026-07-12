@@ -1,13 +1,10 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { openDb } from "../db/connection.js";
-import { invalidInput, ok, notFound } from "../lib/response.js";
+import { invalidInput, ok, notFound, err } from "../lib/response.js";
+import { readJson } from "../lib/idempotency.js";
 
 const channelObjects = new Hono();
-
-function audit(db: ReturnType<typeof openDb>, wsId: string, rid: string | undefined, rt: string, ri: string | null, meta: Record<string, unknown>) {
-  db.prepare(`INSERT INTO audit_event (audit_id, workspace_id, actor, request_id, resource_type, resource_id, event, meta, occurred_at) VALUES (?, ?, 'api', ?, ?, ?, 'query', ?, datetime('now'))`).run(`au_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, wsId, rid ?? null, rt, ri, JSON.stringify(meta));
-}
 
 function parseJson<T>(text: string | null | undefined, fallback: T): T {
   if (!text) return fallback;
@@ -22,6 +19,112 @@ function parseCursor(cursor: string | undefined): number | null {
   if (!cursor) return 0;
   const match = /^offset:(\d+)$/.exec(cursor);
   return match ? Number(match[1]) : null;
+}
+
+interface ObjectContextFields {
+  eventType?: string;
+  customTags?: string[];
+  scenarioType?: string;
+  description?: string | null;
+}
+
+function buildContextFields(
+  objectType: string,
+  entityAttributes: Record<string, unknown>
+): ObjectContextFields {
+  if (objectType === "marketing_event") {
+    const customTags = Array.isArray(entityAttributes.customTags)
+      ? entityAttributes.customTags.filter((t): t is string => typeof t === "string")
+      : [];
+    return {
+      eventType: typeof entityAttributes.eventType === "string" ? entityAttributes.eventType : undefined,
+      customTags,
+    };
+  }
+  if (objectType === "business_scenario") {
+    return {
+      scenarioType: typeof entityAttributes.scenarioType === "string" ? entityAttributes.scenarioType : undefined,
+      description: typeof entityAttributes.description === "string" ? entityAttributes.description : null,
+    };
+  }
+  return {};
+}
+
+interface CompanionObject {
+  canonicalObjectKey: string | number | null;
+  objectType: string | number | null;
+  displayName: string | number | null;
+  dataVersion: string | number | null;
+}
+
+interface EnrichedBinding {
+  bindingId: string | number | null;
+  bindingType: string | number | null;
+  fromCanonicalObjectKey: string | number | null;
+  toCanonicalObjectKey: string | number | null;
+  sourceBatchId: string | number | null;
+  dataVersion: string | number | null;
+  generatedAt: string | number | null;
+  qualityFlags: unknown;
+  fromObject: CompanionObject;
+  toObject: CompanionObject;
+}
+
+function enrichBindings(
+  db: ReturnType<typeof openDb>,
+  wsId: string,
+  rows: Array<Record<string, unknown>>
+): EnrichedBinding[] {
+  const keys = new Set<string>();
+  for (const r of rows) {
+    const from = String(r.from_canonical_object_key ?? "");
+    const to = String(r.to_canonical_object_key ?? "");
+    if (from) keys.add(from);
+    if (to) keys.add(to);
+  }
+
+  const companions = new Map<string, Record<string, unknown>>();
+  if (keys.size > 0) {
+    const placeholders = Array(keys.size).fill("?").join(",");
+    const companionRows = db
+      .prepare(
+        `SELECT canonical_object_key, object_type, display_name, data_version FROM channel_object_latest WHERE workspace_id = ? AND canonical_object_key IN (${placeholders})`
+      )
+      .all(wsId, ...keys) as Array<Record<string, unknown>>;
+    for (const cr of companionRows) {
+      companions.set(String(cr.canonical_object_key ?? ""), cr);
+    }
+  }
+
+  return rows.map((r) => {
+    const fromKey = String(r.from_canonical_object_key ?? "");
+    const toKey = String(r.to_canonical_object_key ?? "");
+    const fromCompanion = companions.get(fromKey);
+    const toCompanion = companions.get(toKey);
+
+    return {
+      bindingId: r.binding_id,
+      bindingType: r.binding_type,
+      fromCanonicalObjectKey: r.from_canonical_object_key,
+      toCanonicalObjectKey: r.to_canonical_object_key,
+      sourceBatchId: r.source_batch_id,
+      dataVersion: r.data_version,
+      generatedAt: r.generated_at,
+      qualityFlags: parseJson(r.quality_flags as string, []),
+      fromObject: {
+        canonicalObjectKey: fromCompanion?.canonical_object_key ?? r.from_canonical_object_key,
+        objectType: fromCompanion?.object_type ?? null,
+        displayName: fromCompanion?.display_name ?? null,
+        dataVersion: fromCompanion?.data_version ?? null,
+      },
+      toObject: {
+        canonicalObjectKey: toCompanion?.canonical_object_key ?? r.to_canonical_object_key,
+        objectType: toCompanion?.object_type ?? null,
+        displayName: toCompanion?.display_name ?? null,
+        dataVersion: toCompanion?.data_version ?? null,
+      },
+    };
+  }) as EnrichedBinding[];
 }
 
 // GET /channel-objects
@@ -70,7 +173,6 @@ channelObjects.get("/", (c) => {
     source: r.source,
     sourceType: r.source_type,
   }));
-  audit(db, wsId, c.get("requestId"), "channel_object", null, { count: items.length, objectType: objectType ?? null });
   db.close();
   return ok(c, {
     items,
@@ -95,8 +197,8 @@ channelObjects.get("/:canonicalObjectKey", (c) => {
   if (dataVersion) { conds.push("data_version = ?"); params.push(dataVersion); }
   const r = db.prepare(`SELECT * FROM ${table} WHERE ${conds.join(" AND ")} LIMIT 1`).get(...params) as Record<string, unknown> | undefined;
   if (!r) { db.close(); return notFound(c, `Channel object ${key} not found`); }
-  audit(db, wsId, c.get("requestId"), "channel_object", key, { dataVersion: dataVersion ?? "latest" });
   db.close();
+  const entityAttributes = parseJson(r.entity_attributes as string, {});
   return ok(c, {
     workspaceId: r.workspace_id,
     objectType: r.object_type,
@@ -113,13 +215,14 @@ channelObjects.get("/:canonicalObjectKey", (c) => {
     platformType: r.platform_type,
     entityStatus: r.entity_status,
     targetObject: r.target_object,
-    entityAttributes: parseJson(r.entity_attributes as string, {}),
+    entityAttributes,
     possibleDuplicate: Boolean(r.possible_duplicate),
     duplicateCandidateKeys: parseJson(r.duplicate_candidate_keys as string, []),
     manualReviewStatus: r.manual_review_status,
     qualityFlags: parseJson(r.quality_flags as string, []),
     source: r.source,
     sourceType: r.source_type,
+    ...buildContextFields(String(r.object_type ?? ""), entityAttributes),
   });
 });
 
@@ -149,7 +252,6 @@ channelObjects.get("/:canonicalObjectKey/audience-profiles", (c) => {
     unmappedFields: parseJson(r.unmapped_fields as string, []),
     qualityFlags: parseJson(r.quality_flags as string, []),
   }));
-  audit(db, wsId, c.get("requestId"), "audience_profile", key, { count: items.length, dataVersion: dataVersion ?? "latest" });
   db.close();
   return ok(c, { items });
 });
@@ -183,7 +285,6 @@ channelObjects.get("/:canonicalObjectKey/product-fit-profiles", (c) => {
     evidence: parseJson(r.evidence as string, []),
     qualityFlags: parseJson(r.quality_flags as string, []),
   }));
-  audit(db, wsId, c.get("requestId"), "product_fit_profile", key, { count: items.length, dataVersion: dataVersion ?? "latest" });
   db.close();
   return ok(c, { items });
 });
@@ -201,19 +302,23 @@ channelObjects.get("/:canonicalObjectKey/bindings", (c) => {
   if (bindingType) { conds.push("binding_type = ?"); params.push(bindingType); }
   if (dataVersion) { conds.push("data_version = ?"); params.push(dataVersion); }
   const rows = db.prepare(`SELECT * FROM ${table} WHERE ${conds.join(" AND ")} ORDER BY generated_at DESC`).all(...params) as Array<Record<string, unknown>>;
-  const items = rows.map((r) => ({
-    bindingId: r.binding_id,
-    bindingType: r.binding_type,
-    fromCanonicalObjectKey: r.from_canonical_object_key,
-    toCanonicalObjectKey: r.to_canonical_object_key,
-    sourceBatchId: r.source_batch_id,
-    dataVersion: r.data_version,
-    generatedAt: r.generated_at,
-    qualityFlags: parseJson(r.quality_flags as string, []),
-  }));
-  audit(db, wsId, c.get("requestId"), "channel_object_binding", key, { count: items.length, bindingType: bindingType ?? null });
+  const items = enrichBindings(db, wsId, rows);
   db.close();
   return ok(c, { items });
+});
+
+// POST /channel-objects/analysis
+channelObjects.post("/analysis", async (c) => {
+  // Analysis with full marketing event / business scenario context is not
+  // implemented yet. Do not write audit events for this stub endpoint; otherwise
+  // read-only smoke tests against ws_demo would dirtify the fixture DB.
+  return err(
+    c,
+    "not_implemented",
+    "Channel object analysis with marketing event / business scenario context is not implemented in this version",
+    501,
+    "analysis"
+  );
 });
 
 export default channelObjects;

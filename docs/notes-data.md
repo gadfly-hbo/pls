@@ -2,7 +2,7 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-06（D-P7-INGEST-1 CSV 导入字段校验口径与质量报告契约冻结）
+最近更新：2026-07-12（T0035 ws_demo fixture isolation 批次验收）
 
 进度：
 
@@ -11,6 +11,7 @@
 - D-P6 样例包均标记为 `mock_sample`，只作为 contract 示例；未新增 taxonomy tagId，未连接生产平台或 SQL，未导入主 workspace，未实现 DB schema / API / UI。
 - 基础模板覆盖 `platform`、`trade_area`、`store`、`account`、`marketing_event`、`business_scenario`；高级包覆盖对象、父子层级、活动/场景绑定、`AudienceProfile`、`ProductFitProfile` 和质量报告。
 - 当前 `ws_demo` 仍为空业务库；依赖历史 SKU、渠道、抖音 BI 或 demo 数据的旧业务 smoke / 页面流程需要先通过受控导入重放数据。
+- T0035 已完成 `ws_demo` fixture isolation 批次验收：后端 smoke 与前端 Playwright 均未让 `data/workspaces/ws_demo/db.sqlite` 进入 diff，根级 `npm run guard:worktree` 可拦截该 tracked fixture 被误改。
 
 下一步：
 
@@ -19,6 +20,7 @@
 - A 域后续需要实现 `channel-profile-object-library` import adapter：dry-run 质量检查、confirm import、workspace 隔离、admin token、Idempotency-Key、confirmText、audit，以及 ChannelEntity / MarketingEvent / BusinessScenario / Binding / AudienceProfile / ProductFitProfile 的持久化或 staging contract。
 - M/V 后续消费时必须先读取 `docs/channel-profile-2.0-plan.md` 和本模板 README，活动 / 场景只能绑定或调权，不能当作渠道实体或独立渠道分数。
 - 如需演示或业务 smoke，需要先通过数据管理模块或 Admin API 重新导入数据；当前 `ws_demo` 是空业务库。
+- 中长期建议将 `ws_demo/db.sqlite` 视为可重建生成物，由 schema/migration + demo/import package 重放生成，减少运行态 SQLite binary 被任务 diff 污染的概率。
 
 阻塞：
 
@@ -37,6 +39,7 @@
 
 - D-P7-INGEST-1（2026-07-06）：`docs/p7-csv-ingestion-data-contract.md` 结构与章节完整；`data/templates/csv-ingestion/sample_sku.csv` / `sample_channel_profile.csv` header 与 `apps/server/src/db/schema.ts` 对应表字段一致；提供 README 人工校验命令。
 - D-P6-CHANNEL-1 收尾复验（2026-07-06）：`node data/templates/channel-profile-object-library/scripts/validate-channel-profile-object-library-package.mjs data/templates/channel-profile-object-library/sample_package` 通过，`ok: true`，`failures: []`。
+- T0035 fixture isolation 复验（2026-07-12）：`npm run guard:worktree` 通过；`git diff --name-only -- data/workspaces/ws_demo/db.sqlite apps/web/playwright-report/index.html` 无输出。
 - 本轮未运行 server/web typecheck、build 或 smoke，因为未改应用代码、DB schema、API 路由或前端代码。
 
 ---
@@ -48,6 +51,7 @@
 - 所有标签映射都要可追溯，不能只留黑盒结果。
 - P0 主监督标签使用 `buyerProfileTags`；浏览和加购画像有聚合数据就保留，不作为训练宽表准入硬门槛。
 - 真实金额、销量、排名、互动等业务字段可按产品需要保留；如建模需要再派生 index、band 或 rankBucket。
+- **ws_demo fixture 保护**：数据导入、seed、sync 脚本不得默认写 `ws_demo`。必须显式指定临时 workspace，或使用 controller-only override `PLS_ALLOW_WS_DEMO_WRITE=1`。
 
 ## D-P0-1 沉淀
 

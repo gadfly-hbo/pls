@@ -227,6 +227,12 @@ export interface ChannelProfile {
   qualityFlags?: string[];
 }
 
+export interface MatchCorePrefill {
+  channelId?: string;
+  skuId?: string;
+  sourceLabel?: string;
+}
+
 export interface AccountProfile {
   accountId: string;
   sourceEntityKey?: string;
@@ -508,6 +514,18 @@ export interface ChannelObjectBinding {
   dataVersion: string;
   generatedAt: string;
   qualityFlags: string[];
+  fromObject: {
+    canonicalObjectKey: string;
+    objectType: string | null;
+    displayName: string | null;
+    dataVersion: string | null;
+  };
+  toObject: {
+    canonicalObjectKey: string;
+    objectType: string | null;
+    displayName: string | null;
+    dataVersion: string | null;
+  };
 }
 
 export interface ChannelObjectAnalysisView {

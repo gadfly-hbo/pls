@@ -2,38 +2,71 @@
 
 ## Learned Lesson
 
-在文档或 handoff 中记录 shell 命令时，环境变量必须放在实际要执行命令之前（或先 `export`），不能放在 `cd ... &&` 之前，否则可能只作用于 `cd` 而没传给目标命令。
+Any product iteration that uses a tracked fixture database (e.g., `data/workspaces/ws_demo/db.sqlite`) or generated E2E artifacts (e.g., `apps/web/playwright-report/index.html`, `apps/web/test-results/`) must run a worktree diff guard before handoff. The guard fails the handoff if any forbidden generated artifact appears in the worktree diff, and provides clear recovery instructions. This prevents fixture DB contamination and generated artifacts from being silently committed or reviewed.
 
 ## Evidence
 
-- T0023 controller review 发现：`RUN_SIMULATED_MARKET_LIVE_LLM=1 MINIMAX_API_KEY=<key> cd apps/server && npm run smoke:simulated-market` 在 zsh 中只把 env 赋给 `cd`，`npm run` 未收到 `RUN_SIMULATED_MARKET_LIVE_LLM` 和 `MINIMAX_API_KEY`，导致 Phase 5 未真正启用。修正为 `cd apps/server && RUN_SIMULATED_MARKET_LIVE_LLM=1 MINIMAX_API_KEY=<key> npm run smoke:simulated-market`。
-- 来源：`/Users/huangbo/Dev/Projects/pls/.agentops/tasks/T0023-simulated-market-llm-acceptance-regression/review.md` 与本次修订实践。
+- T0032 (ws_demo write isolation): The tracked fixture DB `data/workspaces/ws_demo/db.sqlite` was repeatedly dirtied by (1) smoke scripts running on `ws_demo`, (2) read-only GET endpoints writing `audit_event` rows, and (3) idempotency middleware pruning on failed requests. The acceptance criterion required `git diff --quiet -- data/workspaces/ws_demo/db.sqlite` to be clean.
+- T0034 (ws-demo diff guard tooling): To avoid relying on manual `git status` checks before every review, we created `scripts/check-worktree-guard.mjs` and exposed it as `npm run guard:worktree` from the root `package.json`. It checks `git diff --name-only`, `git diff --cached --name-only`, and `git ls-files --others --exclude-standard` against a configurable list of forbidden paths.
+- Validation: the guard passed on the clean worktree, correctly failed when `apps/web/test-results/` was created, and exited 0 with a warning when `PLS_ALLOW_DIRTY_WORKTREE=1` was set.
 
 ## Classification
 
-Rule
+Skill — reusable multi-step SOP for setting up and running a worktree diff guard before product iteration handoff.
 
 ## Target File
 
-`/Users/huangbo/.config/mimocode/AGENTS.md`（全局 agent 规则，适用于所有使用 MimoCode 的 session）
+Create `/Users/huangbo/.codex/skills/guard-worktree/SKILL.md` (or equivalent under `.config/mimocode/skills/guard-worktree/SKILL.md`).
 
 ## Proposed Change
 
-在 `~/.config/mimocode/AGENTS.md` 的「代码规范」或「操作安全」章节新增一条：
+New skill content:
 
 ```md
-- 在文档、handoff 或脚本中记录 shell 命令时，若命令通过 `cd ... && npm run ...` 串联，环境变量应放在 `&&` 之后的目标命令前，或先 `export` 再执行。禁止写成 `ENV=val cd dir && npm run ...`，因为在 zsh 中 env 只会赋给 `cd` 而不被 `npm run` 继承。
+# guard-worktree
+
+Use this skill when a product uses tracked fixture databases or generated artifacts that must not appear in the worktree diff at handoff time.
+
+## When to use
+
+- The project has a tracked fixture DB (e.g., `data/workspaces/ws_demo/db.sqlite`) used by smoke tests or demos.
+- The project generates E2E/browser artifacts (e.g., `playwright-report/`, `test-results/`).
+- A task involves smoke tests, imports, or frontend E2E runs that could dirty the worktree.
+
+## What to do
+
+1. Identify the forbidden generated artifacts for this product. Common defaults:
+   - `data/workspaces/ws_demo/db.sqlite`
+   - `apps/web/playwright-report/index.html`
+   - `apps/web/test-results/`
+2. Add a guard script at `scripts/check-worktree-guard.mjs` that checks:
+   - `git diff --name-only`
+   - `git diff --cached --name-only`
+   - `git ls-files --others --exclude-standard`
+3. The script should:
+   - Match exact files or directory prefixes.
+   - Exit 0 when no forbidden artifact is in the diff.
+   - Exit 1 when a forbidden artifact is detected, printing the path and recovery command.
+   - Support a controller-only override such as `PLS_ALLOW_DIRTY_WORKTREE=1`.
+4. Expose the script as `npm run guard:worktree` in the root `package.json`.
+5. Document the requirement in the project AGENTS.md or notes: handoff must run `npm run guard:worktree` before controller review.
+6. Run the guard before handoff and include the result in `handoff.md` validation.
+
+## Why
+
+`git diff --check` only catches whitespace errors; it does not prevent binary fixture DBs or generated HTML reports from entering the diff. Manual `git status` checks are easy to forget, especially when a background server can re-dirty the fixture DB after validation. A guard automates the check and provides a clear recovery path.
 ```
 
 ## Scope
 
-Global AgentOps rule（所有 MimoCode session 生效）。
+Global AgentOps skill, applicable to any product iteration that uses tracked fixture DBs or generated E2E artifacts.
 
 ## Risks
 
-- 在 bash 中 `ENV=val cd dir && npm run ...` 可能确实会继承，但依赖 shell 版本/实现差异。规则采用更保守的写法，无向后兼容风险，反而避免跨 shell 歧义。
-- 可能让已有文档中的类似命令被判定为不规范，但属于正确的约束收紧。
+- Overfitting: the default forbidden paths are PLS-centric. Skill users must adjust the list to their own fixture DBs and artifact directories.
+- Conflict: if a project already has a similar guard under a different name, this would duplicate it. Search existing `scripts/*guard*` and `package.json` scripts before creating.
+- Maintenance: adding a root `package.json` when one does not exist may conflict with future workspace tooling. The skill should recommend keeping it minimal.
 
 ## Approval Needed
 
-请回复「确认」以应用此规则到 `/Users/huangbo/.config/mimocode/AGENTS.md`；如需修改提案，请直接说明。
+Reply "确认" to create the skill file at the proposed target, or describe changes to the proposal.

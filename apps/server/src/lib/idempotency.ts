@@ -80,11 +80,6 @@ export function idempotencyMiddleware(): MiddlewareHandler {
     const path = new URL(c.req.url).pathname;
 
     const db = openDb(wsId);
-    // Prune expired rows (cheap; index on expires_at).
-    try {
-      db.prepare("DELETE FROM idempotency_key WHERE expires_at <= datetime('now')").run();
-    } catch { /* idempotency_key table may not exist yet on a fresh workspace */ }
-
     let cached: CacheRow | undefined;
     try {
       cached = db
@@ -163,6 +158,12 @@ function cloneAndStore(
         .toISOString()
         .replace(/\.\d{3}Z$/, "Z");
       const db = openDb(workspaceId);
+      // Prune expired rows (cheap; index on expires_at) only when we are about
+      // to store a new entry. This keeps dry-run / failed requests from writing
+      // to the workspace DB.
+      try {
+        db.prepare("DELETE FROM idempotency_key WHERE expires_at <= datetime('now')").run();
+      } catch { /* idempotency_key table may not exist yet on a fresh workspace */ }
       db.prepare(
         `INSERT OR REPLACE INTO idempotency_key
          (workspace_id, method, path, key, request_hash, response_body,

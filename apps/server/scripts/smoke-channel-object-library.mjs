@@ -1,17 +1,23 @@
 #!/usr/bin/env node
 // A-P6-CHANNEL-3: Channel Profile 2.0 object library smoke.
 // Modes:
-//   PLS_ADMIN_SMOKE_MODE=dry-run (default): only dry-run import; no workspace mutation.
+//   PLS_ADMIN_SMOKE_MODE=dry-run (default): creates a temporary workspace with an empty
+//     schema and only exercises dry-run import; no business data is imported.
 //   PLS_ADMIN_SMOKE_MODE=imported: creates a temporary workspace via rebuild, imports the
 //     channel-profile-object-library sample package, and exercises read APIs.
 //
 // This script never writes to the main ws_demo workspace.
 
+import { guardWriteWorkspace } from "./lib/workspace-guard.mjs";
+
 const BASE = process.env.PLS_API_BASE ?? "http://localhost:3100/api/v0";
 const TOKEN = process.env.PLS_API_TOKEN ?? "pls-p0-demo-token";
 const ADMIN_TOKEN = process.env.PLS_ADMIN_TOKEN ?? "pls-admin-token";
-const WS = process.env.PLS_WORKSPACE ?? (process.env.PLS_ADMIN_SMOKE_MODE === "imported" ? `ws_col_${Date.now()}` : "ws_demo");
+const WS = process.env.PLS_WORKSPACE ?? `ws_col_${Date.now()}`;
 const MODE = process.env.PLS_ADMIN_SMOKE_MODE ?? "dry-run";
+
+guardWriteWorkspace(WS, { purpose: `smoke channel-object-library ${MODE} mode` });
+
 const PACKAGE_TYPE = "channel-profile-object-library";
 const BLOCKING_PACKAGE_TYPE = "channel-profile-object-library-blocking";
 const SOURCE_BATCH_ID = "batch_channel_object_library_mock_20260706";
@@ -36,7 +42,6 @@ function assert(label, cond, detail = "") {
 }
 
 async function initWorkspace() {
-  if (MODE !== "imported") return;
   console.log(`\n>>> Creating temporary workspace ${WS}`);
   const res = await fetch(`${BASE}/admin/database/rebuild`, {
     method: "POST",
@@ -55,6 +60,7 @@ async function initWorkspace() {
 }
 
 async function importPackage() {
+  if (MODE !== "imported") return;
   const idemKey = `col_import_${Date.now()}`;
   const res = await req("/admin/database/import-jobs", {
     method: "POST",
@@ -162,6 +168,18 @@ async function testReadApis() {
   const platformHist = await req(`/channel-objects/platform:mock_platform_douyin?dataVersion=${DATA_VERSION}`);
   assert("platform detail historical returns 200", platformHist.status === 200);
 
+  // Event detail exposes business fields
+  const eventDetail = await req("/channel-objects/marketing_event:mock_event_618");
+  assert("event detail returns 200", eventDetail.status === 200);
+  assert("event detail eventType is platform_promotion", eventDetail.body.data?.eventType === "platform_promotion");
+  assert("event detail customTags present", Array.isArray(eventDetail.body.data?.customTags));
+
+  // Scenario detail exposes business fields
+  const scenarioDetail = await req("/channel-objects/business_scenario:new_product_launch:mock_style");
+  assert("scenario detail returns 200", scenarioDetail.status === 200);
+  assert("scenario detail scenarioType is new_product_launch", scenarioDetail.body.data?.scenarioType === "new_product_launch");
+  assert("scenario detail description present", typeof scenarioDetail.body.data?.description === "string");
+
   // 404
   const nf = await req("/channel-objects/nope");
   assert("404 on missing object", nf.status === 404);
@@ -178,11 +196,16 @@ async function testReadApis() {
   assert("product-fit profiles returns 200", fit.status === 200);
   assert("product-fit profiles has 1 row", fit.body.data?.items?.length === 1);
 
-  // Bindings
+  // Bindings with companion object enrichment
   const bindings = await req("/channel-objects/business_scenario:new_product_launch:mock_style/bindings");
   assert("bindings returns 200", bindings.status === 200);
   assert("scenario has 1 binding", bindings.body.data?.items?.length === 1);
   assert("scenario binding type is scenario_to_channel_entity", bindings.body.data?.items[0]?.bindingType === "scenario_to_channel_entity");
+  assert("binding has fromObject", typeof bindings.body.data?.items[0]?.fromObject === "object");
+  assert("binding fromObject objectType is business_scenario", bindings.body.data?.items[0]?.fromObject?.objectType === "business_scenario");
+  assert("binding fromObject displayName present", typeof bindings.body.data?.items[0]?.fromObject?.displayName === "string");
+  assert("binding has toObject", typeof bindings.body.data?.items[0]?.toObject === "object");
+  assert("binding toObject objectType is store", bindings.body.data?.items[0]?.toObject?.objectType === "store");
 
   const parentBindings = await req("/channel-objects/trade_area:mock_trade_area_city_walk/bindings");
   assert("trade area bindings returns 1", parentBindings.body.data?.items?.length === 1);
@@ -193,6 +216,22 @@ async function testReadApis() {
   assert("401 without token", noAuth.status === 401);
   const noWs = await fetch(`${BASE}/channel-objects`, { headers: { Authorization: `Bearer ${TOKEN}` } });
   assert("400 without workspace", noWs.status === 400);
+}
+
+async function testAnalysisApi() {
+  const analysis = await req("/channel-objects/analysis", {
+    method: "POST",
+    headers: { ...HDR, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      selectedChannelEntityIds: ["account:mock_account_douyin_style"],
+      selectedMarketingEventId: "marketing_event:mock_event_618",
+      selectedBusinessScenarioId: "business_scenario:new_product_launch:mock_style",
+      skuIds: ["mock_sku_101"],
+    }),
+  });
+  assert("analysis returns 501", analysis.status === 501);
+  assert("analysis code is not_implemented", analysis.body.code === "not_implemented");
+  assert("analysis message mentions context", analysis.body.error?.message?.includes("not implemented"));
 }
 
 async function testCompatibility() {
@@ -207,14 +246,15 @@ async function main() {
   console.log(`Smoke channel-object-library (${MODE} mode) against ${BASE}`);
   console.log(`Workspace: ${WS} (mode=${MODE})`);
 
+  await initWorkspace();
   await testDryRun();
 
   if (MODE === "imported") {
-    await initWorkspace();
     await importPackage();
     await testReadApis();
   }
 
+  await testAnalysisApi();
   await testCompatibility();
 
   printResult();

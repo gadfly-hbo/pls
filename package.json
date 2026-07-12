@@ -1,0 +1,9 @@
+{
+  "name": "pls",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "guard:worktree": "node scripts/check-worktree-guard.mjs"
+  }
+}

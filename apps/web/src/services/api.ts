@@ -2,11 +2,12 @@ import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, Acc
 
 // Feature flag for local mock vs real backend
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
+const API_WORKSPACE = import.meta.env.VITE_PLS_WORKSPACE || 'ws_demo';
 
 const headers = {
   'Content-Type': 'application/json',
   'Authorization': 'Bearer pls-p0-demo-token',
-  'X-PLS-Workspace': 'ws_demo'
+  'X-PLS-Workspace': API_WORKSPACE
 };
 
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<{ code: string; data: T }> {
@@ -285,7 +286,7 @@ async function uploadSinglePortraitBatch<T>(path: string, file: File): Promise<{
     method: 'POST',
     headers: {
       Authorization: 'Bearer pls-p0-demo-token',
-      'X-PLS-Workspace': 'ws_demo',
+      'X-PLS-Workspace': API_WORKSPACE,
     },
     body: formData,
   });
@@ -739,6 +740,18 @@ const mockChannelObjectBindings: ChannelObjectBinding[] = [
     dataVersion: 'v1',
     generatedAt: '2026-07-01T00:00:00Z',
     qualityFlags: [],
+    fromObject: {
+      canonicalObjectKey: 'marketing_event:618_2026',
+      objectType: 'marketing_event',
+      displayName: 'Mock 618 Event',
+      dataVersion: 'v1',
+    },
+    toObject: {
+      canonicalObjectKey: 'store:douyin_semira_official',
+      objectType: 'store',
+      displayName: '森马抖音官方旗舰店',
+      dataVersion: 'v1',
+    },
   },
   {
     bindingId: 'binding_002',
@@ -749,6 +762,18 @@ const mockChannelObjectBindings: ChannelObjectBinding[] = [
     dataVersion: 'v1',
     generatedAt: '2026-07-01T00:00:00Z',
     qualityFlags: [],
+    fromObject: {
+      canonicalObjectKey: 'business_scenario:new_product_launch_q3',
+      objectType: 'business_scenario',
+      displayName: 'Mock New Product Launch Scenario',
+      dataVersion: 'v1',
+    },
+    toObject: {
+      canonicalObjectKey: 'account:douyin_semira_official_live',
+      objectType: 'account',
+      displayName: '森马官方直播间',
+      dataVersion: 'v1',
+    },
   },
 ];
 
@@ -2095,7 +2120,7 @@ export const api = {
         method: 'POST',
         headers: {
           'Authorization': 'Bearer pls-p0-demo-token',
-          'X-PLS-Workspace': 'ws_demo'
+          'X-PLS-Workspace': API_WORKSPACE
         },
         body: formData
       });
@@ -2314,7 +2339,7 @@ export const api = {
     if (!USE_MOCK) {
       const res = await fetch(`/api/v0/tools/runs/${runId}/artifacts/${artifactId}`, {
         headers: { 
-          'X-PLS-Workspace': 'ws_demo',
+          'X-PLS-Workspace': API_WORKSPACE,
           'Authorization': 'Bearer pls-p0-demo-token'
         }
       });
@@ -2393,7 +2418,7 @@ export const api = {
     if (!USE_MOCK) {
       const res = await fetch(`/api/v0/tools/runs/${runId}/artifacts/${artifactPath}`, {
         headers: { 
-          'X-PLS-Workspace': 'ws_demo',
+          'X-PLS-Workspace': API_WORKSPACE,
           'Authorization': 'Bearer pls-p0-demo-token'
         }
       });

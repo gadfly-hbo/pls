@@ -1,29 +1,36 @@
 #!/usr/bin/env node
-// A-P1-F2: Import D-P1-F1 Douyin BI JSONL objects into the ws_demo SQLite.
+// A-P1-F2: Import D-P1-F1 Douyin BI JSONL objects into the configured workspace SQLite.
 //
 // Usage:
 //   node scripts/import-douyin-bi.mjs [<packageDir>]
 //
 // Defaults:
 //   packageDir = <repo>/data/p1/douyin-bi
-//   workspace  = ws_demo
+//   workspace  = ws_demo (write to ws_demo is blocked by default; see guard below)
 //
 // Behavior:
 //   - Reads sqlite_import_manifest.json to enumerate JSONL tables.
 //   - Upserts every row keyed by PK (workspace_id + business key + source_batch_id + data_version).
 //   - Records one batch row + one audit_event on success.
 //   - Re-runs of the same batchId+dataVersion do NOT duplicate rows (INSERT OR REPLACE).
+//
+// Safety:
+//   - This script refuses to write to ws_demo unless PLS_ALLOW_WS_DEMO_WRITE=1 is set.
+//   - To use a temporary workspace, set PLS_WORKSPACE=ws_import_douyin_<timestamp>.
 
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
+import { guardWriteWorkspace } from "./lib/workspace-guard.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 const packageDir = resolve(process.argv[2] ?? join(repoRoot, "data/p1/douyin-bi"));
 const workspaceId = process.env.PLS_WORKSPACE ?? "ws_demo";
+
+guardWriteWorkspace(workspaceId, { purpose: "import douyin-bi package" });
 const dbPath = join(repoRoot, "data/workspaces", workspaceId, "db.sqlite");
 
 const db = new DatabaseSync(dbPath);

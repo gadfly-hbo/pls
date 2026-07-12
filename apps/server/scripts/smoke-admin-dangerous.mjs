@@ -1,12 +1,21 @@
 #!/usr/bin/env node
 // A-P3-DB-MGMT-1: Smoke script for admin dangerous operations.
 // Covers empty-DB dry-run behavior and destructive execute on a TEMP workspace.
+//
+// Safety: this script refuses to run against ws_demo because it performs dangerous
+// operations. Wrapper scripts inject a temporary workspace. To run directly, set
+// PLS_WORKSPACE to a temporary workspace, or set PLS_ALLOW_WS_DEMO_WRITE=1
+// (controller-only override) and understand the risk.
+
+import { guardWriteWorkspace } from "./lib/workspace-guard.mjs";
 
 const BASE = process.env.PLS_API_BASE ?? "http://localhost:3100/api/v0";
 const TOKEN = process.env.PLS_API_TOKEN ?? "pls-p0-demo-token";
 const ADMIN_TOKEN = process.env.PLS_ADMIN_TOKEN ?? "pls-admin-token";
 const WS = process.env.PLS_WORKSPACE ?? "ws_demo";
 const HDR = { Authorization: `Bearer ${TOKEN}`, "X-PLS-Workspace": WS };
+
+guardWriteWorkspace(WS, { purpose: "smoke admin-dangerous operations" });
 
 let passed = 0;
 let failures = 0;
@@ -282,11 +291,11 @@ async function main() {
   const allOk = tempRebuildBody.data?.afterSnapshot?.steps?.every((s) => s.status === "ok" || s.status === "skipped");
   assert("temp workspace rebuild all steps ok/skipped", allOk === true);
 
-  // Verify rebuild did not affect main ws_demo
+  // Verify rebuild did not affect the current workspace (which should be temporary/isolated)
   const mainCheck = await fetch(`${BASE}/admin/database/tables`, { headers: HDR });
   const mainCheckBody = await mainCheck.json();
   const mainTableCount = mainCheckBody.data?.tables?.length ?? 0;
-  assert("main ws_demo not affected by temp rebuild", mainTableCount >= 28);
+  assert("current workspace not affected by temp rebuild", mainTableCount >= 28);
 
   console.log(`\n${failures === 0 ? "All" : failures} smoke checks ${failures === 0 ? "passed." : "FAILED."}`);
   printResult();

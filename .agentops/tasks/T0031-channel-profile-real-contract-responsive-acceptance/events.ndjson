@@ -1,0 +1,13 @@
+{"timestamp":"2026-07-12T07:40:32.195Z","type":"task_created","task_id":"T0031","actor":"codex","resulting_status":"queued","note":"worktree was dirty at task creation"}
+{"timestamp":"2026-07-12T08:50:31.504Z","type":"task_claimed","task_id":"T0031","actor":"kilo","resulting_status":"running"}
+{"timestamp":"2026-07-12T08:58:38.961Z","type":"handoff_submitted","task_id":"T0031","actor":"kilo","resulting_status":"handoff_ready"}
+{"timestamp":"2026-07-12T09:04:47.348Z","type":"review_decision","task_id":"T0031","actor":"codex","resulting_status":"changes_requested","note":"功能与验证基本通过；请仅修正 docs/notes-viz.md 当前状态口径：不要继续写 T0031/渠道画像验收“进行中”或“worker 验证计划”，应反映本轮验收已完成/已通过的验证结果与剩余 live-backend 风险。保持 Playwright report 不入 diff，修正后复跑 git diff --check。"}
+{"timestamp":"2026-07-12T09:07:06.116Z","type":"task_resumed","task_id":"T0031","actor":"kilo","resulting_status":"running"}
+{"timestamp":"2026-07-12T09:07:52.293Z","type":"handoff_submitted","task_id":"T0031","actor":"kilo","resulting_status":"handoff_ready"}
+{"timestamp":"2026-07-12T09:09:44.909Z","type":"review_decision","task_id":"T0031","actor":"codex","resulting_status":"changes_requested","note":"返修文档口径已通过；仍需清理 data/workspaces/ws_demo/db.sqlite 变更。该文件不在 allowed_paths 内，且 T0031 brief 明确禁止修改 ws_demo fixture DB。请恢复该 DB 到任务前/HEAD 状态，保持 Playwright report 不入 diff，并复跑 git diff --check 后回流。"}
+{"timestamp":"2026-07-12T09:20:33.402Z","type":"task_resumed","task_id":"T0031","actor":"kilo","resulting_status":"running"}
+{"timestamp":"2026-07-12T09:21:25.680Z","type":"handoff_submitted","task_id":"T0031","actor":"kilo","resulting_status":"handoff_ready"}
+{"timestamp":"2026-07-12T09:22:53.997Z","type":"review_decision","task_id":"T0031","actor":"codex","resulting_status":"changes_requested","note":"仍需返修：handoff 声称 data/workspaces/ws_demo/db.sqlite 已恢复且不在 diff，但实际 git diff --name-only 仍包含该文件，git diff --stat 显示 db.sqlite 从 4853760 -> 4857856 bytes。该文件不在 allowed_paths 且 brief 明确禁止修改。请真实恢复该 DB 到 HEAD，复查 git status --short / git diff --name-only 不再包含该文件，并复跑 git diff --check 后回流。"}
+{"timestamp":"2026-07-12T09:23:52.095Z","type":"task_resumed","task_id":"T0031","actor":"kilo","resulting_status":"running"}
+{"timestamp":"2026-07-12T09:24:34.120Z","type":"handoff_submitted","task_id":"T0031","actor":"kilo","resulting_status":"handoff_ready"}
+{"timestamp":"2026-07-12T09:26:01.706Z","type":"review_decision","task_id":"T0031","actor":"codex","resulting_status":"approved","note":"通过。T0031 real contract、mock smoke、响应式验收与中文文案收口已完成；notes-viz 状态已改为验收完成并记录 live-backend 风险；ws_demo fixture DB 与 Playwright report 均已退出 diff。已验证 build/smoke/real-contract/diff-check，并复查清理项。接受 T0028/T0029/T0030 已批准上游 diff。"}

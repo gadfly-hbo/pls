@@ -1,0 +1,4 @@
+{"timestamp":"2026-07-12T07:40:24.630Z","type":"task_created","task_id":"T0030","actor":"codex","resulting_status":"queued","note":"worktree was dirty at task creation"}
+{"timestamp":"2026-07-12T08:37:29.575Z","type":"task_claimed","task_id":"T0030","actor":"kilo","resulting_status":"running"}
+{"timestamp":"2026-07-12T08:43:47.474Z","type":"handoff_submitted","task_id":"T0030","actor":"kilo","resulting_status":"handoff_ready"}
+{"timestamp":"2026-07-12T08:48:14.755Z","type":"review_decision","task_id":"T0030","actor":"codex","resulting_status":"approved","note":"通过。导入向导保留 dry-run/confirmText 安全语义，批量匹配流程完成步骤化并显式展示活动/场景上下文，货渠匹配模块 prefill 不伪装成功；已复跑 web build、定向 Playwright smoke 和 git diff --check。接受 T0028/T0029 已批准上游 diff。"}

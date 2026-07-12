@@ -1,0 +1,19 @@
+{
+  "id": "T0033",
+  "slug": "ws-demo-playwright-isolation-frontend",
+  "status": "approved",
+  "assignee": "kilo",
+  "domain": "frontend",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-12T09:34:23.458Z",
+  "updated_at": "2026-07-12T11:47:16.214Z",
+  "base_ref": "39f89991ee61324a5e35692e889e161818fcc3d2",
+  "dirty_at_creation": true,
+  "batch": "ws-demo-fixture-isolation",
+  "sequence": 2,
+  "depends_on": [
+    "T0032"
+  ],
+  "domain_memory": "agentops/memory/kilo-frontend.md"
+}

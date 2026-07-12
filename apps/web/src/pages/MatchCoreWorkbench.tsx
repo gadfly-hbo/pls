@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api';
-import type { HeatmapData, MatchResult, ChannelProfile, SimulatedMarketPrefill } from '../types';
+import type { HeatmapData, MatchResult, ChannelProfile, SimulatedMarketPrefill, MatchCorePrefill } from '../types';
 import { translateChannel, translateTag } from '../utils/translate';
 
 function safeScore(value: unknown): number {
@@ -55,7 +55,7 @@ function buildMatchPrefill(matchDetail: MatchResult, channelName: string): Simul
   };
 }
 
-export default function MatchCoreWorkbench({ goToFlywheel, goToSimulatedMarket }: { goToFlywheel?: (id?: string) => void; goToSimulatedMarket?: (prefill: SimulatedMarketPrefill) => void }) {
+export default function MatchCoreWorkbench({ initialPrefill, goToFlywheel, goToSimulatedMarket }: { initialPrefill?: MatchCorePrefill | null; goToFlywheel?: (id?: string) => void; goToSimulatedMarket?: (prefill: SimulatedMarketPrefill) => void }) {
   const [mode, setMode] = useState<'sku-to-channel' | 'channel-to-sku'>('sku-to-channel');
   const [loading, setLoading] = useState(true);
   const [heatmapData, setHeatmapData] = useState<HeatmapData | null>(null);
@@ -67,6 +67,7 @@ export default function MatchCoreWorkbench({ goToFlywheel, goToSimulatedMarket }
   const [matchDetail, setMatchDetail] = useState<MatchResult | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [prefillNotice, setPrefillNotice] = useState<string | null>(null);
 
   const [filterRec, setFilterRec] = useState<string>('all');
   const [sortField, setSortField] = useState<'score' | 'confidence'>('score');
@@ -117,6 +118,30 @@ export default function MatchCoreWorkbench({ goToFlywheel, goToSimulatedMarket }
       if (channels.length > 0) setSelectedPrimaryId(channels[0].channelId);
     }
   }, [mode, heatmapData, channels]);
+
+  useEffect(() => {
+    if (!initialPrefill || !heatmapData) return;
+    const channelId = initialPrefill.channelId;
+    const skuId = initialPrefill.skuId;
+
+    if (channelId && channels.some((channel) => channel.channelId === channelId)) {
+      setMode('channel-to-sku');
+      setSelectedPrimaryId(channelId);
+      setSelectedSecondaryId(skuId && heatmapData.rows.some((row) => row.skuId === skuId) ? skuId : '');
+      setPrefillNotice(`已从渠道画像带入：${initialPrefill.sourceLabel || channelId}`);
+      return;
+    }
+
+    if (skuId && heatmapData.rows.some((row) => row.skuId === skuId)) {
+      setMode('sku-to-channel');
+      setSelectedPrimaryId(skuId);
+      setSelectedSecondaryId('');
+      setPrefillNotice(`已从渠道画像带入 SKU：${skuId}`);
+      return;
+    }
+
+    setPrefillNotice(`已收到渠道画像预填：${initialPrefill.sourceLabel || channelId || skuId || '未命名对象'}；当前货渠匹配数据暂未包含可直接打开的匹配记录。`);
+  }, [initialPrefill, heatmapData, channels]);
 
   useEffect(() => {
     if (!selectedPrimaryId || !selectedSecondaryId) {
@@ -238,7 +263,13 @@ export default function MatchCoreWorkbench({ goToFlywheel, goToSimulatedMarket }
   }
 
   return (
-    <div className="match-workbench">
+      <div className="match-workbench">
+
+      {prefillNotice && (
+        <div className="alert-banner alert-banner--info">
+          {prefillNotice}
+        </div>
+      )}
 
       {/* Top Toolbar */}
       <div className="toolbar">

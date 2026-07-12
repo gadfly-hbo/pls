@@ -1,0 +1,19 @@
+{
+  "id": "T0031",
+  "slug": "channel-profile-real-contract-responsive-acceptance",
+  "status": "approved",
+  "assignee": "kilo",
+  "domain": "frontend",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-12T07:40:32.194Z",
+  "updated_at": "2026-07-12T09:26:01.705Z",
+  "base_ref": "39f89991ee61324a5e35692e889e161818fcc3d2",
+  "dirty_at_creation": true,
+  "batch": "channel-profile-ux-productization",
+  "sequence": 4,
+  "depends_on": [
+    "T0030"
+  ],
+  "domain_memory": "agentops/memory/kilo-frontend.md"
+}
