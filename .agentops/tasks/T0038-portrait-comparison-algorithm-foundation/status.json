@@ -1,0 +1,19 @@
+{
+  "id": "T0038",
+  "slug": "portrait-comparison-algorithm-foundation",
+  "status": "approved",
+  "assignee": "opencode",
+  "domain": "algorithm",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-19T01:31:32.175Z",
+  "updated_at": "2026-07-19T02:06:38.262Z",
+  "base_ref": "098e538ba8bd7ebc93bddbf4f0e8c95ff9dac945",
+  "dirty_at_creation": true,
+  "batch": "portrait-comparison-v1",
+  "sequence": 3,
+  "depends_on": [
+    "T0037"
+  ],
+  "domain_memory": "agentops/memory/opencode-algorithm.md"
+}

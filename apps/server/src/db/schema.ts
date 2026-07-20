@@ -1116,3 +1116,8 @@ export const ADMIN_DDL = SCHEMA_MIGRATION_DDL + DB_ADMIN_AUDIT_DDL + DATA_IMPORT
 // Bootstrap DDL: only the schema_migration table, used by migration-runner
 // to bootstrap before reading the migration registry.
 export const BOOTSTRAP_DDL = SCHEMA_MIGRATION_DDL;
+
+// V005 Comparison tables: re-export the single DDL source from the migration
+// file for use in fresh schema, rebuild, and schema-check. The migration
+// runner itself loads V005_portrait_comparison.ts directly.
+export { COMPARISON_DDL } from "./migrations/V005_portrait_comparison.js";

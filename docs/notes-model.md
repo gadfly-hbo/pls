@@ -2,21 +2,27 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-11（模拟市场 LLM / subagent contract 收口）
+最近更新：2026-07-19（Portrait Comparison algorithm foundation）
 
 进度：
 
+- **Portrait Comparison algorithm foundation 已完成 worker 实施，等待 Task Bus review**：T0038 新增 `apps/server/src/portrait-comparison/` 纯函数模块，覆盖 Canonical JSON v1、UTF-8 SHA-256 checksum、`pls-portrait-comparison` 线性归一化绝对差算法、显式 `not_released` quality policy contract 和 deterministic `rule` summary seam；未导出 production candidate dimensions、真实 policy 数值或 AI explanation。
 - **模拟市场模型契约已完成并经 Task Bus 审核**：T0014 / T0020 / T0024 均为 `approved`，模型层覆盖基础模拟、LLM agent 输出结构、subagent / channel audience profile 来源类型与 deterministic fallback。
+- `apps/server/src/portrait-comparison/algorithm.ts` 的 `computeAlgorithmConfigChecksum()` 将 algorithm identity/version、候选维度 key/label/unit/weight/normalization、coverage formula、dimension similarity formula、unit rule、exclusion mapping、overall score policy 和 floating tolerance 全部纳入 canonical checksum；任一影响输出的 config 字段变化都必须改变 checksum。
+- `apps/server/src/portrait-comparison/algorithm.ts` 的 evidence projection 与 V005 对齐：持久化形态 `qualityStatus` 只允许 `ready|limited`，算法排除另用 `qualityEligibility=eligible|insufficient` 表示；规则摘要要求 persisted Run 已有有限 `similarityScore`，不为 coverage-insufficient `null` score 生成 formal summary。
+- Canonical JSON v1 显式拒绝 sparse array holes；algorithm normalization 当前要求 `clamp=true`，保证成功输出的 normalized values、normalized delta、similarity 和 contribution 都可投影到 V005 数值边界。
 - `apps/model/src/simulated-market.ts` 负责 agent template、prompt/response 结构、评分范围、quality flags、fallback 装配和 pi-agent 输出 JSON 抽取；带 `<think>` / 前置文本的 MiniMax-M3 输出必须先抽取结构化 JSON，不能直接按纯 JSON 解析。
 - 模拟结果仍是 Derived Result；`provider=minimax` / `modelVersion=minimax-m3` 只在上游真实 LLM 成功时记录，fallback 必须显式标记 `deterministic_fallback_used` / `llm_unavailable_fallback_used`。
 - Subagent 画像来源新增 `saved_subagent` 与 `channel_audience_profile`，渠道画像派生只保守摘要 `AudienceProfile.tags`，不得声称真实个人偏好或真实用户反馈。
 
 本次验证：
 
+- `cd apps/server && npm run portrait-comparison-algorithm:contract-test` 通过，15/15 pass，覆盖 canonical checksum、sparse array rejection、算法 inclusion/exclusion、finite-output guard、V005-compatible quality projection、clamp/V005 projection boundary、checksum sensitivity、`not_released` policy、rule summary no-threshold guard 和 UTF-16 manifest ordering。
 - `cd apps/model && npm run simulated-market-contract-test` 通过，输出 `ok: true` / `failures: []`。
 
 阻塞/开放：
 
+- Portrait Comparison 当前仍无正式 Dimension Evidence 与 released quality policy；production policy 查询必须返回 `not_released`，正式 Run 创建保持关闭。
 - 当前 contract test 覆盖结构、fallback 和解析健壮性；真实 LLM live 行为由后端 `pi-agent` adapter 与 smoke 控制。
 - 若 `pi-agent` 输出事件格式升级，模型层 JSON 抽取和后端 adapter 都需要同步回归。
 

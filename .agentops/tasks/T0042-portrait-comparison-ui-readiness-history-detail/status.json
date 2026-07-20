@@ -1,0 +1,19 @@
+{
+  "id": "T0042",
+  "slug": "portrait-comparison-ui-readiness-history-detail",
+  "status": "approved",
+  "assignee": "kilo",
+  "domain": "frontend",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-19T16:19:58.333Z",
+  "updated_at": "2026-07-19T16:51:35.607Z",
+  "base_ref": "098e538ba8bd7ebc93bddbf4f0e8c95ff9dac945",
+  "dirty_at_creation": true,
+  "batch": "portrait-comparison-v1",
+  "sequence": 7,
+  "depends_on": [
+    "T0041"
+  ],
+  "domain_memory": "agentops/memory/kilo-frontend.md"
+}

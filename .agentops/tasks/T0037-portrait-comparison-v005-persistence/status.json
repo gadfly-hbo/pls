@@ -1,0 +1,19 @@
+{
+  "id": "T0037",
+  "slug": "portrait-comparison-v005-persistence",
+  "status": "approved",
+  "assignee": "mimo",
+  "domain": "backend",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-18T16:30:43.435Z",
+  "updated_at": "2026-07-19T01:15:45.737Z",
+  "base_ref": "098e538ba8bd7ebc93bddbf4f0e8c95ff9dac945",
+  "dirty_at_creation": true,
+  "batch": "portrait-comparison-v1",
+  "sequence": 2,
+  "depends_on": [
+    "T0036"
+  ],
+  "domain_memory": "agentops/memory/mimo-backend.md"
+}

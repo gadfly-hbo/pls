@@ -72,6 +72,10 @@ const CODE_TABLES = new Set([
   "feedback_record", "strategy_review", "schema_migration", "db_admin_audit",
   "data_import_job", "channel_object", "channel_object_binding",
   "audience_profile", "product_fit_profile",
+  "comparison_run", "comparison_participant", "comparison_portrait_source",
+  "comparison_dimension_evidence", "comparison_dimension_assessment",
+  "comparison_explanation_attempt", "comparison_explanation_outcome",
+  "comparison_archive_event",
 ]);
 
 const SYSTEM_TABLES = new Set(["schema_migration", "db_admin_audit", "data_import_job"]);
@@ -83,6 +87,7 @@ function classifyTable(name: string): string {
   if (name.startsWith("douyin_") || name === "data_source" || name === "channel_entity" ||
       name === "channel_object" || name === "channel_object_binding" ||
       name === "audience_profile" || name === "product_fit_profile") return "import";
+  if (name.startsWith("comparison_")) return "comparison";
   if (name === "prediction" || name === "new_product_prediction") return "prediction";
   if (name === "match_result") return "match";
   if (name === "task") return "task";
@@ -92,13 +97,19 @@ function classifyTable(name: string): string {
 }
 
 /** Tables that should never be truncated or dropped. */
-const IMMUTABLE_TABLES = new Set(["schema_migration", "db_admin_audit"]);
+export const IMMUTABLE_TABLES = new Set([
+  "schema_migration", "db_admin_audit",
+  "comparison_run", "comparison_participant", "comparison_portrait_source",
+  "comparison_dimension_evidence", "comparison_dimension_assessment",
+  "comparison_explanation_attempt", "comparison_explanation_outcome",
+  "comparison_archive_event",
+]);
 
-function isTruncatable(name: string): boolean {
+export function isTruncatable(name: string): boolean {
   return !IMMUTABLE_TABLES.has(name);
 }
 
-function isDroppable(name: string): boolean {
+export function isDroppable(name: string): boolean {
   return !IMMUTABLE_TABLES.has(name) && CODE_TABLES.has(name);
 }
 

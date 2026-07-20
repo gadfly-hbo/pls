@@ -13,6 +13,7 @@ import {
   FLYWHEEL_DDL,
   CHANNEL_OBJECT_LIBRARY_DDL,
   SIMULATED_MARKET_DDL,
+  COMPARISON_DDL,
 } from "./schema.js";
 
 const dataDir = resolve(import.meta.dirname, "../../../../data");
@@ -97,6 +98,7 @@ db.exec(NEW_PRODUCT_DDL);
 db.exec(FLYWHEEL_DDL);
 db.exec(CHANNEL_OBJECT_LIBRARY_DDL);
 db.exec(SIMULATED_MARKET_DDL);
+db.exec(COMPARISON_DDL);
 
 // A-P7-SIM-2: add decision provenance columns for simulated-market sources.
 const SIM_DECISION_COLS = [

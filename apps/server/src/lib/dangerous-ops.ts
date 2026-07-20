@@ -19,6 +19,14 @@ export const PROTECTED_TABLES = new Set([
   "idempotency_key",
   "audit_event",
   "workspace",
+  "comparison_run",
+  "comparison_participant",
+  "comparison_portrait_source",
+  "comparison_dimension_evidence",
+  "comparison_dimension_assessment",
+  "comparison_explanation_attempt",
+  "comparison_explanation_outcome",
+  "comparison_archive_event",
 ]);
 
 /** Tables that admin can drop if explicit. */
@@ -481,7 +489,7 @@ export async function executeRebuild(workspaceId: string, skipSnapshot: boolean)
     const {
       SCHEMA_DDL, DOUYIN_BI_DDL, DOUYIN_BI_DDL_PART2, DOUYIN_BI_DDL_PART3,
       DATA_MANAGEMENT_DDL, CHANNEL_ENTITY_DDL, NEW_PRODUCT_DDL, FLYWHEEL_DDL,
-      CHANNEL_OBJECT_LIBRARY_DDL,
+      CHANNEL_OBJECT_LIBRARY_DDL, COMPARISON_DDL,
     } = await import("../db/schema.js");
     for (const view of [
       "match_result_latest", "douyin_account_latest", "douyin_account_benchmark_tag_latest",
@@ -503,6 +511,7 @@ export async function executeRebuild(workspaceId: string, skipSnapshot: boolean)
     db.exec(NEW_PRODUCT_DDL);
     db.exec(FLYWHEEL_DDL);
     db.exec(CHANNEL_OBJECT_LIBRARY_DDL);
+    db.exec(COMPARISON_DDL);
     db.close();
     steps.push({ step: "apply_migrations", status: "ok", detail: `${result.applied} applied, ${result.failed} failed (migration runner)` });
   } catch (err) {

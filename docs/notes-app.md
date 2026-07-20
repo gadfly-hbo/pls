@@ -2,10 +2,12 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-11（模拟市场 LLM 统一走 pi-agent）
+最近更新：2026-07-20（Portrait Comparison W08 全链路验收）
 
 进度：
 
+- **Portrait Comparison W08 验收完成（T0043）**：`apps/web/e2e/portrait-comparison.spec.ts` 共 10 条 E2E 测试覆盖 readiness（`not_released` 禁用 create）、history list（`{ data: { items, page } }` envelope）、detail（nested `source`、`dimensionAssessments`、`archiveEvents`）、archive POST（`Idempotency-Key`、body 不含 `runId`、`expectedSequence` next logic）、409/404 error envelope UI、responsive 390px（history + detail with long run id/checksum/source text，`body.scrollWidth` + `documentElement.scrollWidth`）、no SQL/stack/DB-path leakage。`VITE_USE_MOCK=false` 模式下 6 passed / 4 skipped；mock 模式 4 passed / 6 skipped。
+- **Portrait Comparison 首版 UI 已实现（T0042）**：`apps/web/src/pages/PortraitComparisonWorkbench.tsx` 实现 readiness 展示、history 列表（active/archived/all 过滤）、run detail（participant source info、dimension assessments、archive events）、archive/restore 操作。前端 types 和 adapter 严格对齐 `apps/server/src/portrait-comparison/application/types.ts` 中的 `ComparisonSummary`、`ComparisonDetail`、`ArchiveComparisonOutput` DTO。`not_released` production policy 下 create 入口明确禁用。
 - **模拟市场真实 LLM 已接通**：`apps/server/src/services/simulated-market-provider.ts` 不再直连 Minimax HTTP API，真实 LLM 调用统一通过本机 `pi-agent` CLI（默认 `pi`）执行；结果仍按业务口径记录 `provider=minimax` / `modelVersion=minimax-m3`。
 - **PLS 项目级 LLM 规则已沉淀**：`AGENTS.md` 新增「LLM 调用规则」，明确 PLS 所有产品 LLM 能力必须走 `pi-agent`，`pi-xanthil` 只作为 `pi-agent` 套壳产品和默认模型口径参考，不作为 PLS runtime provider。
 - **模拟市场 LLM 输出解析已增强**：`apps/model/src/simulated-market.ts` 支持从带 `<think>` / 前置文本的 pi-agent 输出中抽取首尾 JSON object，避免 MiniMax-M3 reasoning 前缀导致结构化解析失败；contract test 已覆盖该场景。

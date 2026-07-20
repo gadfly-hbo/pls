@@ -23,6 +23,7 @@ import adminDataIngestion from "./routes/admin-data-ingestion.js";
 import singleProductPortrait from "./routes/single-product-portrait.js";
 import simulatedMarket from "./routes/simulated-market.js";
 import tools from "./routes/tools.js";
+import portraitComparisons from "./routes/portrait-comparisons.js";
 
 const app = new Hono();
 
@@ -54,6 +55,7 @@ api.route("/admin/database", adminDatabase);
 api.route("/admin/data-ingestion", adminDataIngestion);
 api.route("/single-product-portrait", singleProductPortrait);
 api.route("/simulated-market", simulatedMarket);
+api.route("/portrait-comparisons", portraitComparisons);
 
 app.route("/api/v0", api);
 

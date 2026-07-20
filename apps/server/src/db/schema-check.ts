@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import { openDb } from "./connection.js";
 import {
   SCHEMA_DDL,
@@ -11,6 +12,7 @@ import {
   ADMIN_DDL,
   CHANNEL_OBJECT_LIBRARY_DDL,
   SIMULATED_MARKET_DDL,
+  COMPARISON_DDL,
 } from "./schema.js";
 
 const ALL_DDL = [
@@ -25,6 +27,7 @@ const ALL_DDL = [
   ADMIN_DDL,
   CHANNEL_OBJECT_LIBRARY_DDL,
   SIMULATED_MARKET_DDL,
+  COMPARISON_DDL,
 ].join("\n");
 
 function extractNames(ddl: string, type: "table" | "view"): string[] {
@@ -54,53 +57,56 @@ export interface SchemaCheckResult {
   };
 }
 
+// Pure checker: accepts an open DatabaseSync so callers can inject /tmp DBs
+// or the CLI's workspace connection without duplicating sqlite_master logic.
+export function checkSchema(db: DatabaseSync): SchemaCheckResult {
+  const codeTables = extractNames(ALL_DDL, "table");
+  const codeViews = extractNames(ALL_DDL, "view");
+
+  const dbRows = db
+    .prepare("SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'")
+    .all() as Array<{ name: string; type: string }>;
+
+  const dbTables = dbRows
+    .filter((r) => r.type === "table")
+    .map((r) => r.name.toLowerCase());
+  const dbViews = dbRows
+    .filter((r) => r.type === "view")
+    .map((r) => r.name.toLowerCase());
+
+  const missing = codeTables.filter((t) => !dbTables.includes(t));
+  const extra = dbTables.filter((t) => !codeTables.includes(t));
+  const viewMissing = codeViews.filter((v) => !dbViews.includes(v));
+  const viewExtra = dbViews.filter((v) => !codeViews.includes(v));
+
+  let migrationStatus = { total: 0, applied: 0, pending: 0, failed: 0 };
+  const hasMigrationTable = dbTables.includes("schema_migration");
+  if (hasMigrationTable) {
+    const rows = db
+      .prepare("SELECT status, COUNT(*) as cnt FROM schema_migration GROUP BY status")
+      .all() as Array<{ status: string; cnt: number }>;
+    for (const row of rows) {
+      migrationStatus.total += row.cnt;
+      if (row.status === "applied") migrationStatus.applied = row.cnt;
+      else if (row.status === "pending") migrationStatus.pending = row.cnt;
+      else if (row.status === "failed") migrationStatus.failed = row.cnt;
+    }
+  }
+
+  return {
+    valid: missing.length === 0 && viewMissing.length === 0,
+    missing,
+    extra,
+    viewMissing,
+    viewExtra,
+    migrationStatus,
+  };
+}
+
 export function validateSchema(workspaceId: string): SchemaCheckResult {
   const db = openDb(workspaceId);
   try {
-    // Collect code-defined names
-    const codeTables = extractNames(ALL_DDL, "table");
-    const codeViews = extractNames(ALL_DDL, "view");
-
-    // Collect actual DB names
-    const dbRows = db
-      .prepare("SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'")
-      .all() as Array<{ name: string; type: string }>;
-
-    const dbTables = dbRows
-      .filter((r) => r.type === "table")
-      .map((r) => r.name.toLowerCase());
-    const dbViews = dbRows
-      .filter((r) => r.type === "view")
-      .map((r) => r.name.toLowerCase());
-
-    const missing = codeTables.filter((t) => !dbTables.includes(t));
-    const extra = dbTables.filter((t) => !codeTables.includes(t));
-    const viewMissing = codeViews.filter((v) => !dbViews.includes(v));
-    const viewExtra = dbViews.filter((v) => !codeViews.includes(v));
-
-    // Migration status
-    let migrationStatus = { total: 0, applied: 0, pending: 0, failed: 0 };
-    const hasMigrationTable = dbTables.includes("schema_migration");
-    if (hasMigrationTable) {
-      const rows = db
-        .prepare("SELECT status, COUNT(*) as cnt FROM schema_migration GROUP BY status")
-        .all() as Array<{ status: string; cnt: number }>;
-      for (const row of rows) {
-        migrationStatus.total += row.cnt;
-        if (row.status === "applied") migrationStatus.applied = row.cnt;
-        else if (row.status === "pending") migrationStatus.pending = row.cnt;
-        else if (row.status === "failed") migrationStatus.failed = row.cnt;
-      }
-    }
-
-    return {
-      valid: missing.length === 0 && viewMissing.length === 0,
-      missing,
-      extra,
-      viewMissing,
-      viewExtra,
-      migrationStatus,
-    };
+    return checkSchema(db);
   } finally {
     db.close();
   }

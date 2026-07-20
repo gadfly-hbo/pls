@@ -1,0 +1,19 @@
+{
+  "id": "T0040",
+  "slug": "portrait-comparison-application-repository",
+  "status": "approved",
+  "assignee": "mimo",
+  "domain": "backend",
+  "controller": "codex",
+  "created_by": "codex",
+  "created_at": "2026-07-19T06:36:25.313Z",
+  "updated_at": "2026-07-19T15:06:35.449Z",
+  "base_ref": "098e538ba8bd7ebc93bddbf4f0e8c95ff9dac945",
+  "dirty_at_creation": true,
+  "batch": "portrait-comparison-v1",
+  "sequence": 5,
+  "depends_on": [
+    "T0039"
+  ],
+  "domain_memory": "agentops/memory/mimo-backend.md"
+}

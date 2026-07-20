@@ -15,6 +15,7 @@ import {
   Sun,
   X,
   Wrench,
+  GitCompareArrows,
   type LucideIcon,
 } from 'lucide-react';
 import type { MatchCorePrefill, SingleProductPortraitPrediction, SimulatedMarketPrefill } from './types';
@@ -26,8 +27,9 @@ import DataManagementWorkbench from './pages/DataManagementWorkbench';
 import Overview from './pages/Overview';
 import ToolsWorkbench from './pages/ToolsWorkbench';
 import SimulatedMarketWorkbench from './pages/SimulatedMarketWorkbench';
+import PortraitComparisonWorkbench from './pages/PortraitComparisonWorkbench';
 
-type ViewId = 'overview' | 'channel-objects' | 'match-core' | 'dashboard' | 'flywheel' | 'tools' | 'data-management' | 'simulated-market';
+type ViewId = 'overview' | 'channel-objects' | 'match-core' | 'dashboard' | 'flywheel' | 'tools' | 'data-management' | 'simulated-market' | 'portrait-comparison';
 type SubViewId = 'workbench' | 'readme';
 
 const NAV_ITEMS: { id: ViewId; label: string; shortLabel: string; icon: LucideIcon }[] = [
@@ -36,6 +38,7 @@ const NAV_ITEMS: { id: ViewId; label: string; shortLabel: string; icon: LucideIc
   { id: 'match-core', label: '货渠匹配', shortLabel: '匹配', icon: PackageSearch },
   { id: 'dashboard', label: '新品预测', shortLabel: '预测', icon: Sparkles },
   { id: 'simulated-market', label: '模拟市场', shortLabel: '模拟', icon: Beaker },
+  { id: 'portrait-comparison', label: '画像对比', shortLabel: '对比', icon: GitCompareArrows },
   { id: 'flywheel', label: '经营飞轮', shortLabel: '飞轮', icon: GitBranch },
   { id: 'tools', label: '工具管理', shortLabel: '工具', icon: Wrench },
   { id: 'data-management', label: '数据管理', shortLabel: '数据', icon: Database },
@@ -277,6 +280,9 @@ function App() {
               )}
               {currentView === 'data-management' && (
                 <DataManagementWorkbench />
+              )}
+              {currentView === 'portrait-comparison' && (
+                <PortraitComparisonWorkbench />
               )}
             </>
           )}

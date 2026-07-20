@@ -32,6 +32,12 @@
     "sync:channel-entities": "node scripts/sync-channel-entities.mjs",
     "typecheck": "tsc --noEmit",
     "migrate:versioned": "tsx src/db/migration-runner.ts",
+    "migration-runner:contract-test": "tsx src/db/migration-runner-contract-test.ts",
+    "portrait-comparison-schema:contract-test": "tsx src/db/portrait-comparison-schema-contract-test.ts",
+    "portrait-comparison-algorithm:contract-test": "tsx src/portrait-comparison/portrait-comparison-algorithm-contract-test.ts",
+    "portrait-source:contract-test": "tsx src/portrait-comparison/portrait-source-contract-test.ts",
+    "portrait-comparison-application:contract-test": "tsx src/portrait-comparison/portrait-comparison-application-contract-test.ts",
+    "portrait-comparison-http:contract-test": "tsx src/portrait-comparison/portrait-comparison-http-contract-test.ts",
     "schema:check": "tsx src/db/schema-check.ts"
   },
   "dependencies": {

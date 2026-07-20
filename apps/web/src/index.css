@@ -3624,3 +3624,251 @@ h1, h2, h3, h4, h5, h6 {
     white-space: normal;
   }
 }
+
+/* ===== Portrait Comparison Workbench ===== */
+.pc-workbench {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pc-workbench__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pc-workbench__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.pc-workbench__tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.pc-workbench__tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.pc-workbench__tab:hover {
+  background: var(--accent);
+}
+
+.pc-workbench__tab--active {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
+}
+
+.pc-workbench__tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pc-workbench__tab-count {
+  font-size: 11px;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.pc-readiness {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: var(--card);
+}
+
+.pc-readiness__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.pc-readiness__details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pc-readiness__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.pc-readiness__row > span:first-child {
+  color: var(--muted-foreground);
+  min-width: 120px;
+}
+
+.pc-readiness__caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pc-readiness__blockers {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--destructive);
+  margin-top: 4px;
+}
+
+.pc-readiness__blockers ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.pc-history__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pc-history__filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pc-history__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pc-history__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  cursor: pointer;
+  transition: border-color 0.15s;
+  text-align: left;
+  width: 100%;
+}
+
+.pc-history__item:hover {
+  border-color: var(--ring);
+}
+
+.pc-history__item-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pc-history__item-id {
+  font-family: monospace;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.pc-history__item-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.pc-history__item-arrow {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.pc-detail__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.pc-detail__header h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.pc-detail__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.pc-detail__participants {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.pc-detail__participant h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.pc-participant-card {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pc-detail__meta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .pc-detail__participants {
+    grid-template-columns: 1fr;
+  }
+
+  .pc-history__item-meta {
+    flex-direction: column;
+    gap: 2px;
+  }
+}

@@ -1,4 +1,4 @@
-import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord, DbOverview, DbTableInfo, DbSchemaInfo, DbSampleInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbOperationDryRunResult, DbOperationExecuteResult, CsvQualityReport, CsvIngestionExecuteResponse, ToolRun, SingleProductPortraitPrediction, SingleProductPortraitInput, SingleProductPortraitMetadata, SingleProductPortraitBatchPreview, SingleProductPortraitBatchExecute, ChannelObject, AudienceProfile, ProductFitProfile, ChannelObjectBinding, TargetUserAgent, SimulatedMarketInput, SimulatedMarketResult, SimulatedMarketRunListResponse, SimulationRun, SimulatedMarketSourceType, CreateDecisionInput, SimulatedMarketSubagent, CreateSimulatedMarketSubagentInput, UpdateSimulatedMarketSubagentInput, CreateSubagentFromChannelObjectInput } from '../types';
+import type { SKU, ProductProfile, MatchResult, HeatmapData, ChannelProfile, AccountMatchResult, AccountProfile, ProductCompass, DecisionRecord, ActionRecord, FeedbackRecord, DbOverview, DbTableInfo, DbSchemaInfo, DbSampleInfo, DbMigration, DbDataVersion, DbImportJob, DbAuditEvent, DbOperationDryRunResult, DbOperationExecuteResult, CsvQualityReport, CsvIngestionExecuteResponse, ToolRun, SingleProductPortraitPrediction, SingleProductPortraitInput, SingleProductPortraitMetadata, SingleProductPortraitBatchPreview, SingleProductPortraitBatchExecute, ChannelObject, AudienceProfile, ProductFitProfile, ChannelObjectBinding, TargetUserAgent, SimulatedMarketInput, SimulatedMarketResult, SimulatedMarketRunListResponse, SimulationRun, SimulatedMarketSourceType, CreateDecisionInput, SimulatedMarketSubagent, CreateSimulatedMarketSubagentInput, UpdateSimulatedMarketSubagentInput, CreateSubagentFromChannelObjectInput, PortraitComparisonReadiness, PortraitComparisonListResponse, PortraitComparisonDetail, PortraitComparisonArchiveResult } from '../types';
 
 // Feature flag for local mock vs real backend
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
@@ -2733,6 +2733,196 @@ export const api = {
     const run = db.simulatedMarketRuns.find(r => r.runId === runId);
     if (!run) throw new Error(`Simulation run ${runId} not found`);
     return { code: 'ok', data: run };
+  },
+
+  // ----------------------------------------------------
+  // Portrait Comparison API (T0042)
+  // DTOs aligned with apps/server/src/portrait-comparison/application/types.ts
+  // ----------------------------------------------------
+  getPortraitComparisonReadiness: async (): Promise<{ code: string; data: PortraitComparisonReadiness }> => {
+    if (!USE_MOCK) return fetchApi<PortraitComparisonReadiness>('/portrait-comparisons/readiness');
+    return {
+      code: 'ok',
+      data: {
+        status: 'not_released',
+        contractVersion: '1',
+        productionPolicyStatus: 'not_released',
+        capabilities: { create: false, list: true, detail: true, archive: true, explanation: true },
+        blockers: ['Portrait comparison quality policy is not yet released.'],
+      },
+    };
+  },
+
+  getPortraitComparisonList: async (archiveFilter: 'active' | 'archived' | 'all' = 'active', limit = 20, cursor?: string): Promise<{ code: string; data: PortraitComparisonListResponse }> => {
+    if (!USE_MOCK) {
+      const qs = new URLSearchParams();
+      qs.append('archiveFilter', archiveFilter);
+      qs.append('limit', String(limit));
+      if (cursor) qs.append('afterCreatedAt', cursor);
+      return fetchApi<PortraitComparisonListResponse>(`/portrait-comparisons?${qs.toString()}`);
+    }
+    const now = new Date().toISOString();
+    const mockItems: PortraitComparisonListResponse['items'] = [
+      {
+        id: 'run_mock_001',
+        mode: 'peer_same_period',
+        similarityScore: 0.85,
+        coverage: 100,
+        qualityStatus: 'passed',
+        createdAt: now,
+        baselineDisplayName: 'Platform A',
+        comparisonDisplayName: 'Platform B',
+      },
+    ];
+    const filtered = archiveFilter === 'all' ? mockItems : mockItems.filter(() => archiveFilter === 'active');
+    return {
+      code: 'ok',
+      data: {
+        items: filtered,
+        page: { cursor: null, nextCursor: null, pageSize: filtered.length, hasMore: false },
+      },
+    };
+  },
+
+  getPortraitComparisonDetail: async (runId: string): Promise<{ code: string; data: PortraitComparisonDetail }> => {
+    if (!USE_MOCK) return fetchApi<PortraitComparisonDetail>(`/portrait-comparisons/${runId}`);
+    const now = new Date().toISOString();
+    return {
+      code: 'ok',
+      data: {
+        id: runId || 'run_mock_001',
+        mode: 'peer_same_period',
+        similarityScore: 0.85,
+        coverage: 100,
+        qualityStatus: 'passed',
+        qualityReasons: [],
+        algorithmId: 'pls-portrait-comparison',
+        algorithmVersion: 'pls-v1',
+        algorithmConfigChecksum: 'a'.repeat(64),
+        qualityPolicyId: 'pls-portrait-comparison-quality-policy',
+        qualityPolicyVersion: 'not_released@1',
+        qualityPolicyConfigChecksum: 'b'.repeat(64),
+        comparisonContractId: 'pls-portrait-comparison-contract',
+        comparisonContractVersion: '1',
+        comparisonContractChecksum: 'c'.repeat(64),
+        createdAt: now,
+        createdBy: 'http-api',
+        createdByDisplayName: null,
+        baseline: {
+          objectId: 'obj_a',
+          displayName: 'Platform A',
+          family: 'channel',
+          objectType: 'platform',
+          source: {
+            sourceSystem: 'pls_workspace',
+            sourceContractVersion: '1',
+            snapshotId: 'snap_a',
+            dataVersion: 'v1',
+            periodStart: '2026-01-01',
+            periodEnd: '2026-01-31',
+            sourceGeneratedAt: now,
+            sourceBatchId: 'batch_1',
+            sampleSize: 1000,
+            confidence: 0.95,
+            qualityStatus: 'passed',
+            sourceFlags: [],
+            policyReasons: [],
+          },
+        },
+        comparison: {
+          objectId: 'obj_b',
+          displayName: 'Platform B',
+          family: 'channel',
+          objectType: 'platform',
+          source: {
+            sourceSystem: 'pls_workspace',
+            sourceContractVersion: '1',
+            snapshotId: 'snap_b',
+            dataVersion: 'v2',
+            periodStart: '2026-01-01',
+            periodEnd: '2026-01-31',
+            sourceGeneratedAt: now,
+            sourceBatchId: 'batch_2',
+            sampleSize: 1200,
+            confidence: 0.92,
+            qualityStatus: 'passed',
+            sourceFlags: [],
+            policyReasons: [],
+          },
+        },
+        dimensionEvidence: [
+          {
+            participantId: 'obj_a',
+            dimensionKey: 'audience_age_distribution',
+            dimensionLabel: 'Audience Age Distribution',
+            value: 30,
+            unit: 'percent',
+            qualityStatus: 'passed',
+            sourceFlags: [],
+            policyReasons: [],
+            evidenceRefs: [{ sourceRecordType: 'audience_profile', sourceRecordId: 'ap_1' }],
+          },
+          {
+            participantId: 'obj_b',
+            dimensionKey: 'audience_age_distribution',
+            dimensionLabel: 'Audience Age Distribution',
+            value: 35,
+            unit: 'percent',
+            qualityStatus: 'passed',
+            sourceFlags: [],
+            policyReasons: [],
+            evidenceRefs: [{ sourceRecordType: 'audience_profile', sourceRecordId: 'ap_2' }],
+          },
+        ],
+        dimensionAssessments: [
+          {
+            dimensionKey: 'audience_age_distribution',
+            dimensionLabel: 'Audience Age Distribution',
+            expectedUnit: 'percent',
+            weight: 0.5,
+            participation: 'included',
+            exclusionReason: null,
+            baselineEvidenceId: null,
+            comparisonEvidenceId: null,
+            baselineNormalizedValue: 30,
+            comparisonNormalizedValue: 35,
+            rawDelta: 5,
+            normalizedDelta: 0.05,
+            dimensionSimilarity: 0.9,
+            weightedContribution: 0.45,
+          },
+        ],
+        explanationAttempts: [],
+        archiveState: 'active',
+        archiveEvents: [],
+      },
+    };
+  },
+
+  archivePortraitComparison: async (
+    runId: string,
+    operation: 'archived' | 'restored',
+    expectedCurrentState: 'active' | 'archived',
+    expectedSequence: number,
+    reason?: string,
+  ): Promise<{ code: string; data: PortraitComparisonArchiveResult }> => {
+    const idempotencyKey = `archive-${runId}-${operation}-${expectedSequence}`;
+    if (!USE_MOCK) {
+      return fetchApi<PortraitComparisonArchiveResult>(`/portrait-comparisons/${runId}/archive`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify({ operation, expectedCurrentState, expectedSequence, reason: reason ?? null }),
+      });
+    }
+    return {
+      code: 'ok',
+      data: {
+        eventId: `evt_${Date.now()}`,
+        eventSequence: expectedSequence + 1,
+        replayed: false,
+        newState: operation === 'archived' ? 'archived' : 'active',
+      },
+    };
   },
 };
 

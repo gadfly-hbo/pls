@@ -2,10 +2,21 @@
 
 ## 0. 当前状态
 
-最近更新：2026-07-12（T0035 完成 ws_demo fixture isolation 批次验收）
+最近更新：2026-07-18（T0036 完成 migration runner 加固，portrait-comparison-v1 批次第 1 项）
 
 进度：
 
+- T0036 已完成（review 第三轮修正后）：加固 `apps/server/src/db/migration-runner.ts` 并新增 `migration-backup.ts` 与 `migration-runner-contract-test.ts`（16/16 通过），为 `V005_portrait_comparison` 提供安全前置。核心语义：
+  - 已应用 migration 每次运行复核 version/name/checksum，漂移即抛 `MigrationDriftError` fail closed；数据库存在 registry 外更高/未知 version 同样拒绝。
+  - checksum 一律为完整 SHA-256 64 位小写 hex；旧 16 位只有与当前完整摘要前 16 位严格一致才一次性升级，升级与 `db_admin_audit` 最小审计（`operation=migration_checksum_upgrade`）在同一事务；前缀不一致或审计表缺失一律拒绝。
+  - 每个 migration 在 `BEGIN IMMEDIATE` 事务内执行，失败不留部分 schema；全部应用后执行 `foreign_key_check` 与 `quick_check`。
+  - **备份先于本次运行全部 durable mutation**（含非空库的 schema_migration bootstrap）：读取走 tableExists 守卫，备份后 bootstrap 才在恢复伞内建表；任一后续失败恢复的是 sqlite_master 级逐字节调用前状态（含调用前 16 位 checksum、无新审计行、调用前 failed/pending 行、调用前不存在的 registry 表仍不存在），均有回归断言。
+  - 非空库备份前 `wal_checkpoint(TRUNCATE)`，备份位于 workspace `.migration-backups/`（目录 0700、文件 0600，拒绝 symlink/path escape，从 `PRAGMA database_list` 真实路径推导）；正式备份不自动清理。
+  - 恢复不关闭调用方句柄：先经活句柄 checkpoint+truncate WAL 再覆盖库文件，调用方 `finally close()` 不抛错也不掩盖原始 `MigrationFailedError`（Node 26/WAL 实测；调用链形回归测试覆盖）。恢复后句柄视为 dead，只能 close 不得再读写。
+  - 调用方资源释放可达性矩阵：admin-database apply-migrations（可达恢复路径 → finally close 正常）、dangerous-ops rebuild（先删库文件恒为全新库 → runner 只可能正常返回 → 成功路径 close，throw 对该调用方不可达）、migrate.ts/CLI（throw 后进程非零退出，OS 释放 fd）。三者均有调用链形回归测试或构造性证明。
+  - 失败行为矩阵：有备份 → 恢复 + 抛错；全新库无备份 → 保留旧 failed-row 语义并停于首个失败（admin apply-migrations 响应形态不变）。
+  - 已用 ws_demo 只读副本演练：V001-V004 的 16 位 checksum 均为当前文件完整 SHA-256 前缀，可干净升级；模拟 V005 成功与失败两条路径均通过（失败恢复后 schema_migration 行与 sqlite_master 清单均逐字节回到调用前）。`ws_demo` 真身未被写入。
+  - 注意：当 V005 真正落地并在 ws_demo 上跑 migrate 时，会在 `data/workspaces/ws_demo/.migration-backups/` 产生未跟踪备份文件，届时 handoff/review 需要按生成产物口径复核。
 - T0034 已完成：新增 `scripts/check-worktree-guard.mjs`，在根 `package.json` 暴露 `npm run guard:worktree`，用于在 handoff / controller review 前自动拦截 `ws_demo/db.sqlite`、`apps/web/playwright-report/index.html`、`apps/web/test-results/` 等生成产物进入 diff。
 - T0035 已完成 `ws-demo-fixture-isolation` 批次验收：后端写型脚本隔离、前端 Playwright 产物隔离、统一 diff guard 三条防线均有验证证据；本轮验收后 `data/workspaces/ws_demo/db.sqlite` 与 `apps/web/playwright-report/index.html` 均未进入 diff。
 - P7 CSV 导入已有 SQLite 表第一期完成；A/V 已经总控复核通过并 mark done。
