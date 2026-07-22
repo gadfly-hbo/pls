@@ -1,0 +1,7 @@
+# Keep local/runtime datasets out of the code graph during the trial.
+/data/local/
+/data/demo/
+/data/workspaces/
+
+# Task Bus state is orchestration metadata, not product code.
+.agentops/
